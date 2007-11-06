@@ -1,0 +1,23 @@
+{application, mochiweb,
+ [{description, "MochiMedia Web Server"},
+  {vsn, "0.01"},
+  {modules, [
+	     mochihex,
+	     mochijson,
+	     mochiweb,
+	     mochiweb_app,
+	     mochiweb_cookies,
+	     mochiweb_echo,
+	     mochiweb_handler,
+	     mochiweb_headers,
+	     mochiweb_http,
+	     mochiweb_request,
+	     mochiweb_response,
+	     mochiweb_socket_server,
+	     mochiweb_sup,
+	     mochiweb_util
+	    ]},
+  {registered, []},
+  {mod, {mochiweb_app, []}},
+  {env, []},
+  {applications, [kernel, stdlib]}]}.
