@@ -15,6 +15,7 @@
 -export([parse_post/0, parse_qs/0]).
 -export([should_close/0, cleanup/0]).
 -export([parse_cookie/0, get_cookie_value/1]).
+-export([serve_file/2]).
 
 -define(SAVE_QS, mochiweb_request_qs).
 -define(SAVE_PATH, mochiweb_request_path).
@@ -379,6 +380,30 @@ read_chunk(Length) ->
         _ ->
             exit(normal)
     end.
+
+%% @spec serve_file(Path, DocRoot) -> Response
+%% @doc Serve a file relative to DocRoot.
+serve_file(Path, DocRoot) ->
+    FullPath = filename:join([DocRoot, Path]),
+    File = case filelib:is_dir(FullPath) of
+	       true ->
+		   filename:join([FullPath, "index.html"]);
+	       false ->
+		   FullPath
+	   end,
+    case lists:prefix(DocRoot, File) of
+	true ->
+	    case file:read_file(File) of
+		{ok, Binary} ->
+		    ContentType = mochiweb_util:guess_mime(File),
+		    ok({ContentType, Binary});
+		_ ->
+		    not_found()
+	    end;
+	false ->
+	    not_found()
+    end.
+
 
 %% Internal API
 
