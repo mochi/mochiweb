@@ -1,5 +1,9 @@
+%% @author Bob Ippolito <bob@mochimedia.com>
+%% @copyright 2007 Mochi Media, Inc.
+
+%% @doc Loosely tokenizes and generates parse trees for HTML 4.
 -module(mochiweb_html).
--export([tokens/1]).
+-export([tokens/1, parse/1, parse_tokens/1, test/0]).
 
 % This is a macro to placate syntax highlighters..
 -define(QUOTE, $\").
@@ -18,10 +22,52 @@
 -record(decoder, {line=1,
 		  column=1}).
 
+%% @type html_node() = {string(), [html_attr()], [html_node() | string()]}
+%% @type html_attr() = {string(), string()}
+%% @type html_token() = html_data() | start_tag() | end_tag()
+%% @type html_data() = {data, string(), Whitespace::boolean()}
+%% @type start_tag() = {start_tag, Name, [html_attr()], Singleton::boolean()}
+%% @type end_tag() = {end_tag, Name}
+
+%% External API.
+
+%% @spec parse(string() | binary()) -> html_node()
+%% @doc tokenize and then transform the token stream into a HTML tree.
+parse(Input) ->
+    parse_tokens(tokens(Input)).
+
+%% @spec parse_tokens([html_token()]) -> html_node()
+%% @doc Transform the output of tokens(Doc) into a HTML tree.
+parse_tokens(Tokens) ->
+    %% Skip over doctype
+    F = fun (X) ->
+                case X of
+                    {start_tag, _, _, false} ->
+                        false;
+                    _ ->
+                        true
+                end
+        end,
+    [{start_tag, Tag, Attrs, false} | Rest] = lists:dropwhile(F, Tokens),
+    {Tree, _} = tree(Rest, [norm({Tag, Attrs})]),
+    Tree.
+
+%% @spec tokens(StringOrBinary) -> [html_token()]
+%% @doc Transform the input UTF-8 HTML into a token stream.
 tokens(Input) when is_binary(Input) ->
     tokens(binary_to_list(Input), #decoder{}, []);
 tokens(Input) ->
     tokens(Input, #decoder{}, []).
+
+%% @spec test() -> ok
+%% @doc Run tests for mochiweb_html.
+test() ->
+    test_destack(),
+    test_parse_tokens(),
+    ok.
+
+
+%% Internal API
 
 tokens("", _S, Acc) ->
     lists:reverse(Acc);
@@ -48,7 +94,84 @@ tokenize("<" ++ Rest, S) ->
 tokenize(Rest, S) ->
     tokenize_data(Rest, S, [], true).
 
-%% Internal API
+test_parse_tokens() ->
+    D0 = [{doctype,["HTML","PUBLIC","-//W3C//DTD HTML 4.01 Transitional//EN"]},
+          {data,"\n",true},
+          {start_tag,"html",[],false}],
+    {"html", [], []} = parse_tokens(D0),
+    D1 = D0 ++ [{end_tag, "html"}],
+    {"html", [], []} = parse_tokens(D1),
+    D2 = D0 ++ [{start_tag, "body", [], false}],
+    {"html", [], [{"body", [], []}]} = parse_tokens(D2),
+    D3 = D0 ++ [{start_tag, "head", [], false},
+                {end_tag, "head"},
+                {start_tag, "body", [], false}],
+    {"html", [], [{"head", [], []}, {"body", [], []}]} = parse_tokens(D3),
+    ok.
+
+tree([], Stack) ->
+    {destack(Stack), []};
+tree([{end_tag, Tag} | Rest], Stack) ->
+    tree(Rest, destack(norm(Tag), Stack));
+tree([{start_tag, Tag, Attrs, true} | Rest], [T0 | S0]) ->
+    tree(Rest, [destack([norm({Tag, Attrs}), T0]) | S0]);
+tree([{start_tag, Tag, Attrs, false} | Rest], S) ->
+    tree(Rest, [norm({Tag, Attrs}) | S]);
+tree([{data, Data, Whitespace} | Rest], [{Tag, Attrs, Acc} | S0]) ->
+    Acc1 = case Acc of
+               [L | Acc0] when is_list(L) ->
+                   %% Merge consecutive data
+                   [L ++ Data | Acc0];
+               _ ->
+                   case Whitespace of
+                       true ->
+                           %% Ignore whitespace if it's not following
+                           %% non-whitespace text
+                           Acc;
+                       false ->
+                           [Data | Acc]
+                   end
+           end,
+    tree(Rest, [{Tag, Attrs, Acc1} | S0]).
+
+norm({Tag, Attrs}) ->
+    {norm(Tag), [{norm(K), V} || {K, V} <- Attrs], []};
+norm(Tag) ->
+    string:to_lower(Tag).
+
+test_destack() ->
+    {"a", [], []} = destack([{"a", [], []}]),
+    {"a", [], [{"b", [], []}]} = destack([{"b", [], []}, {"a", [], []}]),
+    {"a", [], [{"b", [], [{"c", [], []}]}]} =
+        destack([{"c", [], []}, {"b", [], []}, {"a", [], []}]),
+    [{"a", [], [{"b", [], [{"c", [], []}]}]}] =
+        destack("b", [{"c", [], []}, {"b", [], []}, {"a", [], []}]),
+    [{"b", [], [{"c", [], []}]}, {"a", [], []}] =
+        destack("c", [{"c", [], []}, {"b", [], []}, {"a", [], []}]),
+    ok.
+
+destack(TagName, Stack) when is_list(Stack) ->
+    F = fun (X) ->
+                case X of 
+                    {TagName, _, _} ->
+                        false;
+                    _ ->
+                        true
+                end
+        end,
+    case lists:splitwith(F, Stack) of
+        {_, []} ->
+            Stack;
+        {Pre, [T]} ->
+            [destack(Pre ++ [T])];
+        {Pre, [T, N | Post]} ->
+            [destack(Pre ++ [T, N]) | Post]
+    end.
+            
+destack([Tag]) ->
+    Tag;
+destack([Sub, {Tag, Attrs, Acc} | Rest]) ->
+    destack([{Tag, Attrs, lists:reverse([Sub | Acc])} | Rest]).
 
 is_singleton("br") -> true;
 is_singleton("hr") -> true;
