@@ -3,10 +3,12 @@
 
 %% @doc Loosely tokenizes and generates parse trees for HTML 4.
 -module(mochiweb_html).
--export([tokens/1, parse/1, parse_tokens/1, test/0]).
+-export([tokens/1, parse/1, parse_tokens/1, to_tokens/1, escape/1,
+         escape_attr/1, to_html/1, test/0]).
 
 % This is a macro to placate syntax highlighters..
 -define(QUOTE, $\").
+-define(SQUOTE, $\').
 -define(ADV_COL(S, N), S#decoder{column=N+S#decoder.column}).
 -define(INC_COL(S), S#decoder{column=1+S#decoder.column}).
 -define(INC_LINE(S), S#decoder{column=1, line=1+S#decoder.line}).
@@ -59,15 +61,117 @@ tokens(Input) when is_binary(Input) ->
 tokens(Input) ->
     tokens(Input, #decoder{}, []).
 
+%% @spec to_tokens(html_node()) -> [html_token()]
+%% @doc Convert a html_node() tree to a list of tokens.
+to_tokens({Tag, Attrs, Acc}) ->
+    to_tokens([{Tag, Acc}], [{start_tag, Tag, Attrs, is_singleton(Tag)}]).
+
+%% @spec to_html([html_token()]) -> iolist()
+%% @doc Convert a list of html_token() to a HTML document.
+to_html(Tokens) ->
+    to_html(Tokens, []).
+
+%% @spec escape(S::string()) -> string()
+%% @doc Escape a string such that it's safe for HTML (amp; lt; gt;).
+escape(S) ->
+    escape(S, []).
+
+%% @spec escape(S::string()) -> string()
+%% @doc Escape a string such that it's safe for HTML attrs
+%%      (amp; lt; gt; quot;).
+escape_attr(S) ->
+    escape_attr(S, []).
+
 %% @spec test() -> ok
 %% @doc Run tests for mochiweb_html.
 test() ->
     test_destack(),
+    test_tokens(),
     test_parse_tokens(),
+    test_escape(),
+    test_escape_attr(),
     ok.
 
 
 %% Internal API
+
+to_html([], Acc) ->
+    lists:reverse(Acc);
+to_html([{data, Data, _Whitespace} | Rest], Acc) ->
+    to_html(Rest, [escape(Data) | Acc]);
+to_html([{start_tag, Tag, Attrs, Singleton} | Rest], Acc) ->
+    Open = "<" ++ Tag ++ attrs_to_html(Attrs, []) ++ case Singleton of
+                                                         true -> " />";
+                                                         false -> ">"
+                                                     end,
+    to_html(Rest, [Open | Acc]);
+to_html([{end_tag, Tag} | Rest], Acc) ->
+    to_html(Rest, ["</" ++ Tag ++ ">" | Acc]).
+
+attrs_to_html([], Acc) ->
+    lists:reverse(Acc);
+attrs_to_html([{K, V} | Rest], Acc) ->
+    attrs_to_html(Rest, [" " ++ K ++ "=\"" ++ escape_attr(V) ++ "\"" | Acc]).
+    
+test_escape() ->
+    "&amp;quot;\"word &lt;&lt;up!&amp;quot;" =
+        escape("&quot;\"word <<up!&quot;"),
+    ok.
+
+test_escape_attr() ->
+    "&amp;quot;&quot;word &lt;&lt;up!&amp;quot;" =
+        escape_attr("&quot;\"word <<up!&quot;"),
+    ok.
+
+escape([], Acc) ->
+    lists:reverse(Acc);
+escape("<" ++ Rest, Acc) ->
+    escape(Rest, lists:reverse("&lt;", Acc));
+escape(">" ++ Rest, Acc) ->
+    escape(Rest, lists:reverse("&gt;", Acc));
+escape("&" ++ Rest, Acc) ->
+    escape(Rest, lists:reverse("&amp;", Acc));
+escape([C | Rest], Acc) ->
+    escape(Rest, [C | Acc]).
+
+escape_attr([], Acc) ->
+    lists:reverse(Acc);
+escape_attr("<" ++ Rest, Acc) ->
+    escape_attr(Rest, lists:reverse("&lt;", Acc));
+escape_attr(">" ++ Rest, Acc) ->
+    escape_attr(Rest, lists:reverse("&gt;", Acc));
+escape_attr("&" ++ Rest, Acc) ->
+    escape_attr(Rest, lists:reverse("&amp;", Acc));
+escape_attr([?QUOTE | Rest], Acc) ->
+    escape_attr(Rest, lists:reverse("&quot;", Acc));
+escape_attr([C | Rest], Acc) ->
+    escape_attr(Rest, [C | Acc]).
+
+to_tokens([], Acc) ->
+    lists:reverse(Acc);
+to_tokens([{Tag, []} | Rest], Acc) ->
+    to_tokens(Rest, [{end_tag, Tag} | Acc]);
+to_tokens([{Tag, [{T1, A1, C1} | R1]} | Rest], Acc) ->
+    case is_singleton(T1) of
+        true ->
+            to_tokens([{Tag, R1} | Rest], [{start_tag, T1, A1, true} | Acc]);
+        false ->
+            to_tokens([{T1, C1}, {Tag, R1} | Rest],
+                      [{start_tag, T1, A1, false} | Acc])
+    end;
+to_tokens([{Tag, [L | R1]} | Rest], Acc) when is_list(L) ->
+    to_tokens([{Tag, R1} | Rest], [{data, L, false} | Acc]).
+
+test_tokens() ->
+    [{start_tag, "foo", [{"bar", "baz"},
+                         {"wibble", "wibble"},
+                         {"alice", "bob"}], true}] =
+        tokens("<foo bar=baz wibble='wibble' alice=\"bob\"/>"),
+    [{start_tag, "foo", [{"bar", "baz"},
+                         {"wibble", "wibble"},
+                         {"alice", "bob"}], true}] =
+        tokens("<foo bar=baz wibble='wibble' alice=bob/>"),
+    ok.
 
 tokens("", _S, Acc) ->
     lists:reverse(Acc);
@@ -85,6 +189,9 @@ tokenize("</" ++ Rest, S) ->
     {Tag, Rest1, S1} = tokenize_literal(Rest, ?ADV_COL(S, 2), []),
     {Rest2, S2, _} = find_gt(Rest1, S1, false),
     {{end_tag, Tag}, Rest2, S2};
+tokenize(L="<" ++ [C | _Rest], S) when ?IS_WHITESPACE(C) ->
+    %% This isn't really strict HTML but we want this for markdown
+    tokenize_data(L, ?INC_COL(S), "<", true);
 tokenize("<" ++ Rest, S) ->
     {Tag, Rest1, S1} = tokenize_literal(Rest, ?INC_COL(S), []),
     {Attrs, Rest2, S2} = tokenize_attributes(Rest1, S1, []),
@@ -295,7 +402,7 @@ find_gt([], S, HasSlash) ->
 find_gt(">" ++ Rest, S, HasSlash) ->
     {Rest, ?INC_COL(S), HasSlash};
 find_gt([$/ | Rest], S, _) ->
-    {Rest, ?INC_COL(S), true};
+    find_gt(Rest, ?INC_COL(S), true);
 find_gt([C | Rest], S, HasSlash) ->
     find_gt(Rest, ?INC_CHAR(S, C), HasSlash).
 
@@ -304,6 +411,7 @@ tokenize_charref([], S, Acc) ->
 tokenize_charref(Rest=">" ++ _, S, Acc) ->
     {{data, lists:reverse(Acc), false}, Rest, S};
 tokenize_charref(Rest=[C | _], S, Acc) when ?IS_WHITESPACE(C) 
+                                            orelse C =:= ?SQUOTE
                                             orelse C =:= ?QUOTE
                                             orelse C =:= $/ ->
     {{data, lists:reverse(Acc), false}, Rest, S};
@@ -332,19 +440,21 @@ tokenize_doctype(Rest, S, Acc) ->
 tokenize_word_or_literal([C | _], S) when ?IS_WHITESPACE(C) ->
     {error, {whitespace, [C], S}};
 tokenize_word_or_literal([?QUOTE | Rest], S) ->
-    tokenize_word(Rest, ?INC_COL(S), []);
+    tokenize_word(Rest, ?INC_COL(S), ?QUOTE, []);
+tokenize_word_or_literal([?SQUOTE | Rest], S) ->
+    tokenize_word(Rest, ?INC_COL(S), ?SQUOTE, []);
 tokenize_word_or_literal(Rest, S) ->
     tokenize_literal(Rest, S, []).
     
-tokenize_word([], S, Acc) ->
+tokenize_word([], S, _Quote, Acc) ->
     {lists:reverse(Acc), [], S};
-tokenize_word([?QUOTE | Rest], S, Acc) ->
+tokenize_word([Quote | Rest], S, Quote, Acc) ->
     {lists:reverse(Acc), Rest, ?INC_COL(S)};
-tokenize_word([$& | Rest], S, Acc) ->
+tokenize_word([$& | Rest], S, Quote, Acc) ->
     {{data, Data, false}, S1, Rest1} = tokenize_charref(Rest, ?INC_COL(S), []),
-    tokenize_word(Rest1, S1, lists:reverse(Data, Acc));
-tokenize_word([C | Rest], S, Acc) ->
-    tokenize_word(Rest, ?INC_CHAR(S, C), [C | Acc]).
+    tokenize_word(Rest1, S1, Quote, lists:reverse(Data, Acc));
+tokenize_word([C | Rest], S, Quote, Acc) ->
+    tokenize_word(Rest, ?INC_CHAR(S, C), Quote, [C | Acc]).
 
 tokenize_literal([], S, Acc) ->
     {lists:reverse(Acc), [], S};
