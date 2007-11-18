@@ -46,7 +46,7 @@ tokenize("<" ++ Rest, S) ->
     Singleton = HasSlash orelse is_singleton(string:to_lower(Tag)),
     {{start_tag, Tag, Attrs, Singleton}, Rest3, S3};
 tokenize(Rest, S) ->
-    tokenize_data(Rest, S, []).
+    tokenize_data(Rest, S, [], true).
 
 %% Internal API
 
@@ -59,14 +59,16 @@ is_singleton("meta") -> true;
 is_singleton("link") -> true;
 is_singleton(_) -> false.
 
-tokenize_data([], S, Acc) ->
-    {{text, lists:reverse(Acc)}, [], S};
-tokenize_data(Rest="<" ++ _, S, Acc) ->
-    {{text, lists:reverse(Acc)}, Rest, S};
-tokenize_data(Rest="&" ++ _, S, Acc) ->
-    {{text, lists:reverse(Acc)}, Rest, S};
-tokenize_data([C | Rest], S, Acc) ->
-    tokenize_data(Rest, S, [C | Acc]).
+tokenize_data([], S, Acc, Whitespace) ->
+    {{data, lists:reverse(Acc), Whitespace}, [], S};
+tokenize_data(Rest="<" ++ _, S, Acc, Whitespace) ->
+    {{data, lists:reverse(Acc), Whitespace}, Rest, S};
+tokenize_data(Rest="&" ++ _, S, Acc, Whitespace) ->
+    {{data, lists:reverse(Acc), Whitespace}, Rest, S};
+tokenize_data([C | Rest], S, Acc, Whitespace) when ?IS_WHITESPACE(C) ->
+    tokenize_data(Rest, S, [C | Acc], Whitespace);
+tokenize_data([C | Rest], S, Acc, _) ->
+    tokenize_data(Rest, S, [C | Acc], false).
 
 tokenize_attributes([], S, Acc) ->
     {lists:reverse(Acc), [], S};
@@ -105,13 +107,13 @@ find_gt([C | Rest], S, HasSlash) ->
     find_gt(Rest, ?INC_CHAR(S, C), HasSlash).
 
 tokenize_charref([], S, Acc) ->
-    {{text, lists:reverse(Acc)}, [], S};
+    {{data, lists:reverse(Acc), false}, [], S};
 tokenize_charref(Rest=">" ++ _, S, Acc) ->
-    {{text, lists:reverse(Acc)}, Rest, S};
+    {{data, lists:reverse(Acc), false}, Rest, S};
 tokenize_charref(Rest=[C | _], S, Acc) when ?IS_WHITESPACE(C) 
                                             orelse C =:= ?QUOTE
                                             orelse C =:= $/ ->
-    {{text, lists:reverse(Acc)}, Rest, S};
+    {{data, lists:reverse(Acc), false}, Rest, S};
 tokenize_charref(";" ++ Rest, S, Acc) ->
     Raw = lists:reverse(Acc),
     Data = case mochiweb_charref:charref(Raw) of
@@ -120,7 +122,7 @@ tokenize_charref(";" ++ Rest, S, Acc) ->
                Unichar ->
                    xmerl_ucs:to_utf8(Unichar)
            end,
-    {{text, Data}, Rest, ?INC_COL(S)};
+    {{data, Data, false}, Rest, ?INC_COL(S)};
 tokenize_charref([C | Rest], S, Acc) ->
     tokenize_charref(Rest, ?INC_COL(S), [C | Acc]).
 
@@ -146,7 +148,7 @@ tokenize_word([], S, Acc) ->
 tokenize_word([?QUOTE | Rest], S, Acc) ->
     {lists:reverse(Acc), Rest, ?INC_COL(S)};
 tokenize_word([$& | Rest], S, Acc) ->
-    {{text, Data}, S1, Rest1} = tokenize_charref(Rest, ?INC_COL(S), []),
+    {{data, Data, false}, S1, Rest1} = tokenize_charref(Rest, ?INC_COL(S), []),
     tokenize_word(Rest1, S1, lists:reverse(Data, Acc));
 tokenize_word([C | Rest], S, Acc) ->
     tokenize_word(Rest, ?INC_CHAR(S, C), [C | Acc]).
@@ -156,7 +158,7 @@ tokenize_literal([], S, Acc) ->
 tokenize_literal(Rest=">" ++ _, S, Acc) ->
     {lists:reverse(Acc), Rest, S};
 tokenize_literal([$& | Rest], S, Acc) ->
-    {{text, Data}, S1, Rest1} = tokenize_charref(Rest, ?INC_COL(S), []),
+    {{data, Data, false}, S1, Rest1} = tokenize_charref(Rest, ?INC_COL(S), []),
     tokenize_literal(Rest1, S1, lists:reverse(Data, Acc));
 tokenize_literal(Rest=[C | _], S, Acc) when ?IS_WHITESPACE(C)
                                             orelse C =:= $/
