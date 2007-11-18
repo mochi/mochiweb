@@ -57,6 +57,9 @@ is_singleton("input") -> true;
 is_singleton("base") -> true;
 is_singleton("meta") -> true;
 is_singleton("link") -> true;
+is_singleton("area") -> true;
+is_singleton("param") -> true;
+is_singleton("col") -> true;
 is_singleton(_) -> false.
 
 tokenize_data([], S, Acc, Whitespace) ->
