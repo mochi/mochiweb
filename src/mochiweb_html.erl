@@ -122,7 +122,24 @@ test_parse_tokens() ->
        [{"div", [{"class", "a"}], [{"a", [{"name", "#anchor"}], []}]},
         {"div", [{"class", "b"}], [{"div", [{"class", "c"}], []}]}
        ]}]} = parse_tokens(D4),
+    D5 = [{start_tag,"html",[],false},
+          {data,"\n",true},
+          {data,"boo",false},
+          {data,"hoo",false},
+          {data,"\n",true},
+          {end_tag,"html"}],
+    {"html", [], ["\nboohoo\n"]} = parse_tokens(D5),
+    D6 = [{start_tag,"html",[],false},
+          {data,"\n",true},
+          {data,"\n",true},
+          {end_tag,"html"}],
+    {"html", [], []} = parse_tokens(D6),
     ok.
+
+tree_data([{data, Data, Whitespace} | Rest], AllWhitespace, Acc) ->
+    tree_data(Rest, (Whitespace andalso AllWhitespace), [Data | Acc]);
+tree_data(Rest, AllWhitespace, Acc) ->
+    {lists:append(lists:reverse(Acc)), AllWhitespace, Rest}.
 
 tree([], Stack) ->
     {destack(Stack), []};
@@ -137,22 +154,13 @@ tree([{start_tag, Tag, Attrs, true} | Rest], [T0 | S0]) ->
     tree(Rest, stack(norm({Tag, Attrs}), T0, S0));
 tree([{start_tag, Tag, Attrs, false} | Rest], S) ->
     tree(Rest, [norm({Tag, Attrs}) | S]);
-tree([{data, Data, Whitespace} | Rest], [{Tag, Attrs, Acc} | S0]) ->
-    Acc1 = case Acc of
-               [L | Acc0] when is_list(L) ->
-                   %% Merge consecutive data
-                   [L ++ Data | Acc0];
-               _ ->
-                   case Whitespace of
-                       true ->
-                           %% Ignore whitespace if it's not following
-                           %% non-whitespace text
-                           Acc;
-                       false ->
-                           [Data | Acc]
-                   end
-           end,
-    tree(Rest, [{Tag, Attrs, Acc1} | S0]).
+tree(L=[{data, _Data, _Whitespace} | _], S=[{Tag, Attrs, Acc} | S0]) ->
+    case tree_data(L, true, []) of
+        {_, true, Rest} -> 
+            tree(Rest, S);
+        {Data, false, Rest} ->
+            tree(Rest, [{Tag, Attrs, [Data | Acc]} | S0])
+    end.
 
 norm({Tag, Attrs}) ->
     {norm(Tag), [{norm(K), V} || {K, V} <- Attrs], []};
