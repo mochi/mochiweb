@@ -107,14 +107,34 @@ test_parse_tokens() ->
                 {end_tag, "head"},
                 {start_tag, "body", [], false}],
     {"html", [], [{"head", [], []}, {"body", [], []}]} = parse_tokens(D3),
+    D4 = D3 ++ [{data,"\n",true},
+                {start_tag,"div",[{"class","a"}],false},
+                {start_tag,"a",[{"name","#anchor"}],false},
+                {end_tag,"a"},
+                {end_tag, "div"},
+                {start_tag,"div",[{"class","b"}],false},
+                {start_tag,"div",[{"class","c"}],false},
+                {end_tag, "div"},
+                {end_tag, "div"}],
+    {"html", [],
+     [{"head", [], []},
+      {"body", [],
+       [{"div", [{"class", "a"}], [{"a", [{"name", "#anchor"}], []}]},
+        {"div", [{"class", "b"}], [{"div", [{"class", "c"}], []}]}
+       ]}]} = parse_tokens(D4),
     ok.
 
 tree([], Stack) ->
     {destack(Stack), []};
 tree([{end_tag, Tag} | Rest], Stack) ->
-    tree(Rest, destack(norm(Tag), Stack));
+    case destack(norm(Tag), Stack) of
+        S when is_list(S) ->
+            tree(Rest, S);
+        Result ->
+            {Result, []}
+    end;
 tree([{start_tag, Tag, Attrs, true} | Rest], [T0 | S0]) ->
-    tree(Rest, [destack([norm({Tag, Attrs}), T0]) | S0]);
+    tree(Rest, stack(norm({Tag, Attrs}), T0, S0));
 tree([{start_tag, Tag, Attrs, false} | Rest], S) ->
     tree(Rest, [norm({Tag, Attrs}) | S]);
 tree([{data, Data, Whitespace} | Rest], [{Tag, Attrs, Acc} | S0]) ->
@@ -150,6 +170,9 @@ test_destack() ->
         destack("c", [{"c", [], []}, {"b", [], []}, {"a", [], []}]),
     ok.
 
+stack(StartTag, {Name, Attrs, Acc}, Stack) ->
+    [{Name, Attrs, [StartTag | Acc]} | Stack].
+
 destack(TagName, Stack) when is_list(Stack) ->
     F = fun (X) ->
                 case X of 
@@ -161,17 +184,20 @@ destack(TagName, Stack) when is_list(Stack) ->
         end,
     case lists:splitwith(F, Stack) of
         {_, []} ->
+            %% No match, no state change
             Stack;
-        {Pre, [T]} ->
-            [destack(Pre ++ [T])];
-        {Pre, [T, N | Post]} ->
-            [destack(Pre ++ [T, N]) | Post]
+        {_Pre, [_T]} ->
+            %% Unfurl the whole stack, we're done
+            destack(Stack);
+        {Pre, [T, {T0, A0, Acc0} | Post]} ->
+            %% Unfurl up to the tag, then accumulate it
+            [{T0, A0, [destack(Pre ++ [T]) | Acc0]} | Post]
     end.
-            
-destack([Tag]) ->
-    Tag;
-destack([Sub, {Tag, Attrs, Acc} | Rest]) ->
-    destack([{Tag, Attrs, lists:reverse([Sub | Acc])} | Rest]).
+    
+destack([{Tag, Attrs, Acc}]) ->
+    {Tag, Attrs, lists:reverse(Acc)};
+destack([{T1, A1, Acc1}, {T0, A0, Acc0} | Rest]) ->
+    destack([{T0, A0, [{T1, A1, lists:reverse(Acc1)} | Acc0]} | Rest]).
 
 is_singleton("br") -> true;
 is_singleton("hr") -> true;
