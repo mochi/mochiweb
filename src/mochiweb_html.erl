@@ -40,7 +40,7 @@ parse(Input) ->
 
 %% @spec parse_tokens([html_token()]) -> html_node()
 %% @doc Transform the output of tokens(Doc) into a HTML tree.
-parse_tokens(Tokens) ->
+parse_tokens(Tokens) when is_list(Tokens) ->
     %% Skip over doctype
     F = fun (X) ->
                 case X of
@@ -58,28 +58,39 @@ parse_tokens(Tokens) ->
 %% @doc Transform the input UTF-8 HTML into a token stream.
 tokens(Input) when is_binary(Input) ->
     tokens(binary_to_list(Input), #decoder{}, []);
-tokens(Input) ->
+tokens(Input) when is_list(Input) ->
     tokens(Input, #decoder{}, []).
 
 %% @spec to_tokens(html_node()) -> [html_token()]
 %% @doc Convert a html_node() tree to a list of tokens.
-to_tokens({Tag, Attrs, Acc}) ->
+to_tokens({Tag0, Attrs, Acc}) ->
+    Tag = to_tag(Tag0),
     to_tokens([{Tag, Acc}], [{start_tag, Tag, Attrs, is_singleton(Tag)}]).
 
-%% @spec to_html([html_token()]) -> iolist()
+%% @spec to_html([html_token()] | html_node()) -> iolist()
 %% @doc Convert a list of html_token() to a HTML document.
-to_html(Tokens) ->
+to_html(Node={_Tag, _Attrs, _Acc}) ->
+    to_html(to_tokens(Node));
+to_html(Tokens) when is_list(Tokens) ->
     to_html(Tokens, []).
 
-%% @spec escape(S::string()) -> string()
+%% @spec escape(string() | binary()) -> string()
 %% @doc Escape a string such that it's safe for HTML (amp; lt; gt;).
-escape(S) ->
+escape(B) when is_binary(B) ->
+    escape(binary_to_list(B), []);
+escape(A) when is_atom(A) ->
+    escape(atom_to_list(A), []);
+escape(S) when is_list(S) ->
     escape(S, []).
 
 %% @spec escape(S::string()) -> string()
 %% @doc Escape a string such that it's safe for HTML attrs
 %%      (amp; lt; gt; quot;).
-escape_attr(S) ->
+escape_attr(B) when is_binary(B) ->
+    escape_attr(binary_to_list(B), []);
+escape_attr(A) when is_atom(A) ->
+    escape_attr(atom_to_list(A), []);
+escape_attr(S) when is_list(S) ->
     escape_attr(S, []).
 
 %% @spec test() -> ok
@@ -90,28 +101,42 @@ test() ->
     test_parse_tokens(),
     test_escape(),
     test_escape_attr(),
+    test_to_html(),
     ok.
 
 
 %% Internal API
 
+test_to_html() ->
+    Expect = <<"<html><head><title>hey!</title></head><body><p class=\"foo\">what's up<br /></p><div>sucka</div></body></html>">>,
+    Expect = iolist_to_binary(
+               to_html({html, [],
+                        [{"head",
+                          [{title, "hey!"}]},
+                         {body, [],
+                          [{p, [{class, foo}], ["what's", <<" up">>, {br}]},
+                           {'div', <<"sucka">>}]}]})),
+    ok.
 to_html([], Acc) ->
     lists:reverse(Acc);
 to_html([{data, Data, _Whitespace} | Rest], Acc) ->
     to_html(Rest, [escape(Data) | Acc]);
 to_html([{start_tag, Tag, Attrs, Singleton} | Rest], Acc) ->
-    Open = "<" ++ Tag ++ attrs_to_html(Attrs, []) ++ case Singleton of
-                                                         true -> " />";
-                                                         false -> ">"
-                                                     end,
+    Open = ["<" ++ Tag,
+            attrs_to_html(Attrs, []),
+            case Singleton of
+                true -> " />";
+                false -> ">"
+            end],
     to_html(Rest, [Open | Acc]);
 to_html([{end_tag, Tag} | Rest], Acc) ->
-    to_html(Rest, ["</" ++ Tag ++ ">" | Acc]).
+    to_html(Rest, [["</" ++ Tag, ">"] | Acc]).
 
 attrs_to_html([], Acc) ->
     lists:reverse(Acc);
 attrs_to_html([{K, V} | Rest], Acc) ->
-    attrs_to_html(Rest, [" " ++ K ++ "=\"" ++ escape_attr(V) ++ "\"" | Acc]).
+    attrs_to_html(Rest,
+                  [[" " ++ escape(K), "=\"" ++ escape_attr(V), "\""] | Acc]).
     
 test_escape() ->
     "&amp;quot;\"word &lt;&lt;up!&amp;quot;" =
@@ -147,11 +172,32 @@ escape_attr([?QUOTE | Rest], Acc) ->
 escape_attr([C | Rest], Acc) ->
     escape_attr(Rest, [C | Acc]).
 
+to_tag(A) when is_atom(A) ->
+    atom_to_list(A);
+to_tag(L) ->
+    L.
+
 to_tokens([], Acc) ->
     lists:reverse(Acc);
 to_tokens([{Tag, []} | Rest], Acc) ->
-    to_tokens(Rest, [{end_tag, Tag} | Acc]);
-to_tokens([{Tag, [{T1, A1, C1} | R1]} | Rest], Acc) ->
+    to_tokens(Rest, [{end_tag, to_tag(Tag)} | Acc]);
+to_tokens([{Tag0, [{T0} | R1]} | Rest], Acc) ->
+    %% Allow {br}
+    to_tokens([{Tag0, [{T0, [], []} | R1]} | Rest], Acc);
+to_tokens([{Tag0, [{T0, C0} | R1]} | Rest], Acc) ->
+    %% Allow {p, ["content"]}
+    to_tokens([{Tag0, [{T0, [], C0} | R1]} | Rest], Acc);
+to_tokens([{Tag0, [{T0, A1, C0} | R1]} | Rest], Acc) when is_binary(C0) ->
+    %% Allow {"p", [{"class", "foo"}], <<"content">>}
+    to_tokens([{Tag0, [{T0, A1, binary_to_list(C0)} | R1]} | Rest], Acc);
+to_tokens([{Tag0, [{T0, A1, C0=[C | _]} | R1]} | Rest], Acc)
+  when is_integer(C) ->
+    %% Allow {"p", [{"class", "foo"}], "content"}
+    to_tokens([{Tag0, [{T0, A1, [C0]} | R1]} | Rest], Acc);
+to_tokens([{Tag0, [{T0, A1, C1} | R1]} | Rest], Acc) ->
+    %% Native {"p", [{"class", "foo"}], ["content"]}
+    Tag = to_tag(Tag0),
+    T1 = to_tag(T0),
     case is_singleton(T1) of
         true ->
             to_tokens([{Tag, R1} | Rest], [{start_tag, T1, A1, true} | Acc]);
@@ -159,8 +205,12 @@ to_tokens([{Tag, [{T1, A1, C1} | R1]} | Rest], Acc) ->
             to_tokens([{T1, C1}, {Tag, R1} | Rest],
                       [{start_tag, T1, A1, false} | Acc])
     end;
-to_tokens([{Tag, [L | R1]} | Rest], Acc) when is_list(L) ->
-    to_tokens([{Tag, R1} | Rest], [{data, L, false} | Acc]).
+to_tokens([{Tag0, [L | R1]} | Rest], Acc) when is_list(L) ->
+    Tag = to_tag(Tag0),
+    to_tokens([{Tag, R1} | Rest], [{data, L, false} | Acc]);
+to_tokens([{Tag0, [B | R1]} | Rest], Acc) when is_binary(B) ->
+    Tag = to_tag(Tag0),
+    to_tokens([{Tag, R1} | Rest], [{data, binary_to_list(B), false} | Acc]).
 
 test_tokens() ->
     [{start_tag, "foo", [{"bar", "baz"},
