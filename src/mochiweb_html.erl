@@ -134,6 +134,24 @@ test_parse_tokens() ->
           {data,"\n",true},
           {end_tag,"html"}],
     {"html", [], []} = parse_tokens(D6),
+    D7 = [{start_tag,"html",[],false},
+          {start_tag,"ul",[],false},
+          {start_tag,"li",[],false},
+          {data,"word",false},
+          {start_tag,"li",[],false},
+          {data,"up",false},
+          {end_tag,"li"},
+          {start_tag,"li",[],false},
+          {data,"fdsa",false},
+          {start_tag,"br",[],true},
+          {data,"asdf",false},
+          {end_tag,"ul"},
+          {end_tag,"html"}],
+    {"html", [],
+     [{"ul", [],
+       [{"li", [], ["word"]},
+        {"li", [], ["up"]},
+        {"li", [], ["fdsa",{"br", [], []}, "asdf"]}]}]} = parse_tokens(D7),
     ok.
 
 tree_data([{data, Data, Whitespace} | Rest], AllWhitespace, Acc) ->
@@ -150,16 +168,16 @@ tree([{end_tag, Tag} | Rest], Stack) ->
         Result ->
             {Result, []}
     end;
-tree([{start_tag, Tag, Attrs, true} | Rest], [T0 | S0]) ->
-    tree(Rest, stack(norm({Tag, Attrs}), T0, S0));
+tree([{start_tag, Tag, Attrs, true} | Rest], S) ->
+    tree(Rest, append_stack_child(norm({Tag, Attrs}), S));
 tree([{start_tag, Tag, Attrs, false} | Rest], S) ->
-    tree(Rest, [norm({Tag, Attrs}) | S]);
-tree(L=[{data, _Data, _Whitespace} | _], S=[{Tag, Attrs, Acc} | S0]) ->
+    tree(Rest, stack(norm({Tag, Attrs}), S));
+tree(L=[{data, _Data, _Whitespace} | _], S) ->
     case tree_data(L, true, []) of
         {_, true, Rest} -> 
             tree(Rest, S);
         {Data, false, Rest} ->
-            tree(Rest, [{Tag, Attrs, [Data | Acc]} | S0])
+            tree(Rest, append_stack_child(Data, S))
     end.
 
 norm({Tag, Attrs}) ->
@@ -178,7 +196,22 @@ test_destack() ->
         destack("c", [{"c", [], []}, {"b", [], []}, {"a", [], []}]),
     ok.
 
-stack(StartTag, {Name, Attrs, Acc}, Stack) ->
+stack(T1={"li", _, _}, Stack=[{TN="li", _, _} | _Rest]) ->
+    [T1 | destack(TN, Stack)];
+stack(T1={"dt", _, _}, Stack=[{TN="dd", _, _} | _Rest]) ->
+    [T1 | destack(TN, Stack)];
+stack(T1={"dt", _, _}, Stack=[{TN="dt", _, _} | _Rest]) ->
+    [T1 | destack(TN, Stack)];
+stack(T1={"dd", _, _}, Stack=[{TN="dt", _, _} | _Rest]) ->
+    [T1 | destack(TN, Stack)];
+stack(T1={"dd", _, _}, Stack=[{TN="dd", _, _} | _Rest]) ->
+    [T1 | destack(TN, Stack)];
+stack(T1={"option", _, _}, Stack=[{TN="option", _, _} | _Rest]) ->
+    [T1 | destack(TN, Stack)];
+stack(T1, Stack) ->
+    [T1 | Stack].
+
+append_stack_child(StartTag, [{Name, Attrs, Acc} | Stack]) ->
     [{Name, Attrs, [StartTag | Acc]} | Stack].
 
 destack(TagName, Stack) when is_list(Stack) ->
