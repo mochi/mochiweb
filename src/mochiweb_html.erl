@@ -107,7 +107,11 @@ escape_attr(B) when is_binary(B) ->
 escape_attr(A) when is_atom(A) ->
     escape_attr(atom_to_list(A), []);
 escape_attr(S) when is_list(S) ->
-    escape_attr(S, []).
+    escape_attr(S, []);
+escape_attr(I) when is_integer(I) ->
+    escape_attr(integer_to_list(I), []);
+escape_attr(F) when is_float(F) ->
+    escape_attr(mochijson:encode(F), []).
 
 %% @spec test() -> ok
 %% @doc Run tests for mochiweb_html.
