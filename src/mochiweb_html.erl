@@ -19,17 +19,23 @@
         end).
 
 -define(IS_WHITESPACE(C),
-	(C =:= $\s orelse C =:= $\t orelse C =:= $\r orelse C =:= $\n)).
+ 	(C =:= $\s orelse C =:= $\t orelse C =:= $\r orelse C =:= $\n)).
+-define(IS_LITERAL_SAFE(C),
+        ((C >= $A andalso C =< $Z) orelse (C >= $a andalso C =< $z)
+         orelse (C >= $0 andalso C =< $9))).
                                 
 -record(decoder, {line=1,
 		  column=1}).
 
 %% @type html_node() = {string(), [html_attr()], [html_node() | string()]}
 %% @type html_attr() = {string(), string()}
-%% @type html_token() = html_data() | start_tag() | end_tag()
+%% @type html_token() = html_data() | start_tag() | end_tag() | inline_html() | html_comment() | html_doctype()
 %% @type html_data() = {data, string(), Whitespace::boolean()}
 %% @type start_tag() = {start_tag, Name, [html_attr()], Singleton::boolean()}
 %% @type end_tag() = {end_tag, Name}
+%% @type html_comment() = {comment, Comment}
+%% @type html_doctype() = {doctype, [Doctype]}
+%% @type inline_html() = {'=', iolist()}
 
 %% External API.
 
@@ -63,13 +69,23 @@ tokens(Input) when is_list(Input) ->
 
 %% @spec to_tokens(html_node()) -> [html_token()]
 %% @doc Convert a html_node() tree to a list of tokens.
+to_tokens({Tag0}) ->
+    to_tokens({Tag0, [], []});
+to_tokens(T={'=', _}) ->
+    [T];
+to_tokens(T={doctype, _}) ->
+    [T];
+to_tokens(T={comment, _}) ->
+    [T];
+to_tokens({Tag0, Acc}) ->
+    to_tokens({Tag0, [], Acc});
 to_tokens({Tag0, Attrs, Acc}) ->
     Tag = to_tag(Tag0),
     to_tokens([{Tag, Acc}], [{start_tag, Tag, Attrs, is_singleton(Tag)}]).
 
 %% @spec to_html([html_token()] | html_node()) -> iolist()
 %% @doc Convert a list of html_token() to a HTML document.
-to_html(Node={_Tag, _Attrs, _Acc}) ->
+to_html(Node) when is_tuple(Node) ->
     to_html(to_tokens(Node));
 to_html(Tokens) when is_list(Tokens) ->
     to_html(Tokens, []).
@@ -108,17 +124,31 @@ test() ->
 %% Internal API
 
 test_to_html() ->
-    Expect = <<"<html><head><title>hey!</title></head><body><p class=\"foo\">what's up<br /></p><div>sucka</div></body></html>">>,
+    Expect = <<"<html><head><title>hey!</title></head><body><p class=\"foo\">what's up<br /></p><div>sucka</div><!-- comment! --></body></html>">>,
     Expect = iolist_to_binary(
                to_html({html, [],
-                        [{"head",
+                        [{"head", [],
                           [{title, "hey!"}]},
                          {body, [],
                           [{p, [{class, foo}], ["what's", <<" up">>, {br}]},
-                           {'div', <<"sucka">>}]}]})),
+                           {'div', <<"sucka">>},
+                           {comment, " comment! "}]}]})),
+    Expect1 = <<"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">">>,
+    Expect1 = iolist_to_binary(
+                to_html({doctype,
+                         ["html", "PUBLIC",
+                          "-//W3C//DTD XHTML 1.0 Transitional//EN",
+                          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"]})),
     ok.
 to_html([], Acc) ->
     lists:reverse(Acc);
+to_html([{'=', Content} | Rest], Acc) ->
+    to_html(Rest, [Content | Acc]);
+to_html([{comment, Comment} | Rest], Acc) ->
+    to_html(Rest, [["<!--" ++ Comment, "-->"] | Acc]);
+to_html([{doctype, Parts} | Rest], Acc) ->
+    Inside = doctype_to_html(Parts, Acc),
+    to_html(Rest, [["<!DOCTYPE" ++ Inside, ">"] | Acc]);
 to_html([{data, Data, _Whitespace} | Rest], Acc) ->
     to_html(Rest, [escape(Data) | Acc]);
 to_html([{start_tag, Tag, Attrs, Singleton} | Rest], Acc) ->
@@ -131,6 +161,16 @@ to_html([{start_tag, Tag, Attrs, Singleton} | Rest], Acc) ->
     to_html(Rest, [Open | Acc]);
 to_html([{end_tag, Tag} | Rest], Acc) ->
     to_html(Rest, [["</" ++ Tag, ">"] | Acc]).
+
+doctype_to_html([], Acc) ->
+    lists:reverse(Acc);
+doctype_to_html([Word | Rest], Acc) ->
+    case lists:all(fun (C) -> ?IS_LITERAL_SAFE(C) end, Word) of
+        true ->
+            doctype_to_html(Rest, [" " ++ Word | Acc]);
+        false ->
+            doctype_to_html(Rest, [[" \"" ++ escape_attr(Word), ?QUOTE] | Acc])
+    end.
 
 attrs_to_html([], Acc) ->
     lists:reverse(Acc);
@@ -184,8 +224,17 @@ to_tokens([{Tag, []} | Rest], Acc) ->
 to_tokens([{Tag0, [{T0} | R1]} | Rest], Acc) ->
     %% Allow {br}
     to_tokens([{Tag0, [{T0, [], []} | R1]} | Rest], Acc);
+to_tokens([{Tag0, [T0={'=', _C0} | R1]} | Rest], Acc) ->
+    %% Allow {'=', iolist()}
+    to_tokens([{Tag0, R1} | Rest], [T0 | Acc]);
+to_tokens([{Tag0, [T0={comment, _C0} | R1]} | Rest], Acc) ->
+    %% Allow {comment, iolist()}
+    to_tokens([{Tag0, R1} | Rest], [T0 | Acc]);
+to_tokens([{Tag0, [{T0, A0=[{_, _} | _]} | R1]} | Rest], Acc) ->
+    %% Allow {p, [{"class", "foo"}]}
+    to_tokens([{Tag0, [{T0, A0, []} | R1]} | Rest], Acc);
 to_tokens([{Tag0, [{T0, C0} | R1]} | Rest], Acc) ->
-    %% Allow {p, ["content"]}
+    %% Allow {p, "content"} and {p, <<"content">>}
     to_tokens([{Tag0, [{T0, [], C0} | R1]} | Rest], Acc);
 to_tokens([{Tag0, [{T0, A1, C0} | R1]} | Rest], Acc) when is_binary(C0) ->
     %% Allow {"p", [{"class", "foo"}], <<"content">>}
@@ -206,9 +255,11 @@ to_tokens([{Tag0, [{T0, A1, C1} | R1]} | Rest], Acc) ->
                       [{start_tag, T1, A1, false} | Acc])
     end;
 to_tokens([{Tag0, [L | R1]} | Rest], Acc) when is_list(L) ->
+    %% List text
     Tag = to_tag(Tag0),
     to_tokens([{Tag, R1} | Rest], [{data, L, false} | Acc]);
 to_tokens([{Tag0, [B | R1]} | Rest], Acc) when is_binary(B) ->
+    %% Binary text
     Tag = to_tag(Tag0),
     to_tokens([{Tag, R1} | Rest], [{data, binary_to_list(B), false} | Acc]).
 
