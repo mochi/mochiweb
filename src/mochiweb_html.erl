@@ -118,6 +118,7 @@ escape_attr(F) when is_float(F) ->
 test() ->
     test_destack(),
     test_tokens(),
+    test_parse(),
     test_parse_tokens(),
     test_escape(),
     test_escape_attr(),
@@ -308,6 +309,62 @@ tokenize("<" ++ Rest, S) ->
 tokenize(Rest, S) ->
     tokenize_data(Rest, S, [], true).
 
+test_parse() ->
+    D0 = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">
+<html>
+ <head>
+   <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">
+   <title>Foo</title>
+   <link rel=\"stylesheet\" type=\"text/css\" href=\"/static/rel/dojo/resources/dojo.css\" media=\"screen\">
+   <link rel=\"stylesheet\" type=\"text/css\" href=\"/static/foo.css\" media=\"screen\">
+   <!--[if lt IE 7]>
+   <style type=\"text/css\">
+     .no_ie { display: none; }
+   </style>
+   <![endif]-->
+   <link rel=\"icon\" href=\"/static/images/favicon.ico\" type=\"image/x-icon\">
+   <link rel=\"shortcut icon\" href=\"/static/images/favicon.ico\" type=\"image/x-icon\">
+ </head>
+ <body id=\"home\" class=\"tundra\">
+ </body>
+</html>",
+    Expect = {"html", [],
+              [{"head", [],
+                [{"meta",
+                  [{"http-equiv","Content-Type"},
+                   {"content","text/html; charset=UTF-8"}],
+                  []},
+                 {"title",[],["Foo"]},
+                 {"link",
+                  [{"rel","stylesheet"},
+                   {"type","text/css"},
+                   {"href","/static/rel/dojo/resources/dojo.css"},
+                   {"media","screen"}],
+                  []},
+                 {"link",
+                  [{"rel","stylesheet"},
+                   {"type","text/css"},
+                   {"href","/static/foo.css"},
+                   {"media","screen"}],
+                  []},
+                 {comment,"[if lt IE 7]>\n   <style type=\"text/css\">\n     .no_ie { display: none; }\n   </style>\n   <![endif]"},
+                 {"link",
+                  [{"rel","icon"},
+                   {"href","/static/images/favicon.ico"},
+                   {"type","image/x-icon"}],
+                  []},
+                 {"link",
+                  [{"rel","shortcut icon"},
+                   {"href","/static/images/favicon.ico"},
+                   {"type","image/x-icon"}],
+                  []}]},
+               {"body",
+                [{"id","home"},
+                 {"class","tundra"}],
+                []}]},
+    Expect = parse(D0),
+    ok.
+
 test_parse_tokens() ->
     D0 = [{doctype,["HTML","PUBLIC","-//W3C//DTD HTML 4.01 Transitional//EN"]},
           {data,"\n",true},
@@ -386,6 +443,8 @@ tree([{start_tag, Tag, Attrs, true} | Rest], S) ->
     tree(Rest, append_stack_child(norm({Tag, Attrs}), S));
 tree([{start_tag, Tag, Attrs, false} | Rest], S) ->
     tree(Rest, stack(norm({Tag, Attrs}), S));
+tree([T={comment, _Comment} | Rest], S) ->
+    tree(Rest, append_stack_child(T, S));
 tree(L=[{data, _Data, _Whitespace} | _], S) ->
     case tree_data(L, true, []) of
         {_, true, Rest} -> 
