@@ -47,7 +47,7 @@ parse(Input) ->
 %% @spec parse_tokens([html_token()]) -> html_node()
 %% @doc Transform the output of tokens(Doc) into a HTML tree.
 parse_tokens(Tokens) when is_list(Tokens) ->
-    %% Skip over doctype
+    %% Skip over doctype, processing instructions
     F = fun (X) ->
                 case X of
                     {start_tag, _, _, false} ->
@@ -149,6 +149,11 @@ to_html([], Acc) ->
     lists:reverse(Acc);
 to_html([{'=', Content} | Rest], Acc) ->
     to_html(Rest, [Content | Acc]);
+to_html([{pi, Tag, Attrs} | Rest], Acc) ->
+    Open = ["<?" ++ Tag,
+            attrs_to_html(Attrs, []),
+            "?>"],
+    to_html(Rest, [Open | Acc]);
 to_html([{comment, Comment} | Rest], Acc) ->
     to_html(Rest, [["<!--" ++ Comment, "-->"] | Acc]);
 to_html([{doctype, Parts} | Rest], Acc) ->
@@ -293,6 +298,11 @@ tokenize("<!DOCTYPE " ++ Rest, S) ->
     tokenize_doctype(Rest, ?ADV_COL(S, 10), []);
 tokenize("<![CDATA[" ++ Rest, S) ->
     tokenize_cdata(Rest, ?ADV_COL(S, 9), []);
+tokenize("<?" ++ Rest, S) ->
+    {Tag, Rest1, S1} = tokenize_literal(Rest, ?ADV_COL(S, 2), []),
+    {Attrs, Rest2, S2} = tokenize_attributes(Rest1, S1, []),
+    {Rest3, S3} = find_qgt(Rest2, S2),
+    {{pi, Tag, Attrs}, Rest3, S3};
 tokenize("&" ++ Rest, S) ->
     tokenize_charref(Rest, ?INC_COL(S), []);
 tokenize("</" ++ Rest, S) ->
@@ -444,6 +454,8 @@ tree([{start_tag, Tag, Attrs, true} | Rest], S) ->
     tree(Rest, append_stack_child(norm({Tag, Attrs}), S));
 tree([{start_tag, Tag, Attrs, false} | Rest], S) ->
     tree(Rest, stack(norm({Tag, Attrs}), S));
+tree([T={pi, _Tag, _Attrs} | Rest], S) ->
+    tree(Rest, append_stack_child(T, S));
 tree([T={comment, _Comment} | Rest], S) ->
     tree(Rest, append_stack_child(T, S));
 tree(L=[{data, _Data, _Whitespace} | _], S) ->
@@ -541,6 +553,8 @@ tokenize_attributes([], S, Acc) ->
     {lists:reverse(Acc), [], S};
 tokenize_attributes(Rest=">" ++ _, S, Acc) ->
     {lists:reverse(Acc), Rest, S};
+tokenize_attributes(Rest="?>" ++ _, S, Acc) ->
+    {lists:reverse(Acc), Rest, S};
 tokenize_attributes(Rest="/" ++ _, S, Acc) ->
     {lists:reverse(Acc), Rest, S};
 tokenize_attributes([C | Rest], S, Acc) when ?IS_WHITESPACE(C) ->
@@ -563,6 +577,13 @@ skip_whitespace([C | Rest], S) when ?IS_WHITESPACE(C) ->
     skip_whitespace(Rest, ?INC_CHAR(S, C));
 skip_whitespace(Rest, S) ->
     {Rest, S}.
+
+find_qgt([], S) ->
+    {[], S};
+find_qgt("?>" ++ Rest, S) ->
+    {Rest, ?ADV_COL(S, 2)};
+find_qgt([C | Rest], S) ->
+    find_qgt(Rest, ?INC_CHAR(S, C)).
 
 find_gt([], S, HasSlash) ->
     {[], S, HasSlash};
