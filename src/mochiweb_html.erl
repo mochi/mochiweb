@@ -291,6 +291,8 @@ tokenize("<!--" ++ Rest, S) ->
     tokenize_comment(Rest, ?ADV_COL(S, 4), []);
 tokenize("<!DOCTYPE " ++ Rest, S) ->
     tokenize_doctype(Rest, ?ADV_COL(S, 10), []);
+tokenize("<![CDATA[" ++ Rest, S) ->
+    tokenize_cdata(Rest, ?ADV_COL(S, 9), []);
 tokenize("&" ++ Rest, S) ->
     tokenize_charref(Rest, ?INC_COL(S), []);
 tokenize("</" ++ Rest, S) ->
@@ -325,8 +327,7 @@ test_parse() ->
    <link rel=\"icon\" href=\"/static/images/favicon.ico\" type=\"image/x-icon\">
    <link rel=\"shortcut icon\" href=\"/static/images/favicon.ico\" type=\"image/x-icon\">
  </head>
- <body id=\"home\" class=\"tundra\">
- </body>
+ <body id=\"home\" class=\"tundra\"><![CDATA[&lt;<this<!-- is -->CDATA>&gt;]]></body>
 </html>",
     Expect = {"html", [],
               [{"head", [],
@@ -361,7 +362,7 @@ test_parse() ->
                {"body",
                 [{"id","home"},
                  {"class","tundra"}],
-                []}]},
+                ["&lt;<this<!-- is -->CDATA>&gt;"]}]},
     Expect = parse(D0),
     ok.
 
@@ -635,6 +636,13 @@ tokenize_literal(Rest=[C | _], S, Acc) when ?IS_WHITESPACE(C)
     {lists:reverse(Acc), Rest, S};
 tokenize_literal([C | Rest], S, Acc) ->
     tokenize_literal(Rest, ?INC_COL(S), [C | Acc]).
+
+tokenize_cdata([], S, Acc) ->
+    {{data, lists:reverse(Acc), false}, [], S};
+tokenize_cdata("]]>" ++ Rest, S, Acc) ->
+    {{data, lists:reverse(Acc), false}, Rest, ?ADV_COL(S, 3)};
+tokenize_cdata([C | Rest], S, Acc) ->
+    tokenize_cdata(Rest, ?INC_CHAR(S, C), [C | Acc]).
 
 tokenize_comment([], S, Acc) ->
     {{comment, lists:reverse(Acc)}, [], S};
