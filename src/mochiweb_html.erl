@@ -276,6 +276,8 @@ test_tokens() ->
                          {"wibble", "wibble"},
                          {"alice", "bob"}], true}] =
         tokens("<foo bar=baz wibble='wibble' alice=bob/>"),
+    [{comment, "[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]"}] =
+        tokens("<!--[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]-->"),
     ok.
 
 tokens("", _S, Acc) ->
