@@ -132,74 +132,78 @@ test_to_html() ->
     Expect = <<"<html><head><title>hey!</title></head><body><p class=\"foo\">what's up<br /></p><div>sucka</div><!-- comment! --></body></html>">>,
     Expect = iolist_to_binary(
                to_html({html, [],
-                        [{"head", [],
-                          [{title, "hey!"}]},
+                        [{<<"head">>, [],
+                          [{title, <<"hey!">>}]},
                          {body, [],
-                          [{p, [{class, foo}], ["what's", <<" up">>, {br}]},
+                          [{p, [{class, foo}], [<<"what's">>, <<" up">>, {br}]},
                            {'div', <<"sucka">>},
-                           {comment, " comment! "}]}]})),
+                           {comment, <<" comment! ">>}]}]})),
     Expect1 = <<"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">">>,
     Expect1 = iolist_to_binary(
                 to_html({doctype,
-                         ["html", "PUBLIC",
-                          "-//W3C//DTD XHTML 1.0 Transitional//EN",
-                          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"]})),
+                         [<<"html">>, <<"PUBLIC">>,
+                          <<"-//W3C//DTD XHTML 1.0 Transitional//EN">>,
+                          <<"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">>]})),
     ok.
 to_html([], Acc) ->
     lists:reverse(Acc);
 to_html([{'=', Content} | Rest], Acc) ->
     to_html(Rest, [Content | Acc]);
 to_html([{pi, Tag, Attrs} | Rest], Acc) ->
-    Open = ["<?" ++ Tag,
+    Open = [<<"<?">>,
+            Tag,
             attrs_to_html(Attrs, []),
-            "?>"],
+            <<"?>">>],
     to_html(Rest, [Open | Acc]);
 to_html([{comment, Comment} | Rest], Acc) ->
-    to_html(Rest, [["<!--" ++ Comment, "-->"] | Acc]);
+    to_html(Rest, [[<<"<!--">>, Comment, <<"-->">>] | Acc]);
 to_html([{doctype, Parts} | Rest], Acc) ->
     Inside = doctype_to_html(Parts, Acc),
-    to_html(Rest, [["<!DOCTYPE" ++ Inside, ">"] | Acc]);
+    to_html(Rest, [[<<"<!DOCTYPE">>, Inside, <<">">>] | Acc]);
 to_html([{data, Data, _Whitespace} | Rest], Acc) ->
     to_html(Rest, [escape(Data) | Acc]);
 to_html([{start_tag, Tag, Attrs, Singleton} | Rest], Acc) ->
-    Open = ["<" ++ Tag,
+    Open = [<<"<">>,
+            Tag,
             attrs_to_html(Attrs, []),
             case Singleton of
-                true -> " />";
-                false -> ">"
+                true -> <<" />">>;
+                false -> <<">">>
             end],
     to_html(Rest, [Open | Acc]);
 to_html([{end_tag, Tag} | Rest], Acc) ->
-    to_html(Rest, [["</" ++ Tag, ">"] | Acc]).
+    to_html(Rest, [[<<"</">>, Tag, <<">">>] | Acc]).
 
 doctype_to_html([], Acc) ->
     lists:reverse(Acc);
 doctype_to_html([Word | Rest], Acc) ->
-    case lists:all(fun (C) -> ?IS_LITERAL_SAFE(C) end, Word) of
+    case lists:all(fun (C) -> ?IS_LITERAL_SAFE(C) end,
+                   binary_to_list(iolist_to_binary(Word))) of
         true ->
-            doctype_to_html(Rest, [" " ++ Word | Acc]);
+            doctype_to_html(Rest, [[<<" ">>, Word] | Acc]);
         false ->
-            doctype_to_html(Rest, [[" \"" ++ escape_attr(Word), ?QUOTE] | Acc])
+            doctype_to_html(Rest, [[<<" \"">>, escape_attr(Word), ?QUOTE] | Acc])
     end.
 
 attrs_to_html([], Acc) ->
     lists:reverse(Acc);
 attrs_to_html([{K, V} | Rest], Acc) ->
     attrs_to_html(Rest,
-                  [[" " ++ escape(K), "=\"" ++ escape_attr(V), "\""] | Acc]).
+                  [[<<" ">>, escape(K), <<"=\"">>,
+                    escape_attr(V), <<"\"">>] | Acc]).
     
 test_escape() ->
-    "&amp;quot;\"word &lt;&lt;up!&amp;quot;" =
-        escape("&quot;\"word <<up!&quot;"),
+    <<"&amp;quot;\"word &lt;&lt;up!&amp;quot;">> =
+        escape(<<"&quot;\"word <<up!&quot;">>),
     ok.
 
 test_escape_attr() ->
-    "&amp;quot;&quot;word &lt;&lt;up!&amp;quot;" =
-        escape_attr("&quot;\"word <<up!&quot;"),
+    <<"&amp;quot;&quot;word &lt;&lt;up!&amp;quot;">> =
+        escape_attr(<<"&quot;\"word <<up!&quot;">>),
     ok.
 
 escape([], Acc) ->
-    lists:reverse(Acc);
+    list_to_binary(lists:reverse(Acc));
 escape("<" ++ Rest, Acc) ->
     escape(Rest, lists:reverse("&lt;", Acc));
 escape(">" ++ Rest, Acc) ->
@@ -210,7 +214,7 @@ escape([C | Rest], Acc) ->
     escape(Rest, [C | Acc]).
 
 escape_attr([], Acc) ->
-    lists:reverse(Acc);
+    list_to_binary(lists:reverse(Acc));
 escape_attr("<" ++ Rest, Acc) ->
     escape_attr(Rest, lists:reverse("&lt;", Acc));
 escape_attr(">" ++ Rest, Acc) ->
@@ -223,9 +227,9 @@ escape_attr([C | Rest], Acc) ->
     escape_attr(Rest, [C | Acc]).
 
 to_tag(A) when is_atom(A) ->
-    atom_to_list(A);
+    norm(atom_to_list(A));
 to_tag(L) ->
-    L.
+    norm(L).
 
 to_tokens([], Acc) ->
     lists:reverse(Acc);
@@ -257,7 +261,7 @@ to_tokens([{Tag0, [{T0, A1, C1} | R1]} | Rest], Acc) ->
     %% Native {"p", [{"class", "foo"}], ["content"]}
     Tag = to_tag(Tag0),
     T1 = to_tag(T0),
-    case is_singleton(T1) of
+    case is_singleton(norm(T1)) of
         true ->
             to_tokens([{Tag, R1} | Rest], [{start_tag, T1, A1, true} | Acc]);
         false ->
@@ -267,23 +271,23 @@ to_tokens([{Tag0, [{T0, A1, C1} | R1]} | Rest], Acc) ->
 to_tokens([{Tag0, [L | R1]} | Rest], Acc) when is_list(L) ->
     %% List text
     Tag = to_tag(Tag0),
-    to_tokens([{Tag, R1} | Rest], [{data, L, false} | Acc]);
+    to_tokens([{Tag, R1} | Rest], [{data, iolist_to_binary(L), false} | Acc]);
 to_tokens([{Tag0, [B | R1]} | Rest], Acc) when is_binary(B) ->
     %% Binary text
     Tag = to_tag(Tag0),
-    to_tokens([{Tag, R1} | Rest], [{data, binary_to_list(B), false} | Acc]).
+    to_tokens([{Tag, R1} | Rest], [{data, B, false} | Acc]).
 
 test_tokens() ->
-    [{start_tag, "foo", [{"bar", "baz"},
-                         {"wibble", "wibble"},
-                         {"alice", "bob"}], true}] =
-        tokens("<foo bar=baz wibble='wibble' alice=\"bob\"/>"),
-    [{start_tag, "foo", [{"bar", "baz"},
-                         {"wibble", "wibble"},
-                         {"alice", "bob"}], true}] =
-        tokens("<foo bar=baz wibble='wibble' alice=bob/>"),
-    [{comment, "[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]"}] =
-        tokens("<!--[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]-->"),
+    [{start_tag, <<"foo">>, [{<<"bar">>, <<"baz">>},
+                             {<<"wibble">>, <<"wibble">>},
+                             {<<"alice">>, <<"bob">>}], true}] =
+        tokens(<<"<foo bar=baz wibble='wibble' alice=\"bob\"/>">>),
+    [{start_tag, <<"foo">>, [{<<"bar">>, <<"baz">>},
+                             {<<"wibble">>, <<"wibble">>},
+                             {<<"alice">>, <<"bob">>}], true}] =
+        tokens(<<"<foo bar=baz wibble='wibble' alice=bob/>">>),
+    [{comment, <<"[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]">>}] =
+        tokens(<<"<!--[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]-->">>),
     ok.
 
 tokens("", _S, Acc) ->
@@ -316,13 +320,13 @@ tokenize("<" ++ Rest, S) ->
     {Tag, Rest1, S1} = tokenize_literal(Rest, ?INC_COL(S), []),
     {Attrs, Rest2, S2} = tokenize_attributes(Rest1, S1, []),
     {Rest3, S3, HasSlash} = find_gt(Rest2, S2, false),
-    Singleton = HasSlash orelse is_singleton(string:to_lower(Tag)),
+    Singleton = HasSlash orelse is_singleton(norm(binary_to_list(Tag))),
     {{start_tag, Tag, Attrs, Singleton}, Rest3, S3};
 tokenize(Rest, S) ->
     tokenize_data(Rest, S, [], true).
 
 test_parse() ->
-    D0 = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">
+    D0 = <<"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">
 <html>
  <head>
    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">
@@ -338,108 +342,108 @@ test_parse() ->
    <link rel=\"shortcut icon\" href=\"/static/images/favicon.ico\" type=\"image/x-icon\">
  </head>
  <body id=\"home\" class=\"tundra\"><![CDATA[&lt;<this<!-- is -->CDATA>&gt;]]></body>
-</html>",
-    Expect = {"html", [],
-              [{"head", [],
-                [{"meta",
-                  [{"http-equiv","Content-Type"},
-                   {"content","text/html; charset=UTF-8"}],
+</html>">>,
+    Expect = {<<"html">>, [],
+              [{<<"head">>, [],
+                [{<<"meta">>,
+                  [{<<"http-equiv">>,<<"Content-Type">>},
+                   {<<"content">>,<<"text/html; charset=UTF-8">>}],
                   []},
-                 {"title",[],["Foo"]},
-                 {"link",
-                  [{"rel","stylesheet"},
-                   {"type","text/css"},
-                   {"href","/static/rel/dojo/resources/dojo.css"},
-                   {"media","screen"}],
+                 {<<"title">>,[],[<<"Foo">>]},
+                 {<<"link">>,
+                  [{<<"rel">>,<<"stylesheet">>},
+                   {<<"type">>,<<"text/css">>},
+                   {<<"href">>,<<"/static/rel/dojo/resources/dojo.css">>},
+                   {<<"media">>,<<"screen">>}],
                   []},
-                 {"link",
-                  [{"rel","stylesheet"},
-                   {"type","text/css"},
-                   {"href","/static/foo.css"},
-                   {"media","screen"}],
+                 {<<"link">>,
+                  [{<<"rel">>,<<"stylesheet">>},
+                   {<<"type">>,<<"text/css">>},
+                   {<<"href">>,<<"/static/foo.css">>},
+                   {<<"media">>,<<"screen">>}],
                   []},
-                 {comment,"[if lt IE 7]>\n   <style type=\"text/css\">\n     .no_ie { display: none; }\n   </style>\n   <![endif]"},
-                 {"link",
-                  [{"rel","icon"},
-                   {"href","/static/images/favicon.ico"},
-                   {"type","image/x-icon"}],
+                 {comment,<<"[if lt IE 7]>\n   <style type=\"text/css\">\n     .no_ie { display: none; }\n   </style>\n   <![endif]">>},
+                 {<<"link">>,
+                  [{<<"rel">>,<<"icon">>},
+                   {<<"href">>,<<"/static/images/favicon.ico">>},
+                   {<<"type">>,<<"image/x-icon">>}],
                   []},
-                 {"link",
-                  [{"rel","shortcut icon"},
-                   {"href","/static/images/favicon.ico"},
-                   {"type","image/x-icon"}],
+                 {<<"link">>,
+                  [{<<"rel">>,<<"shortcut icon">>},
+                   {<<"href">>,<<"/static/images/favicon.ico">>},
+                   {<<"type">>,<<"image/x-icon">>}],
                   []}]},
-               {"body",
-                [{"id","home"},
-                 {"class","tundra"}],
-                ["&lt;<this<!-- is -->CDATA>&gt;"]}]},
+               {<<"body">>,
+                [{<<"id">>,<<"home">>},
+                 {<<"class">>,<<"tundra">>}],
+                [<<"&lt;<this<!-- is -->CDATA>&gt;">>]}]},
     Expect = parse(D0),
     ok.
 
 test_parse_tokens() ->
-    D0 = [{doctype,["HTML","PUBLIC","-//W3C//DTD HTML 4.01 Transitional//EN"]},
-          {data,"\n",true},
-          {start_tag,"html",[],false}],
-    {"html", [], []} = parse_tokens(D0),
-    D1 = D0 ++ [{end_tag, "html"}],
-    {"html", [], []} = parse_tokens(D1),
-    D2 = D0 ++ [{start_tag, "body", [], false}],
-    {"html", [], [{"body", [], []}]} = parse_tokens(D2),
-    D3 = D0 ++ [{start_tag, "head", [], false},
-                {end_tag, "head"},
-                {start_tag, "body", [], false}],
-    {"html", [], [{"head", [], []}, {"body", [], []}]} = parse_tokens(D3),
-    D4 = D3 ++ [{data,"\n",true},
-                {start_tag,"div",[{"class","a"}],false},
-                {start_tag,"a",[{"name","#anchor"}],false},
-                {end_tag,"a"},
-                {end_tag, "div"},
-                {start_tag,"div",[{"class","b"}],false},
-                {start_tag,"div",[{"class","c"}],false},
-                {end_tag, "div"},
-                {end_tag, "div"}],
-    {"html", [],
-     [{"head", [], []},
-      {"body", [],
-       [{"div", [{"class", "a"}], [{"a", [{"name", "#anchor"}], []}]},
-        {"div", [{"class", "b"}], [{"div", [{"class", "c"}], []}]}
+    D0 = [{doctype,[<<"HTML">>,<<"PUBLIC">>,<<"-//W3C//DTD HTML 4.01 Transitional//EN">>]},
+          {data,<<"\n">>,true},
+          {start_tag,<<"html">>,[],false}],
+    {<<"html">>, [], []} = parse_tokens(D0),
+    D1 = D0 ++ [{end_tag, <<"html">>}],
+    {<<"html">>, [], []} = parse_tokens(D1),
+    D2 = D0 ++ [{start_tag, <<"body">>, [], false}],
+    {<<"html">>, [], [{<<"body">>, [], []}]} = parse_tokens(D2),
+    D3 = D0 ++ [{start_tag, <<"head">>, [], false},
+                {end_tag, <<"head">>},
+                {start_tag, <<"body">>, [], false}],
+    {<<"html">>, [], [{<<"head">>, [], []}, {<<"body">>, [], []}]} = parse_tokens(D3),
+    D4 = D3 ++ [{data,<<"\n">>,true},
+                {start_tag,<<"div">>,[{<<"class">>,<<"a">>}],false},
+                {start_tag,<<"a">>,[{<<"name">>,<<"#anchor">>}],false},
+                {end_tag,<<"a">>},
+                {end_tag,<<"div">>},
+                {start_tag,<<"div">>,[{<<"class">>,<<"b">>}],false},
+                {start_tag,<<"div">>,[{<<"class">>,<<"c">>}],false},
+                {end_tag,<<"div">>},
+                {end_tag,<<"div">>}],
+    {<<"html">>, [],
+     [{<<"head">>, [], []},
+      {<<"body">>, [],
+       [{<<"div">>, [{<<"class">>, <<"a">>}], [{<<"a">>, [{<<"name">>, <<"#anchor">>}], []}]},
+        {<<"div">>, [{<<"class">>, <<"b">>}], [{<<"div">>, [{<<"class">>, <<"c">>}], []}]}
        ]}]} = parse_tokens(D4),
-    D5 = [{start_tag,"html",[],false},
-          {data,"\n",true},
-          {data,"boo",false},
-          {data,"hoo",false},
-          {data,"\n",true},
-          {end_tag,"html"}],
-    {"html", [], ["\nboohoo\n"]} = parse_tokens(D5),
-    D6 = [{start_tag,"html",[],false},
-          {data,"\n",true},
-          {data,"\n",true},
-          {end_tag,"html"}],
-    {"html", [], []} = parse_tokens(D6),
-    D7 = [{start_tag,"html",[],false},
-          {start_tag,"ul",[],false},
-          {start_tag,"li",[],false},
-          {data,"word",false},
-          {start_tag,"li",[],false},
-          {data,"up",false},
-          {end_tag,"li"},
-          {start_tag,"li",[],false},
-          {data,"fdsa",false},
-          {start_tag,"br",[],true},
-          {data,"asdf",false},
-          {end_tag,"ul"},
-          {end_tag,"html"}],
-    {"html", [],
-     [{"ul", [],
-       [{"li", [], ["word"]},
-        {"li", [], ["up"]},
-        {"li", [], ["fdsa",{"br", [], []}, "asdf"]}]}]} = parse_tokens(D7),
+    D5 = [{start_tag,<<"html">>,[],false},
+          {data,<<"\n">>,true},
+          {data,<<"boo">>,false},
+          {data,<<"hoo">>,false},
+          {data,<<"\n">>,true},
+          {end_tag,<<"html">>}],
+    {<<"html">>, [], [<<"\nboohoo\n">>]} = parse_tokens(D5),
+    D6 = [{start_tag,<<"html">>,[],false},
+          {data,<<"\n">>,true},
+          {data,<<"\n">>,true},
+          {end_tag,<<"html">>}],
+    {<<"html">>, [], []} = parse_tokens(D6),
+    D7 = [{start_tag,<<"html">>,[],false},
+          {start_tag,<<"ul">>,[],false},
+          {start_tag,<<"li">>,[],false},
+          {data,<<"word">>,false},
+          {start_tag,<<"li">>,[],false},
+          {data,<<"up">>,false},
+          {end_tag,<<"li">>},
+          {start_tag,<<"li">>,[],false},
+          {data,<<"fdsa">>,false},
+          {start_tag,<<"br">>,[],true},
+          {data,<<"asdf">>,false},
+          {end_tag,<<"ul">>},
+          {end_tag,<<"html">>}],
+    {<<"html">>, [],
+     [{<<"ul">>, [],
+       [{<<"li">>, [], [<<"word">>]},
+        {<<"li">>, [], [<<"up">>]},
+        {<<"li">>, [], [<<"fdsa">>,{<<"br">>, [], []}, <<"asdf">>]}]}]} = parse_tokens(D7),
     ok.
 
 tree_data([{data, Data, Whitespace} | Rest], AllWhitespace, Acc) ->
     tree_data(Rest, (Whitespace andalso AllWhitespace), [Data | Acc]);
 tree_data(Rest, AllWhitespace, Acc) ->
-    {lists:append(lists:reverse(Acc)), AllWhitespace, Rest}.
+    {iolist_to_binary(lists:reverse(Acc)), AllWhitespace, Rest}.
 
 tree([], Stack) ->
     {destack(Stack), []};
@@ -467,33 +471,34 @@ tree(L=[{data, _Data, _Whitespace} | _], S) ->
     end.
 
 norm({Tag, Attrs}) ->
-    {norm(Tag), [{norm(K), V} || {K, V} <- Attrs], []};
+    {norm(Tag), [{norm(K), iolist_to_binary(V)} || {K, V} <- Attrs], []};
+norm(Tag) when is_binary(Tag) ->
+    Tag;
 norm(Tag) ->
-    string:to_lower(Tag).
+    list_to_binary(string:to_lower(Tag)).
 
 test_destack() ->
-    {"a", [], []} = destack([{"a", [], []}]),
-    {"a", [], [{"b", [], []}]} = destack([{"b", [], []}, {"a", [], []}]),
-    {"a", [], [{"b", [], [{"c", [], []}]}]} =
-        destack([{"c", [], []}, {"b", [], []}, {"a", [], []}]),
-    [{"a", [], [{"b", [], [{"c", [], []}]}]}] =
-        destack("b", [{"c", [], []}, {"b", [], []}, {"a", [], []}]),
-    [{"b", [], [{"c", [], []}]}, {"a", [], []}] =
-        destack("c", [{"c", [], []}, {"b", [], []}, {"a", [], []}]),
+    {<<"a">>, [], []} =
+        destack([{<<"a">>, [], []}]),
+    {<<"a">>, [], [{<<"b">>, [], []}]} =
+        destack([{<<"b">>, [], []}, {<<"a">>, [], []}]),
+    {<<"a">>, [], [{<<"b">>, [], [{<<"c">>, [], []}]}]} =
+     destack([{<<"c">>, [], []}, {<<"b">>, [], []}, {<<"a">>, [], []}]),
+    [{<<"a">>, [], [{<<"b">>, [], [{<<"c">>, [], []}]}]}] =
+     destack(<<"b">>,
+             [{<<"c">>, [], []}, {<<"b">>, [], []}, {<<"a">>, [], []}]),
+    [{<<"b">>, [], [{<<"c">>, [], []}]}, {<<"a">>, [], []}] =
+     destack(<<"c">>,
+             [{<<"c">>, [], []}, {<<"b">>, [], []},{<<"a">>, [], []}]),
     ok.
 
-stack(T1={"li", _, _}, Stack=[{TN="li", _, _} | _Rest]) ->
+stack(T1={TN, _, _}, Stack=[{TN, _, _} | _Rest])
+  when TN =:= <<"li">> orelse TN =:= <<"option">> ->
     [T1 | destack(TN, Stack)];
-stack(T1={"dt", _, _}, Stack=[{TN="dd", _, _} | _Rest]) ->
-    [T1 | destack(TN, Stack)];
-stack(T1={"dt", _, _}, Stack=[{TN="dt", _, _} | _Rest]) ->
-    [T1 | destack(TN, Stack)];
-stack(T1={"dd", _, _}, Stack=[{TN="dt", _, _} | _Rest]) ->
-    [T1 | destack(TN, Stack)];
-stack(T1={"dd", _, _}, Stack=[{TN="dd", _, _} | _Rest]) ->
-    [T1 | destack(TN, Stack)];
-stack(T1={"option", _, _}, Stack=[{TN="option", _, _} | _Rest]) ->
-    [T1 | destack(TN, Stack)];
+stack(T1={TN0, _, _}, Stack=[{TN1, _, _} | _Rest])
+  when (TN0 =:= <<"dd">> orelse TN0 =:= <<"dt">>) andalso
+       (TN1 =:= <<"dd">> orelse TN1 =:= <<"dt">>) ->
+    [T1 | destack(TN1, Stack)];
 stack(T1, Stack) ->
     [T1 | Stack].
 
@@ -526,24 +531,24 @@ destack([{Tag, Attrs, Acc}]) ->
 destack([{T1, A1, Acc1}, {T0, A0, Acc0} | Rest]) ->
     destack([{T0, A0, [{T1, A1, lists:reverse(Acc1)} | Acc0]} | Rest]).
 
-is_singleton("br") -> true;
-is_singleton("hr") -> true;
-is_singleton("img") -> true;
-is_singleton("input") -> true;
-is_singleton("base") -> true;
-is_singleton("meta") -> true;
-is_singleton("link") -> true;
-is_singleton("area") -> true;
-is_singleton("param") -> true;
-is_singleton("col") -> true;
+is_singleton(<<"br">>) -> true;
+is_singleton(<<"hr">>) -> true;
+is_singleton(<<"img">>) -> true;
+is_singleton(<<"input">>) -> true;
+is_singleton(<<"base">>) -> true;
+is_singleton(<<"meta">>) -> true;
+is_singleton(<<"link">>) -> true;
+is_singleton(<<"area">>) -> true;
+is_singleton(<<"param">>) -> true;
+is_singleton(<<"col">>) -> true;
 is_singleton(_) -> false.
 
 tokenize_data([], S, Acc, Whitespace) ->
-    {{data, lists:reverse(Acc), Whitespace}, [], S};
+    {{data, list_to_binary(lists:reverse(Acc)), Whitespace}, [], S};
 tokenize_data(Rest="<" ++ _, S, Acc, Whitespace) ->
-    {{data, lists:reverse(Acc), Whitespace}, Rest, S};
+    {{data, list_to_binary(lists:reverse(Acc)), Whitespace}, Rest, S};
 tokenize_data(Rest="&" ++ _, S, Acc, Whitespace) ->
-    {{data, lists:reverse(Acc), Whitespace}, Rest, S};
+    {{data, list_to_binary(lists:reverse(Acc)), Whitespace}, Rest, S};
 tokenize_data([C | Rest], S, Acc, Whitespace) when ?IS_WHITESPACE(C) ->
     tokenize_data(Rest, S, [C | Acc], Whitespace);
 tokenize_data([C | Rest], S, Acc, _) ->
@@ -595,14 +600,14 @@ find_gt([C | Rest], S, HasSlash) ->
     find_gt(Rest, ?INC_CHAR(S, C), HasSlash).
 
 tokenize_charref([], S, Acc) ->
-    {{data, lists:reverse(Acc), false}, [], S};
+    {{data, list_to_binary(lists:reverse(Acc)), false}, [], S};
 tokenize_charref(Rest=">" ++ _, S, Acc) ->
-    {{data, lists:reverse(Acc), false}, Rest, S};
+    {{data, list_to_binary(lists:reverse(Acc)), false}, Rest, S};
 tokenize_charref(Rest=[C | _], S, Acc) when ?IS_WHITESPACE(C) 
                                             orelse C =:= ?SQUOTE
                                             orelse C =:= ?QUOTE
                                             orelse C =:= $/ ->
-    {{data, lists:reverse(Acc), false}, Rest, S};
+    {{data, list_to_binary(lists:reverse(Acc)), false}, Rest, S};
 tokenize_charref(";" ++ Rest, S, Acc) ->
     Raw = lists:reverse(Acc),
     Data = case mochiweb_charref:charref(Raw) of
@@ -611,7 +616,7 @@ tokenize_charref(";" ++ Rest, S, Acc) ->
                Unichar ->
                    xmerl_ucs:to_utf8(Unichar)
            end,
-    {{data, Data, false}, Rest, ?INC_COL(S)};
+    {{data, list_to_binary(Data), false}, Rest, ?INC_COL(S)};
 tokenize_charref([C | Rest], S, Acc) ->
     tokenize_charref(Rest, ?INC_COL(S), [C | Acc]).
 
@@ -635,39 +640,39 @@ tokenize_word_or_literal(Rest, S) ->
     tokenize_literal(Rest, S, []).
     
 tokenize_word([], S, _Quote, Acc) ->
-    {lists:reverse(Acc), [], S};
+    {list_to_binary(lists:reverse(Acc)), [], S};
 tokenize_word([Quote | Rest], S, Quote, Acc) ->
-    {lists:reverse(Acc), Rest, ?INC_COL(S)};
+    {list_to_binary(lists:reverse(Acc)), Rest, ?INC_COL(S)};
 tokenize_word([$& | Rest], S, Quote, Acc) ->
     {{data, Data, false}, S1, Rest1} = tokenize_charref(Rest, ?INC_COL(S), []),
-    tokenize_word(Rest1, S1, Quote, lists:reverse(Data, Acc));
+    tokenize_word(Rest1, S1, Quote, lists:reverse(binary_to_list(Data), Acc));
 tokenize_word([C | Rest], S, Quote, Acc) ->
     tokenize_word(Rest, ?INC_CHAR(S, C), Quote, [C | Acc]).
 
 tokenize_literal([], S, Acc) ->
-    {lists:reverse(Acc), [], S};
+    {list_to_binary(lists:reverse(Acc)), [], S};
 tokenize_literal(Rest=">" ++ _, S, Acc) ->
-    {lists:reverse(Acc), Rest, S};
+    {list_to_binary(lists:reverse(Acc)), Rest, S};
 tokenize_literal([$& | Rest], S, Acc) ->
     {{data, Data, false}, S1, Rest1} = tokenize_charref(Rest, ?INC_COL(S), []),
-    tokenize_literal(Rest1, S1, lists:reverse(Data, Acc));
+    tokenize_literal(Rest1, S1, lists:reverse(binary_to_list(Data), Acc));
 tokenize_literal(Rest=[C | _], S, Acc) when ?IS_WHITESPACE(C)
                                             orelse C =:= $/
                                             orelse C =:= $= ->
-    {lists:reverse(Acc), Rest, S};
+    {list_to_binary(lists:reverse(Acc)), Rest, S};
 tokenize_literal([C | Rest], S, Acc) ->
     tokenize_literal(Rest, ?INC_COL(S), [C | Acc]).
 
 tokenize_cdata([], S, Acc) ->
-    {{data, lists:reverse(Acc), false}, [], S};
+    {{data, list_to_binary(lists:reverse(Acc)), false}, [], S};
 tokenize_cdata("]]>" ++ Rest, S, Acc) ->
-    {{data, lists:reverse(Acc), false}, Rest, ?ADV_COL(S, 3)};
+    {{data, list_to_binary(lists:reverse(Acc)), false}, Rest, ?ADV_COL(S, 3)};
 tokenize_cdata([C | Rest], S, Acc) ->
     tokenize_cdata(Rest, ?INC_CHAR(S, C), [C | Acc]).
 
 tokenize_comment([], S, Acc) ->
-    {{comment, lists:reverse(Acc)}, [], S};
+    {{comment, list_to_binary(lists:reverse(Acc))}, [], S};
 tokenize_comment("-->" ++ Rest, S, Acc) ->
-    {{comment, lists:reverse(Acc)}, Rest, ?ADV_COL(S, 3)};
+    {{comment, list_to_binary(lists:reverse(Acc))}, Rest, ?ADV_COL(S, 3)};
 tokenize_comment([C | Rest], S, Acc) ->
     tokenize_comment(Rest, ?INC_CHAR(S, C), [C | Acc]).
