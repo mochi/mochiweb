@@ -9,13 +9,25 @@
 % This is a macro to placate syntax highlighters..
 -define(QUOTE, $\").
 -define(SQUOTE, $\').
--define(ADV_COL(S, N), S#decoder{column=N+S#decoder.column}).
--define(INC_COL(S), S#decoder{column=1+S#decoder.column}).
--define(INC_LINE(S), S#decoder{column=1, line=1+S#decoder.line}).
+-define(ADV_COL(S, N),
+        S#decoder{column=N+S#decoder.column,
+                  offset=N+S#decoder.offset}).
+-define(INC_COL(S),
+        S#decoder{column=1+S#decoder.column,
+                  offset=1+S#decoder.offset}).
+-define(INC_LINE(S),
+        S#decoder{column=1,
+                  line=1+S#decoder.line,
+                  offset=1+S#decoder.offset}).
 -define(INC_CHAR(S, C),
         case C of
-            $\n -> S#decoder{column=1, line=1+S#decoder.line};
-            _ -> S#decoder{column=1+S#decoder.column}
+            $\n ->
+                S#decoder{column=1,
+                          line=1+S#decoder.line,
+                          offset=1+S#decoder.offset};
+            _ ->
+                S#decoder{column=1+S#decoder.column,
+                          offset=1+S#decoder.offset}
         end).
 
 -define(IS_WHITESPACE(C),
@@ -25,7 +37,8 @@
          orelse (C >= $0 andalso C =< $9))).
                                 
 -record(decoder, {line=1,
-		  column=1}).
+		  column=1,
+                  offset=0}).
 
 %% @type html_node() = {string(), [html_attr()], [html_node() | string()]}
 %% @type html_attr() = {string(), string()}
@@ -62,10 +75,8 @@ parse_tokens(Tokens) when is_list(Tokens) ->
 
 %% @spec tokens(StringOrBinary) -> [html_token()]
 %% @doc Transform the input UTF-8 HTML into a token stream.
-tokens(Input) when is_binary(Input) ->
-    tokens(binary_to_list(Input), #decoder{}, []);
-tokens(Input) when is_list(Input) ->
-    tokens(Input, #decoder{}, []).
+tokens(Input) ->
+    tokens(iolist_to_binary(Input), #decoder{}, []).
 
 %% @spec to_tokens(html_node()) -> [html_token()]
 %% @doc Convert a html_node() tree to a list of tokens.
@@ -290,40 +301,46 @@ test_tokens() ->
         tokens(<<"<!--[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]-->">>),
     ok.
 
-tokens("", _S, Acc) ->
-    lists:reverse(Acc);
-tokens(Rest, S, Acc) ->
-    {Tag, Rest1, S1} = tokenize(Rest, S),
-    tokens(Rest1, S1, [Tag | Acc]).
+tokens(B, S=#decoder{offset=O}, Acc) ->
+    case B of
+        <<_:O/binary>> ->
+            lists:reverse(Acc);
+        _ ->
+            {Tag, S1} = tokenize(B, S),
+            tokens(B, S1, [Tag | Acc])
+    end.
 
-tokenize("<!--" ++ Rest, S) ->
-    tokenize_comment(Rest, ?ADV_COL(S, 4), []);
-tokenize("<!DOCTYPE " ++ Rest, S) ->
-    tokenize_doctype(Rest, ?ADV_COL(S, 10), []);
-tokenize("<![CDATA[" ++ Rest, S) ->
-    tokenize_cdata(Rest, ?ADV_COL(S, 9), []);
-tokenize("<?" ++ Rest, S) ->
-    {Tag, Rest1, S1} = tokenize_literal(Rest, ?ADV_COL(S, 2), []),
-    {Attrs, Rest2, S2} = tokenize_attributes(Rest1, S1, []),
-    {Rest3, S3} = find_qgt(Rest2, S2),
-    {{pi, Tag, Attrs}, Rest3, S3};
-tokenize("&" ++ Rest, S) ->
-    tokenize_charref(Rest, ?INC_COL(S), []);
-tokenize("</" ++ Rest, S) ->
-    {Tag, Rest1, S1} = tokenize_literal(Rest, ?ADV_COL(S, 2), []),
-    {Rest2, S2, _} = find_gt(Rest1, S1, false),
-    {{end_tag, Tag}, Rest2, S2};
-tokenize(L="<" ++ [C | _Rest], S) when ?IS_WHITESPACE(C) ->
-    %% This isn't really strict HTML but we want this for markdown
-    tokenize_data(L, ?INC_COL(S), "<", true);
-tokenize("<" ++ Rest, S) ->
-    {Tag, Rest1, S1} = tokenize_literal(Rest, ?INC_COL(S), []),
-    {Attrs, Rest2, S2} = tokenize_attributes(Rest1, S1, []),
-    {Rest3, S3, HasSlash} = find_gt(Rest2, S2, false),
-    Singleton = HasSlash orelse is_singleton(norm(binary_to_list(Tag))),
-    {{start_tag, Tag, Attrs, Singleton}, Rest3, S3};
-tokenize(Rest, S) ->
-    tokenize_data(Rest, S, [], true).
+tokenize(B, S=#decoder{offset=O}) ->
+    case B of
+        <<_:O/binary, "<!--", _/binary>> ->
+            tokenize_comment(B, ?ADV_COL(S, 4));
+        <<_:O/binary, "<!DOCTYPE", _/binary>> ->
+            tokenize_doctype(B, ?ADV_COL(S, 10));
+        <<_:O/binary, "<![CDATA[", _/binary>> ->
+            tokenize_cdata(B, ?ADV_COL(S, 9));
+        <<_:O/binary, "<?", _/binary>> ->
+            {Tag, S1} = tokenize_literal(B, ?ADV_COL(S, 2)),
+            {Attrs, S2} = tokenize_attributes(B, S1),
+            S3 = find_qgt(B, S2),
+            {{pi, Tag, Attrs}, S3};
+        <<_:O/binary, "&", _/binary>> ->
+            tokenize_charref(B, ?INC_COL(S));
+        <<_:O/binary, "</", _/binary>> ->
+            {Tag, S1} = tokenize_literal(B, ?ADV_COL(S, 2)),
+            {S2, _} = find_gt(B, S1),
+            {{end_tag, Tag}, S2};
+        <<_:O/binary, "<", C, _/binary>> when ?IS_WHITESPACE(C) ->
+            %% This isn't really strict HTML but we want this for markdown
+            tokenize_data(B, ?INC_COL(S));
+        <<_:O/binary, "<", _/binary>> ->
+            {Tag, S1} = tokenize_literal(B, ?INC_COL(S)),
+            {Attrs, S2} = tokenize_attributes(B, S1),
+            {S3, HasSlash} = find_gt(B, S2),
+            Singleton = HasSlash orelse is_singleton(norm(binary_to_list(Tag))),
+            {{start_tag, Tag, Attrs, Singleton}, S3};
+        _ ->
+            tokenize_data(B, S)
+    end.
 
 test_parse() ->
     D0 = <<"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">
@@ -543,136 +560,201 @@ is_singleton(<<"param">>) -> true;
 is_singleton(<<"col">>) -> true;
 is_singleton(_) -> false.
 
-tokenize_data([], S, Acc, Whitespace) ->
-    {{data, list_to_binary(lists:reverse(Acc)), Whitespace}, [], S};
-tokenize_data(Rest="<" ++ _, S, Acc, Whitespace) ->
-    {{data, list_to_binary(lists:reverse(Acc)), Whitespace}, Rest, S};
-tokenize_data(Rest="&" ++ _, S, Acc, Whitespace) ->
-    {{data, list_to_binary(lists:reverse(Acc)), Whitespace}, Rest, S};
-tokenize_data([C | Rest], S, Acc, Whitespace) when ?IS_WHITESPACE(C) ->
-    tokenize_data(Rest, S, [C | Acc], Whitespace);
-tokenize_data([C | Rest], S, Acc, _) ->
-    tokenize_data(Rest, S, [C | Acc], false).
+tokenize_data(B, S=#decoder{offset=O}) ->
+    tokenize_data(B, S, O, true).
 
-tokenize_attributes([], S, Acc) ->
-    {lists:reverse(Acc), [], S};
-tokenize_attributes(Rest=">" ++ _, S, Acc) ->
-    {lists:reverse(Acc), Rest, S};
-tokenize_attributes(Rest="?>" ++ _, S, Acc) ->
-    {lists:reverse(Acc), Rest, S};
-tokenize_attributes(Rest="/" ++ _, S, Acc) ->
-    {lists:reverse(Acc), Rest, S};
-tokenize_attributes([C | Rest], S, Acc) when ?IS_WHITESPACE(C) ->
-    tokenize_attributes(Rest, ?INC_CHAR(S, C), Acc);
-tokenize_attributes(Rest, S, Acc) ->
-    {Attr, Rest1, S1} = tokenize_literal(Rest, S, []),
-    {Value, Rest2, S2} = tokenize_attr_value(Attr, Rest1, S1),
-    tokenize_attributes(Rest2, S2, [{Attr, Value} | Acc]).
-
-tokenize_attr_value(Attr, Rest, S) ->
-    {Rest1, S1} = skip_whitespace(Rest, S),
-    case Rest1 of
-        "=" ++ Rest2 ->
-            tokenize_word_or_literal(Rest2, ?INC_COL(S1));
+tokenize_data(B, S=#decoder{offset=O}, Start, Whitespace) ->
+    case B of
+        <<_:O/binary, C, _/binary>> when (C =/= $< andalso C =/= $&) ->
+            tokenize_data(B, ?INC_CHAR(S, C), Start,
+                          (Whitespace andalso ?IS_WHITESPACE(C)));
         _ ->
-            {Attr, Rest1, S1}
+            Len = O - Start,
+            <<_:Start/binary, Data:Len/binary, _/binary>> = B,
+            {{data, Data, Whitespace}, S}
     end.
 
-skip_whitespace([C | Rest], S) when ?IS_WHITESPACE(C) ->
-    skip_whitespace(Rest, ?INC_CHAR(S, C));
-skip_whitespace(Rest, S) ->
-    {Rest, S}.
+tokenize_attributes(B, S) ->
+    tokenize_attributes(B, S, []).
 
-find_qgt([], S) ->
-    {[], S};
-find_qgt("?>" ++ Rest, S) ->
-    {Rest, ?ADV_COL(S, 2)};
-find_qgt([C | Rest], S) ->
-    find_qgt(Rest, ?INC_CHAR(S, C)).
+tokenize_attributes(B, S=#decoder{offset=O}, Acc) ->
+    case B of
+        <<_:O/binary>> ->
+            {lists:reverse(Acc), S};
+        <<_:O/binary, C, _/binary>> when (C =:= $> orelse C =:= $/) ->
+            {lists:reverse(Acc), S};
+        <<_:O/binary, "?>", _/binary>> ->
+            {lists:reverse(Acc), S};
+        <<_:O/binary, C, _/binary>> when ?IS_WHITESPACE(C) ->
+            tokenize_attributes(B, ?INC_CHAR(S, C), Acc);
+        _ ->
+            {Attr, S1} = tokenize_literal(B, S),
+            {Value, S2} = tokenize_attr_value(Attr, B, S1),
+            tokenize_attributes(B, S2, [{Attr, Value} | Acc])
+    end.
 
-find_gt([], S, HasSlash) ->
-    {[], S, HasSlash};
-find_gt(">" ++ Rest, S, HasSlash) ->
-    {Rest, ?INC_COL(S), HasSlash};
-find_gt([$/ | Rest], S, _) ->
-    find_gt(Rest, ?INC_COL(S), true);
-find_gt([C | Rest], S, HasSlash) ->
-    find_gt(Rest, ?INC_CHAR(S, C), HasSlash).
+tokenize_attr_value(Attr, B, S) ->
+    S1 = skip_whitespace(B, S),
+    O = S1#decoder.offset,
+    case B of
+        <<_:O/binary, "=", _/binary>> ->
+            tokenize_word_or_literal(B, ?INC_COL(S1));
+        _ ->
+            {Attr, S1}
+    end.
 
-tokenize_charref([], S, Acc) ->
-    {{data, list_to_binary(lists:reverse(Acc)), false}, [], S};
-tokenize_charref(Rest=">" ++ _, S, Acc) ->
-    {{data, list_to_binary(lists:reverse(Acc)), false}, Rest, S};
-tokenize_charref(Rest=[C | _], S, Acc) when ?IS_WHITESPACE(C) 
-                                            orelse C =:= ?SQUOTE
-                                            orelse C =:= ?QUOTE
-                                            orelse C =:= $/ ->
-    {{data, list_to_binary(lists:reverse(Acc)), false}, Rest, S};
-tokenize_charref(";" ++ Rest, S, Acc) ->
-    Raw = lists:reverse(Acc),
-    Data = case mochiweb_charref:charref(Raw) of
-               undefined ->
-                   "&" ++ Raw ++ ";";
-               Unichar ->
-                   xmerl_ucs:to_utf8(Unichar)
-           end,
-    {{data, list_to_binary(Data), false}, Rest, ?INC_COL(S)};
-tokenize_charref([C | Rest], S, Acc) ->
-    tokenize_charref(Rest, ?INC_COL(S), [C | Acc]).
+skip_whitespace(B, S=#decoder{offset=O}) ->
+    case B of
+        <<_:O/binary, C, _/binary>> when ?IS_WHITESPACE(C) ->
+            skip_whitespace(B, ?INC_CHAR(S, C));
+        _ ->
+            S
+    end.
 
-tokenize_doctype([], S, Acc) ->
-    {{doctype, lists:reverse(Acc)}, [], S};
-tokenize_doctype(">" ++ Rest, S, Acc) ->
-    {{doctype, lists:reverse(Acc)}, Rest, ?INC_COL(S)};
-tokenize_doctype([C | Rest], S, Acc) when ?IS_WHITESPACE(C) ->
-    tokenize_doctype(Rest, ?INC_CHAR(S, C), Acc);
-tokenize_doctype(Rest, S, Acc) ->
-    {Word, Rest1, S1} = tokenize_word_or_literal(Rest, S),
-    tokenize_doctype(Rest1, S1, [Word | Acc]).
+tokenize_literal(Bin, S) ->
+    tokenize_literal(Bin, S, []).
 
-tokenize_word_or_literal([C | _], S) when ?IS_WHITESPACE(C) ->
-    {error, {whitespace, [C], S}};
-tokenize_word_or_literal([?QUOTE | Rest], S) ->
-    tokenize_word(Rest, ?INC_COL(S), ?QUOTE, []);
-tokenize_word_or_literal([?SQUOTE | Rest], S) ->
-    tokenize_word(Rest, ?INC_COL(S), ?SQUOTE, []);
-tokenize_word_or_literal(Rest, S) ->
-    tokenize_literal(Rest, S, []).
+tokenize_literal(Bin, S=#decoder{offset=O}, Acc) ->
+    case Bin of
+        <<_:O/binary, $&, _/binary>> ->
+            {{data, Data, false}, S1} = tokenize_charref(Bin, ?INC_COL(S)),
+            tokenize_literal(Bin, S1, [Data | Acc]);
+        <<_:O/binary, C, _/binary>> when not (?IS_WHITESPACE(C)
+                                              orelse C =:= $>
+                                              orelse C =:= $/
+                                              orelse C =:= $=) ->
+            tokenize_literal(Bin, ?INC_COL(S), [C | Acc]);
+        _ ->
+            {iolist_to_binary(lists:reverse(Acc)), S}
+    end.
+
+find_qgt(Bin, S=#decoder{offset=O}) ->
+    case Bin of
+        <<_:O/binary, "?>", _/binary>> ->
+            ?ADV_COL(S, 2);
+        <<_:O/binary, C, _/binary>> ->
+            find_qgt(Bin, ?INC_CHAR(S, C));
+        _ ->
+            S
+    end.
+
+find_gt(Bin, S) ->
+    find_gt(Bin, S, false).
+
+find_gt(Bin, S=#decoder{offset=O}, HasSlash) ->
+    case Bin of
+        <<_:O/binary, $/, _/binary>> ->
+            find_gt(Bin, ?INC_COL(S), true);
+        <<_:O/binary, $>, _/binary>> ->
+            {?INC_COL(S), HasSlash};
+        <<_:O/binary, C, _/binary>> ->
+            find_gt(Bin, ?INC_CHAR(S, C), HasSlash);
+        _ ->
+            {S, HasSlash}
+    end.
+
+tokenize_charref(Bin, S=#decoder{offset=O}) ->
+    tokenize_charref(Bin, S, O).
     
-tokenize_word([], S, _Quote, Acc) ->
-    {list_to_binary(lists:reverse(Acc)), [], S};
-tokenize_word([Quote | Rest], S, Quote, Acc) ->
-    {list_to_binary(lists:reverse(Acc)), Rest, ?INC_COL(S)};
-tokenize_word([$& | Rest], S, Quote, Acc) ->
-    {{data, Data, false}, S1, Rest1} = tokenize_charref(Rest, ?INC_COL(S), []),
-    tokenize_word(Rest1, S1, Quote, lists:reverse(binary_to_list(Data), Acc));
-tokenize_word([C | Rest], S, Quote, Acc) ->
-    tokenize_word(Rest, ?INC_CHAR(S, C), Quote, [C | Acc]).
+tokenize_charref(Bin, S=#decoder{offset=O}, Start) ->
+    case Bin of
+        <<_:O/binary>> ->
+            <<_:Start/binary, Raw/binary>> = Bin,
+            {{data, Raw, false}, S};
+        <<_:O/binary, C, _/binary>> when ?IS_WHITESPACE(C)
+                                         orelse C =:= ?SQUOTE
+                                         orelse C =:= ?QUOTE
+                                         orelse C =:= $/
+                                         orelse C =:= $> ->
+            Len = O - Start,
+            <<_:Start/binary, Raw:Len/binary, _/binary>> = Bin,
+            {{data, Raw, false}, S};
+        <<_:O/binary, $;, _/binary>> ->
+            Len = O - Start,
+            <<_:Start/binary, Raw:Len/binary, _/binary>> = Bin,
+            Data = case mochiweb_charref:charref(Raw) of
+                       undefined ->
+                           Start1 = Start - 1,
+                           Len1 = Len + 2,
+                           <<_:Start1/binary, R:Len1/binary, _/binary>> = Bin,
+                           R;
+                       Unichar ->
+                           list_to_binary(xmerl_ucs:to_utf8(Unichar))
+                   end,
+            {{data, Data, false}, ?INC_COL(S)};
+        _ ->
+            tokenize_charref(Bin, ?INC_COL(S), Start)
+    end.
 
-tokenize_literal([], S, Acc) ->
-    {list_to_binary(lists:reverse(Acc)), [], S};
-tokenize_literal(Rest=">" ++ _, S, Acc) ->
-    {list_to_binary(lists:reverse(Acc)), Rest, S};
-tokenize_literal([$& | Rest], S, Acc) ->
-    {{data, Data, false}, S1, Rest1} = tokenize_charref(Rest, ?INC_COL(S), []),
-    tokenize_literal(Rest1, S1, lists:reverse(binary_to_list(Data), Acc));
-tokenize_literal(Rest=[C | _], S, Acc) when ?IS_WHITESPACE(C)
-                                            orelse C =:= $/
-                                            orelse C =:= $= ->
-    {list_to_binary(lists:reverse(Acc)), Rest, S};
-tokenize_literal([C | Rest], S, Acc) ->
-    tokenize_literal(Rest, ?INC_COL(S), [C | Acc]).
+tokenize_doctype(Bin, S) ->
+    tokenize_doctype(Bin, S, []).
 
-tokenize_cdata([], S, Acc) ->
-    {{data, list_to_binary(lists:reverse(Acc)), false}, [], S};
-tokenize_cdata("]]>" ++ Rest, S, Acc) ->
-    {{data, list_to_binary(lists:reverse(Acc)), false}, Rest, ?ADV_COL(S, 3)};
-tokenize_cdata([C | Rest], S, Acc) ->
-    tokenize_cdata(Rest, ?INC_CHAR(S, C), [C | Acc]).
+tokenize_doctype(Bin, S=#decoder{offset=O}, Acc) ->
+    case Bin of
+        <<_:O/binary>> ->
+            {{doctype, lists:reverse(Acc)}, S};
+        <<_:O/binary, $>, _/binary>> ->
+            {{doctype, lists:reverse(Acc)}, ?INC_COL(S)};
+        <<_:O/binary, C, _/binary>> when ?IS_WHITESPACE(C) ->
+            tokenize_doctype(Bin, ?INC_CHAR(S, C), Acc);
+        _ ->
+            {Word, S1} = tokenize_word_or_literal(Bin, S),
+            tokenize_doctype(Bin, S1, [Word | Acc])
+    end.
 
-tokenize_comment([], S, Acc) ->
-    {{comment, list_to_binary(lists:reverse(Acc))}, [], S};
-tokenize_comment("-->" ++ Rest, S, Acc) ->
-    {{comment, list_to_binary(lists:reverse(Acc))}, Rest, ?ADV_COL(S, 3)};
-tokenize_comment([C | Rest], S, Acc) ->
-    tokenize_comment(Rest, ?INC_CHAR(S, C), [C | Acc]).
+tokenize_word_or_literal(Bin, S=#decoder{offset=O}) ->
+    case Bin of
+        <<_:O/binary, C, _/binary>> when ?IS_WHITESPACE(C) ->
+            {error, {whitespace, [C], S}};
+        <<_:O/binary, C, _/binary>> when C =:= ?QUOTE orelse C =:= ?SQUOTE ->
+            tokenize_word(Bin, ?INC_COL(S), C);
+        _ ->
+            tokenize_literal(Bin, S, [])
+    end.
+
+tokenize_word(Bin, S, Quote) ->
+    tokenize_word(Bin, S, Quote, []).
+
+tokenize_word(Bin, S=#decoder{offset=O}, Quote, Acc) ->
+    case Bin of
+        <<_:O/binary>> ->
+            {iolist_to_binary(lists:reverse(Acc)), S};
+        <<_:O/binary, Quote, _/binary>> ->
+            {iolist_to_binary(lists:reverse(Acc)), ?INC_COL(S)};
+        <<_:O/binary, $&, _/binary>> ->
+            {{data, Data, false}, S1} = tokenize_charref(Bin, ?INC_COL(S)),
+            tokenize_word(Bin, S1, Quote, [Data | Acc]);
+        <<_:O/binary, C, _/binary>> ->
+            tokenize_word(Bin, ?INC_CHAR(S, C), Quote, [C | Acc])
+    end.
+
+tokenize_cdata(Bin, S=#decoder{offset=O}) ->
+    tokenize_cdata(Bin, S, O).
+
+tokenize_cdata(Bin, S=#decoder{offset=O}, Start) ->
+    case Bin of
+        <<_:O/binary, "]]>", _/binary>> ->
+            Len = O - Start,
+            <<_:Start/binary, Raw:Len/binary, _/binary>> = Bin,
+            {{data, Raw, false}, ?ADV_COL(S, 3)};
+        <<_:O/binary, C, _/binary>> ->
+            tokenize_cdata(Bin, ?INC_CHAR(S, C), Start);
+        _ ->
+            <<_:O/binary, Raw/binary>> = Bin,
+            {{data, Raw, false}, S}
+    end.
+
+tokenize_comment(Bin, S=#decoder{offset=O}) ->
+    tokenize_comment(Bin, S, O).
+
+tokenize_comment(Bin, S=#decoder{offset=O}, Start) ->
+    case Bin of
+        <<_:O/binary, "-->", _/binary>> ->
+            Len = O - Start,
+            <<_:Start/binary, Raw:Len/binary, _/binary>> = Bin,
+            {{comment, Raw}, ?ADV_COL(S, 3)};
+        <<_:O/binary, C, _/binary>> ->
+            tokenize_comment(Bin, ?INC_CHAR(S, C), Start);
+        <<_:Start/binary, Raw/binary>> ->
+            {{comment, Raw}, S}
+    end.

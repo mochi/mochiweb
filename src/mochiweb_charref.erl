@@ -12,6 +12,8 @@
 %%      codepoint, or return undefined on failure.
 %%      The input should not include an ampersand or semicolon.
 %%      charref("#38") = 38, charref("#x26") = 38, charref("amp") = 38.
+charref(B) when is_binary(B) ->
+    charref(binary_to_list(B));
 charref([$#, C | L]) when C =:= $x orelse C =:= $X ->
     try erlang:list_to_integer(L, 16)
     catch
