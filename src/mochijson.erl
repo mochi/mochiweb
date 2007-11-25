@@ -7,6 +7,8 @@
 -author('bob@mochimedia.com').
 -export([encoder/1, encode/1]).
 -export([decoder/1, decode/1]).
+-export([binary_encoder/1, binary_encode/1]).
+-export([binary_decoder/1, binary_decode/1]).
 -export([test/0]).
 
 % This is a macro to placate syntax highlighters..
@@ -28,6 +30,14 @@
 %%                          {handler, function()}
 %% @type decoder_option() = {input_encoding, encoding()} |
 %%                          {object_hook, function()}
+%% @type bjson_string() = binary()
+%% @type bjson_number() = integer() | float()
+%% @type bjson_array() = [bjson_term()]
+%% @type bjson_object() = {struct, [{bjson_string(), bjson_term()}]}
+%% @type bjson_term() = bjson_string() | bjson_number() | bjson_array() |
+%%                      bjson_object()
+%% @type binary_encoder_option() = {handler, function()}
+%% @type binary_decoder_option() = {object_hook, function()}
 
 -record(encoder, {input_encoding=unicode,
 		  handler=null}).
@@ -60,8 +70,31 @@ decoder(Options) ->
 decode(S) ->
     json_decode(S, #decoder{}).
 
+%% @spec binary_decoder([binary_decoder_option()]) -> function()
+%% @doc Create a binary_decoder/1 with the given options.
+binary_decoder(Options) ->
+    mochijson2:decoder(Options).
+
+%% @spec binary_encoder([binary_encoder_option()]) -> function()
+%% @doc Create a binary_encoder/1 with the given options.
+binary_encoder(Options) ->
+    mochijson2:encoder(Options).
+
+%% @spec binary_encode(bjson_term()) -> iolist()
+%% @doc Encode the given as JSON to an iolist, using lists for arrays and
+%%      binaries for strings.
+binary_encode(Any) ->
+    mochijson2:encode(Any).
+
+%% @spec binary_decode(iolist()) -> bjson_term()
+%% @doc Decode the given iolist to Erlang terms, using lists for arrays and
+%%      binaries for strings.
+binary_decode(S) ->
+    mochijson2:decode(S).
+
 test() ->
-    test_all().
+    test_all(),
+    mochijson2:test().
 
 %% Internal API
 
