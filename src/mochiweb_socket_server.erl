@@ -107,13 +107,36 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port}) ->
 	       Ip ->
 		   [{ip, Ip} | BaseOpts]
 	   end,
+    case gen_tcp_listen(Port, Opts, State) of
+        {error, Reason} ->
+            case Port < 1024 of 
+                true ->
+                    case fdsrv:start() of
+                        {ok, _} ->
+                            case fdsrv:bind_socket(tcp, Port) of
+                                {ok, Fd} ->
+                                    gen_tcp_listen(Port, [{fd, Fd} | Opts], State);
+                                _ ->
+                                    {stop, fdsrv_bind_failed}
+                            end;
+                        _ ->
+                            {stop, fdsrv_start_failed}
+                    end;
+                false ->
+                    {error, Reason}
+            end;
+        Ok ->
+            Ok
+    end.
+
+gen_tcp_listen(Port, Opts, State) ->
     case gen_tcp:listen(Port, Opts) of
-	{ok, Listen} ->
-	    {ok, ListenPort} = inet:port(Listen),
-	    {ok, new_acceptor(State#mochiweb_socket_server{listen=Listen,
-							   port=ListenPort})};
-	{error, Reason} ->
-	    {stop, Reason}
+        {ok, Listen} ->
+      	    {ok, ListenPort} = inet:port(Listen),
+       	    {ok, new_acceptor(State#mochiweb_socket_server{listen=Listen, 
+                                                           port=ListenPort})};
+      	{error, Reason} ->
+       	    {stop, Reason}
     end.
 
 new_acceptor(State=#mochiweb_socket_server{max=0}) ->
@@ -163,9 +186,15 @@ handle_cast({accepted, Pid},
 handle_cast(stop, State) ->
     {stop, normal, State}.
 
-terminate(_Reason, #mochiweb_socket_server{listen=Listen}) ->
+terminate(_Reason, #mochiweb_socket_server{listen=Listen, port=Port}) ->
     gen_tcp:close(Listen),
-    ok.
+    case Port < 1024 of 
+        true ->
+            catch fdsrv:stop(),
+            ok;
+        false ->
+            ok
+    end.
 
 code_change(_OldVsn, State, _Extra) ->
     State.
