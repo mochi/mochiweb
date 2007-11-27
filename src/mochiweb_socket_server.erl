@@ -108,7 +108,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port}) ->
 		   [{ip, Ip} | BaseOpts]
 	   end,
     case gen_tcp_listen(Port, Opts, State) of
-        {error, Reason} ->
+        {stop, eacces} ->
             case Port < 1024 of 
                 true ->
                     case fdsrv:start() of
@@ -123,10 +123,10 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port}) ->
                             {stop, fdsrv_start_failed}
                     end;
                 false ->
-                    {error, Reason}
+                    {stop, eacces}
             end;
-        Ok ->
-            Ok
+        Other ->
+            Other
     end.
 
 gen_tcp_listen(Port, Opts, State) ->
