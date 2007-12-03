@@ -110,7 +110,7 @@ escape(A) when is_atom(A) ->
 escape(S) when is_list(S) ->
     escape(S, []).
 
-%% @spec escape(S::string()) -> string()
+%% @spec escape_attr(S::string()) -> string()
 %% @doc Escape a string such that it's safe for HTML attrs
 %%      (amp; lt; gt; quot;).
 escape_attr(B) when is_binary(B) ->
