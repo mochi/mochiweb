@@ -153,7 +153,10 @@ find_boundary(Prefix, Data) ->
 		    %% False positive
 		    not_found
 	    end;
-	_ ->
+	{partial, Skip, Length} when (Skip + Length) =:= size(Data) ->
+            %% Underflow
+            {maybe, Skip};
+        _ ->
 	    not_found
     end.
 
@@ -305,6 +308,12 @@ test_find_boundary() ->
     not_found = find_boundary(B, <<"--X\r\nRest">>),
     {maybe, 0} = find_boundary(B, <<"\r\n--X\r">>),
     {maybe, 1} = find_boundary(B, <<"!\r\n--X\r">>),
+    P = <<"\r\n-----------------------------16037454351082272548568224146">>,
+    B0 = <<55,212,131,77,206,23,216,198,35,87,252,118,252,8,25,211,132,229,
+          182,42,29,188,62,175,247,243,4,4,0,59, 13,10,45,45,45,45,45,45,45,
+          45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,
+          49,54,48,51,55,52,53,52,51,53,49>>,
+    {maybe, 30} = find_boundary(P, B0),
     ok.
 
 test_find_in_binary() ->
