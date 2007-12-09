@@ -11,9 +11,10 @@
 
 -behaviour(gen_server).
 -export([start/0, start_link/0]).
+-export([stop/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
--record(state, {last}).
+-record(state, {last, tref}).
 
 start() ->
     gen_server:start({local, ?MODULE}, ?MODULE, [], []).
@@ -22,9 +23,14 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init([]) ->
-    {ok, _TRef} = timer:send_interval(timer:seconds(1), doit),
-    {ok, #state{last = stamp()}}.
+    {ok, TRef} = timer:send_interval(timer:seconds(1), doit),
+    {ok, #state{last = stamp(), tref = TRef}}.
 
+stop() ->
+    gen_server:call(?MODULE, stop).
+
+handle_call(stop, _From, State) ->
+    {stop, shutdown, stopped, State};
 handle_call(_Req, _From, State) ->
     {reply, {error, badrequest}, State}.
 
@@ -38,8 +44,11 @@ handle_info(doit, State) ->
 handle_info(_Info, State) ->
     {noreply, State}.
 
-terminate(_Reason, _State) ->
+terminate(_Reason, State) ->
+    {ok, cancel} = timer:cancel(State#state.tref),
     ok.
+
+
 
 code_change(_Vsn, State, _Extra) ->
     {ok, State}.
