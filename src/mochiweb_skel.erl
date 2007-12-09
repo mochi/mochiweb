@@ -7,8 +7,13 @@
 
 skelcopy(DestDir, Name) ->
     ok = ensuredir(DestDir),
-    skelcopy(src(), DestDir, Name,
-             1 + length(filename:dirname(DestDir))).
+    LDst = case length(filename:dirname(DestDir)) of 
+               1 -> %% handle case when dirname returns "/"
+                   0;
+               N ->
+                   N + 1
+           end,
+    skelcopy(src(), DestDir, Name, LDst).
     
 
 %% Internal API
