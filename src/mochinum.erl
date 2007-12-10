@@ -253,7 +253,7 @@ test_frexp() ->
     {0.5, -1073} = frexp(4.94065645841246544177e-324),
     %% large denormalized number
     {0.99999999999999978, -1022} = frexp(2.22507385850720088902e-308),
-    %% small denormalized number
+    %% small normalized number
     {0.5, -1021} = frexp(2.22507385850720138309e-308),
     %% large normalized number
     {0.99999999999999989, 1024} = frexp(1.79769313486231570815e+308),
