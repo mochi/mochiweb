@@ -84,15 +84,36 @@ insert_decimal(Place, S) when Place > 0 ->
     case Place - L of
          0 ->
             S ++ ".0";
-        N when N > 0 ->
-            %% More places than digits
-            S ++ lists:duplicate(N, $0) ++ ".0";
         N when N < 0 ->
             {S0, S1} = lists:split(L + N, S),
-            S0 ++ "." ++ S1
+            S0 ++ "." ++ S1;
+        N when N < 6 ->
+            %% More places than digits
+            S ++ lists:duplicate(N, $0) ++ ".0";
+        _ ->
+            insert_decimal_exp(Place, S)
     end;
+insert_decimal(Place, S) when Place > -6 ->
+    "0." ++ lists:duplicate(abs(Place), $0) ++ S;
 insert_decimal(Place, S) ->
-    "0." ++ lists:duplicate(abs(Place), $0) ++ S.
+    insert_decimal_exp(Place, S).
+
+insert_decimal_exp(Place, S) ->
+    [C | S0] = S,
+    S1 = case S0 of
+             [] ->
+                 "0";
+             _ ->
+                 S0
+         end,
+    Exp = case Place < 0 of
+              true ->
+                  "e-";
+              false ->
+                  "e+"
+          end,
+    [C] ++ "." ++ S1 ++ Exp ++ integer_to_list(abs(Place - 1)).
+
 
 digits1(Float, Exp, Frac) ->
     Round = ((Frac band 1) =:= 0),
