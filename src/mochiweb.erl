@@ -31,8 +31,10 @@ test() ->
     mochiweb_headers:test(),
     mochiweb_cookies:test(),
     mochihex:test(),
+    mochinum:test(),
     mochijson:test(),
     mochiweb_charref:test(),
+    mochiweb_html:test(),
     ok.
 
 reload() ->
