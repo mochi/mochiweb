@@ -13,7 +13,10 @@ skelcopy(DestDir, Name) ->
                N ->
                    N + 1
            end,
-    skelcopy(src(), DestDir, Name, LDst).
+    skelcopy(src(), DestDir, Name, LDst),
+    ok = file:make_symlink(
+        filename:join(filename:dirname(code:which(?MODULE)), ".."),
+        filename:join([DestDir, Name, "deps", "mochiweb-src"])).
     
 
 %% Internal API
