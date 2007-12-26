@@ -112,24 +112,6 @@ parse_decoder_options([{input_encoding, Encoding} | Rest], State) ->
 parse_decoder_options([{object_hook, Hook} | Rest], State) ->
     parse_decoder_options(Rest, State#decoder{object_hook=Hook}).
 
-
-format_float(F) ->
-    format_float1(lists:reverse(float_to_list(F)), []).
-
-format_float1([$0, $0, _, $e | Rest], []) ->
-    strip_zeros(Rest, []);
-format_float1([Sign, $e | Rest], Acc) ->
-    strip_zeros(Rest, [$e, Sign | Acc]);
-format_float1([C | Rest], Acc) ->
-    format_float1(Rest, [C | Acc]).
-
-strip_zeros(L=[$0, $. | _], Acc) ->
-    lists:reverse(L, Acc);
-strip_zeros([$0 | Rest], Acc) ->
-    strip_zeros(Rest, Acc);
-strip_zeros(L, Acc) ->
-    lists:reverse(L, Acc).
-
 json_encode(true, _State) ->
     "true";
 json_encode(false, _State) ->
@@ -139,7 +121,7 @@ json_encode(null, _State) ->
 json_encode(I, _State) when is_integer(I) ->
     integer_to_list(I);
 json_encode(F, _State) when is_float(F) ->
-    format_float(F);
+    mochinum:digits(F);
 json_encode(L, State) when is_list(L); is_binary(L); is_atom(L) ->
     json_encode_string(L, State);
 json_encode({array, Props}, State) when is_list(Props) ->
