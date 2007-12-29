@@ -143,8 +143,16 @@ json_encode_string_unicode([C | Cs], Acc) ->
     Acc1 = case C of
 	       ?Q ->
 		   [?Q, $\\ | Acc];
-	       $/ ->
-		   [$/, $\\ | Acc];
+               %% Escaping solidus is only useful when trying to protect
+               %% against "</script>" injection attacks which are only
+               %% possible when JSON is inserted into a HTML document
+               %% in-line. mochijson2 does not protect you from this, so
+               %% if you do insert directly into HTML then you need to
+               %% uncomment the following case or escape the output of encode.
+               %%
+	       %% $/ ->
+	       %%    [$/, $\\ | Acc];
+               %%
 	       $\\ ->
 		   [$\\, $\\ | Acc];
 	       $\b ->
