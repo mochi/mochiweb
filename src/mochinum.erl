@@ -271,11 +271,19 @@ test_frexp() ->
     %% negative one
     {-0.5, 1} = frexp(-1.0),
     %% small denormalized number
-    {0.5, -1073} = frexp(4.94065645841246544177e-324),
+    %% 4.94065645841246544177e-324
+    <<SmallDenorm/float>> = <<0,0,0,0,0,0,0,1>>,
+    {0.5, -1073} = frexp(SmallDenorm),
     %% large denormalized number
-    {0.99999999999999978, -1022} = frexp(2.22507385850720088902e-308),
+    %% 2.22507385850720088902e-308
+    <<BigDenorm/float>> = <<0,15,255,255,255,255,255,255>>,
+    {0.99999999999999978, -1022} = frexp(BigDenorm),
     %% small normalized number
-    {0.5, -1021} = frexp(2.22507385850720138309e-308),
+    %% 2.22507385850720138309e-308
+    <<SmallNorm/float>> = <<0,16,0,0,0,0,0,0>>,
+    {0.5, -1021} = frexp(SmallNorm),
     %% large normalized number
-    {0.99999999999999989, 1024} = frexp(1.79769313486231570815e+308),
+    %% 1.79769313486231570815e+308
+    <<LargeNorm/float>> = <<127,239,255,255,255,255,255,255>>,
+    {0.99999999999999989, 1024} = frexp(LargeNorm),
     ok.
