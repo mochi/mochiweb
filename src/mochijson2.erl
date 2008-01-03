@@ -332,7 +332,7 @@ tokenize_number(B, frac, S=#decoder{offset=O}, Acc) ->
     end;
 tokenize_number(B, frac1, S=#decoder{offset=O}, Acc) ->
     case B of
-        <<_:O/binary, C, _/binary>> when C >= 0 andalso C =< $9 ->
+        <<_:O/binary, C, _/binary>> when C >= $0 andalso C =< $9 ->
             tokenize_number(B, frac1, ?INC_COL(S), [C | Acc]);
         <<_:O/binary, E, _/binary>> when E =:= $e orelse E =:= $E ->
             tokenize_number(B, esign, ?INC_COL(S), [$e | Acc]);
@@ -452,6 +452,7 @@ equiv_list([V1 | L1], [V2 | L2]) ->
     end.
 
 test_all() ->
+    [1199344435545.0, 1] = decode(<<"[1199344435545.0,1]">>),
     test_one(e2j_test_vec(utf8), 1).
 
 test_one([], _N) ->
