@@ -10,8 +10,9 @@
 
 -define(IS_WHITESPACE(C),
 	(C =:= $\s orelse C =:= $\t orelse C =:= $\r orelse C =:= $\n)).
-%% RFC 2068 token grammar
--define(IS_TSPECIAL(C),
+
+%% RFC 2616 separators (called tspecials in RFC 2068)
+-define(IS_SEPARATOR(C),
 	(C < 32 orelse
 	 C =:= $\s orelse C =:= $\t orelse
 	 C =:= $( orelse C =:= $) orelse C =:= $< orelse C =:= $> orelse
@@ -24,73 +25,88 @@
 %% @type header() = {Name::string(), Value::string()}.
 
 %% @spec cookie(Key::string(), Value::string()) -> header()
-%% @doc cookie(Key, Value, []).
+%% @doc Short-hand for <code>cookie(Key, Value, [])</code>.
 cookie(Key, Value) ->
     cookie(Key, Value, []).
 
-%% @spec cookie(Key::string(), Value::string(),
-%%              Options::proplist()) -> header() 
-%% @doc Generate a cookie string based from the Key Value and Options
-%%      Options should be a proplist of various cookie attributes to set
-%%      returns a tuple {"Set-Cookie", string()}. The option Max-Age (max_age)
-%%      expects an integer indicating the number of seconds the cookie
-%%      should expire in.
+%% @spec cookie(Key::string(), Value::string(), Options::[Option]) -> header() 
+%% where Option = {max_age, integer()} | {local_time, {date(), time()}} 
+%%                | {domain, string()} | {path, string()}
+%%                | {secure, true | false}
+%%
+%% @doc Generate a Set-Cookie header field tuple.
 cookie(Key, Value, Options) ->
-    Cookie = [any_to_list(Key), "=", quote(Value), "; Version=\"1\""],
+    Cookie = [any_to_list(Key), "=", quote(Value), "; Version=1"],
     %% Set-Cookie:
     %%    Comment, Domain, Max-Age, Path, Secure, Version
     %% Set-Cookie2:
     %%    Comment, CommentURL, Discard, Domain, Max-Age, Path, Port, Secure,
     %%    Version
-    Cookie1 = case proplists:get_value(max_age, Options) of
-		  undefined ->
-		      Cookie;
-		  RawAge ->
-		      When = case proplists:get_value(local_time, Options) of
-				      undefined ->
-					  calendar:local_time();
-				 LocalTime ->
-				     LocalTime
-			     end,
-		      Age = case RawAge < 0 of
-				true ->
-				    0;
-				false ->
-				    RawAge
-			    end,
-		      [Cookie,
-		       "; Expires=", quote(age_to_cookie_date(Age, When)),
-		       "; Max-Age=", quote(Age)]
-	      end,
-    Cookie2 = case proplists:get_value(secure, Options) of
-		  true ->
-		      [Cookie1, "; Secure"];
-		  _ ->
-		      Cookie1
-	      end,
-    Cookie3 = case proplists:get_value(domain, Options) of
-		  undefined ->
-		      Cookie2;
-		  Domain ->
-		      [Cookie2, "; Domain=", quote(Domain)]
-	      end,
-    Cookie4 = case proplists:get_value(path, Options) of
-		  undefined ->
-		      Cookie3;
-		  Path ->
-		      [Cookie3, "; Path=", quote(Path)]
-	      end,
-    {"Set-Cookie", lists:flatten(Cookie4)}.
+    ExpiresPart =
+        case proplists:get_value(max_age, Options) of
+            undefined ->
+                "";
+            RawAge ->
+                When = case proplists:get_value(local_time, Options) of
+                           undefined ->
+                               calendar:local_time();
+                           LocalTime ->
+                               LocalTime
+                       end,
+                Age = case RawAge < 0 of
+                          true ->
+                              0;
+                          false ->
+                              RawAge
+                      end,
+                ["; Expires=", age_to_cookie_date(Age, When),
+                 "; Max-Age=", quote(Age)]
+        end,
+    SecurePart =
+        case proplists:get_value(secure, Options) of
+            true ->
+                "; Secure";
+            _ ->
+                ""
+        end,
+    DomainPart =
+        case proplists:get_value(domain, Options) of
+            undefined ->
+                "";
+            Domain ->
+                ["; Domain=", quote(Domain)]
+        end,
+    PathPart =
+        case proplists:get_value(path, Options) of
+            undefined ->
+                "";
+            Path ->
+                ["; Path=", quote(Path)]
+        end,
+    CookieParts = [Cookie, ExpiresPart, SecurePart, DomainPart, PathPart],
+    {"Set-Cookie", lists:flatten(CookieParts)}.
 
-quote(V) ->
-    quote(any_to_list(V), [?QUOTE]).
 
-quote([], Acc) ->
-    lists:reverse([?QUOTE | Acc]);
-quote([?QUOTE | Rest], Acc) ->
-    quote(Rest, [?QUOTE, $\\, Acc]);
-quote([C | Rest], Acc) ->
-    quote(Rest, [C | Acc]).
+%% Every major browser incorrectly handles quoted strings in a
+%% different and (worse) incompatible manner.  Instead of wasting time
+%% writing redundant code for each browser, we restrict cookies to
+%% only contain characters that browsers handle compatibly.
+%%
+%% By replacing the definition of quote with this, we generate
+%% RFC-compliant cookies:
+%%
+%%     quote(V) ->
+%%         Fun = fun(?QUOTE, Acc) -> [$\\, ?QUOTE | Acc];
+%%                  (Ch, Acc) -> [Ch | Acc]
+%%               end,
+%%         [?QUOTE | lists:foldr(Fun, [?QUOTE], V)].
+
+%% Convert to a string and raise an error if quoting is required.
+quote(V0) ->
+    V = any_to_list(V0),
+    lists:all(fun(Ch) -> Ch =:= $/ orelse not ?IS_SEPARATOR(Ch) end, V)
+        orelse erlang:error(cookie_quoting_required),
+    V.
 
 add_seconds(Secs, LocalTime) ->
     Greg = calendar:datetime_to_gregorian_seconds(LocalTime),
@@ -100,8 +116,8 @@ age_to_cookie_date(Age, LocalTime) ->
     httpd_util:rfc1123_date(add_seconds(Age, LocalTime)).
 
 %% @spec parse_cookie(string()) -> [{K::string(), V::string()}]
-%% @doc Parse the value of a Cookie header, ignoring cookie attributes, and
-%%      return a simple property list.
+%% @doc Parse the contents of a Cookie header field, ignoring cookie
+%% attributes, and return a simple property list.
 parse_cookie("") -> 
     [];
 parse_cookie(Cookie) -> 
@@ -163,7 +179,7 @@ skip_whitespace(String) ->
     lists:dropwhile(F, String).
 
 read_token(String) ->
-    F = fun (C) -> not ?IS_TSPECIAL(C) end,
+    F = fun (C) -> not ?IS_SEPARATOR(C) end,
     lists:splitwith(F, String).
 
 skip_past_separator([]) ->    
@@ -202,7 +218,39 @@ any_to_list(V) when is_binary(V) ->
 any_to_list(V) when is_integer(V) ->
     integer_to_list(V).
 
+
 cookie_test() ->
+    C1 = {"Set-Cookie",
+	  "Customer=WILE_E_COYOTE; "
+	  "Version=1; "
+	  "Path=/acme"},
+    C1 = cookie("Customer", "WILE_E_COYOTE", [{path, "/acme"}]),
+    C1 = cookie("Customer", "WILE_E_COYOTE",
+		[{path, "/acme"}, {badoption, "negatory"}]),
+    C1 = cookie('Customer', 'WILE_E_COYOTE', [{path, '/acme'}]),
+    C1 = cookie(<<"Customer">>, <<"WILE_E_COYOTE">>, [{path, <<"/acme">>}]),
+
+    {"Set-Cookie","=NoKey; Version=1"} = cookie("", "NoKey", []),
+
+    LocalTime = {{2007, 5, 15}, {13, 45, 33}},
+    C2 = {"Set-Cookie",
+	  "Customer=WILE_E_COYOTE; "
+	  "Version=1; "
+	  "Expires=Tue, 15 May 2007 20:45:33 GMT; "
+	  "Max-Age=0"},
+    C2 = cookie("Customer", "WILE_E_COYOTE",
+		[{max_age, -111}, {local_time, LocalTime}]),
+    C3 = {"Set-Cookie",
+	  "Customer=WILE_E_COYOTE; "
+	  "Version=1; "
+	  "Expires=Wed, 16 May 2007 20:45:50 GMT; "
+	  "Max-Age=86417"},
+    C3 = cookie("Customer", "WILE_E_COYOTE",
+		[{max_age, 86417}, {local_time, LocalTime}]),
+    ok.
+
+
+rfc_cookie_test() ->
     C1 = {"Set-Cookie",
 	  "Customer=\"WILE_E_COYOTE\"; "
 	  "Version=\"1\"; "
