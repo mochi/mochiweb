@@ -248,34 +248,3 @@ cookie_test() ->
     C3 = cookie("Customer", "WILE_E_COYOTE",
 		[{max_age, 86417}, {local_time, LocalTime}]),
     ok.
-
-
-rfc_cookie_test() ->
-    C1 = {"Set-Cookie",
-	  "Customer=\"WILE_E_COYOTE\"; "
-	  "Version=\"1\"; "
-	  "Path=\"/acme\""},
-    C1 = cookie("Customer", "WILE_E_COYOTE", [{path, "/acme"}]),
-    C1 = cookie("Customer", "WILE_E_COYOTE",
-		[{path, "/acme"}, {badoption, "negatory"}]),
-    C1 = cookie('Customer', 'WILE_E_COYOTE', [{path, '/acme'}]),
-    C1 = cookie(<<"Customer">>, <<"WILE_E_COYOTE">>, [{path, <<"/acme">>}]),
-
-    {"Set-Cookie","=\"NoKey\"; Version=\"1\""} = cookie("", "NoKey", []),
-
-    LocalTime = {{2007, 5, 15}, {13, 45, 33}},
-    C2 = {"Set-Cookie",
-	  "Customer=\"WILE_E_COYOTE\"; "
-	  "Version=\"1\"; "
-	  "Expires=\"Tue, 15 May 2007 20:45:33 GMT\"; "
-	  "Max-Age=\"0\""},
-    C2 = cookie("Customer", "WILE_E_COYOTE",
-		[{max_age, -111}, {local_time, LocalTime}]),
-    C3 = {"Set-Cookie",
-	  "Customer=\"WILE_E_COYOTE\"; "
-	  "Version=\"1\"; "
-	  "Expires=\"Wed, 16 May 2007 20:45:50 GMT\"; "
-	  "Max-Age=\"86417\""},
-    C3 = cookie("Customer", "WILE_E_COYOTE",
-		[{max_age, 86417}, {local_time, LocalTime}]),
-    ok.
