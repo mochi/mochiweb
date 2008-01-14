@@ -255,7 +255,7 @@ unihex(C) when C =< 16#10FFFF ->
     [unihex(S1), unihex(S2)].
 
 json_decode(B, S) when is_binary(B) ->
-    json_decode([B], S);
+    json_decode(binary_to_list(B), S);
 json_decode(L, S) ->
     {Res, L1, S1} = decode1(L, S),
     {eof, [], _} = tokenize(L1, S1#decoder{state=trim}),
