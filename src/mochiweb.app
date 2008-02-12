@@ -4,6 +4,7 @@
   {modules, [
 	     mochihex,
 	     mochijson,
+         mochijson2,
 	     mochiweb,
 	     mochiweb_app,
 	     mochiweb_cookies,
