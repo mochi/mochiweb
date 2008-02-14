@@ -148,7 +148,7 @@ json_encode_proplist(Props, State) ->
     F = fun ({K, V}, Acc) ->
 		KS = case K of 
 			 K when is_atom(K) ->
-			     json_encode_string_utf8(atom_to_list(K), [?Q]);
+			     json_encode_string_utf8(atom_to_list(K));
 			 K when is_integer(K) ->
 			     json_encode_string(integer_to_list(K), State);
 			 K when is_list(K); is_binary(K) ->
@@ -161,76 +161,53 @@ json_encode_proplist(Props, State) ->
     lists:reverse([$\} | Acc1]).
 
 json_encode_string(A, _State) when is_atom(A) ->
-    json_encode_string_unicode(xmerl_ucs:from_utf8(atom_to_list(A)), [?Q]);
+    json_encode_string_unicode(xmerl_ucs:from_utf8(atom_to_list(A)));
 json_encode_string(B, _State) when is_binary(B) ->
-    json_encode_string_unicode(xmerl_ucs:from_utf8(B), [?Q]);
+    json_encode_string_unicode(xmerl_ucs:from_utf8(B));
 json_encode_string(S, #encoder{input_encoding=utf8}) ->
-    json_encode_string_utf8(S, [?Q]);
+    json_encode_string_utf8(S);
 json_encode_string(S, #encoder{input_encoding=unicode}) ->
-    json_encode_string_unicode(S, [?Q]).
+    json_encode_string_unicode(S).
 
-json_encode_string_utf8([], Acc) ->
-    lists:reverse([$\" | Acc]);
-json_encode_string_utf8(All=[C | Cs], Acc) ->
-    case C of 
-	C when C >= 16#7f ->
-	    json_encode_string_unicode(xmerl_ucs:from_utf8(All), Acc);
-	_ ->
-	    Acc1 = case C of
-		       ?Q ->
-			   [?Q, $\\ | Acc];
-		       $/ ->
-			   [$/, $\\ | Acc];
-		       $\\ ->
-			   [$\\, $\\ | Acc];
-		       $\b ->
-			   [$b, $\\ | Acc];
-		       $\f ->
-			   [$f, $\\ | Acc];
-		       $\n ->
-			   [$n, $\\ | Acc];
-		       $\r ->
-			   [$r, $\\ | Acc];
-		       $\t ->
-			   [$t, $\\ | Acc];
-		       C when C >= 0, C < $\s ->
-			   [unihex(C) | Acc];
-		       C when C >= $\s ->
-			   [C | Acc];
-		       _ ->
-			   exit({json_encode, {bad_char, C}})
-		   end,
-	    json_encode_string_utf8(Cs, Acc1)
-    end.
+json_encode_string_utf8(S) ->
+    [?Q | json_encode_string_utf8_1(S)].
 
-json_encode_string_unicode([], Acc) ->
-    lists:reverse([$\" | Acc]);
-json_encode_string_unicode([C | Cs], Acc) ->
-    Acc1 = case C of
-	       ?Q ->
-		   [?Q, $\\ | Acc];
-	       $/ ->
-		   [$/, $\\ | Acc];
-	       $\\ ->
-		   [$\\, $\\ | Acc];
-	       $\b ->
-		   [$b, $\\ | Acc];
-	       $\f ->
-		   [$f, $\\ | Acc];
-	       $\n ->
-		   [$n, $\\ | Acc];
-	       $\r ->
-		   [$r, $\\ | Acc];
-	       $\t ->
-		   [$t, $\\ | Acc];
-	       C when C >= 0, C < $\s; C >= 16#7f, C =< 16#10FFFF ->
-		   [unihex(C) | Acc];
-	       C when C < 16#7f ->
-		   [C | Acc];
-	       _ ->
-		   exit({json_encode, {bad_char, C}})
-	   end,
-    json_encode_string_unicode(Cs, Acc1).
+json_encode_string_utf8_1([C | Cs]) when C >= 0, C =< 16#7f ->
+    NewC = case C of
+               _ when C >= $\s, C < 16#7f -> C;
+               $\\ -> "\\\\";
+               $\t -> "\\t";
+               $\n -> "\\n";
+               $\r -> "\\r";
+               $\f -> "\\f";
+               $\b -> "\\b";
+               _ when C >= 0, C =< 16#7f -> unihex(C);
+               _ -> exit({json_encode, {bad_char, C}})
+           end,
+    [NewC | json_encode_string_utf8_1(Cs)];
+json_encode_string_utf8_1(All=[C | _]) when C >= 16#80, C =< 16#10FFFF ->
+    json_encode_string_unicode(xmerl_ucs:from_utf8(All));
+json_encode_string_utf8_1([]) ->
+    "\"".
+
+json_encode_string_unicode(S) ->
+    [?Q | json_encode_string_unicode_1(S)].
+
+json_encode_string_unicode_1([C | Cs]) ->
+    NewC = case C of
+               _ when C >= $\s, C < 16#7f -> C;
+               $\\ -> "\\\\";
+               $\t -> "\\t";
+               $\n -> "\\n";
+               $\r -> "\\r";
+               $\f -> "\\f";
+               $\b -> "\\b";
+               _ when C >= 0, C =< 16#10FFFF -> unihex(C);
+               _ -> exit({json_encode, {bad_char, C}})
+           end,
+    [NewC | json_encode_string_unicode_1(Cs)];
+json_encode_string_unicode_1([]) ->
+    "\"".
 
 dehex(C) when C >= $0, C =< $9 ->
     C - $0;

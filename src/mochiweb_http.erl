@@ -72,7 +72,7 @@ default_body(Req, M, _Path) when M =:= 'GET'; M =:= 'HEAD' ->
 				   {parse_cookie, Req:parse_cookie()},
 				   Req:dump()]]),
     Req:ok({"text/html",
-	    [mochiweb_cookies:cookie("mochiweb_http", "test cookie")],
+	    [mochiweb_cookies:cookie("mochiweb_http", "test_cookie")],
 	    frm(Body)});
 default_body(Req, 'POST', "/multipart") ->
     Body = io_lib:format("~p~n", [[{parse_qs, Req:parse_qs()},

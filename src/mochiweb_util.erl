@@ -10,6 +10,7 @@
 -export([urlsplit/1, urlsplit_path/1, urlunsplit/1, urlunsplit_path/1]).
 -export([guess_mime/1, parse_header/1]).
 -export([shell_quote/1, cmd/1, cmd_string/1, cmd_port/2]).
+-export([record_to_proplist/2, record_to_proplist/3]).
 -export([test/0]).
 
 -define(PERCENT, 37).  % $\% 
@@ -310,6 +311,24 @@ unquote_header([$\\, C | Rest], Acc) ->
     unquote_header(Rest, [C | Acc]);
 unquote_header([C | Rest], Acc) ->
     unquote_header(Rest, [C | Acc]).
+
+%% @spec record_to_proplist(Record, Fields) -> proplist()
+%% @doc calls record_to_proplist/3 with a default TypeKey of '__record'
+record_to_proplist(Record, Fields) ->
+    record_to_proplist(Record, Fields, '__record').
+
+%% @spec record_to_proplist(Record, Fields, TypeKey) -> proplist()
+%% @doc Return a proplist of the given Record with each field in the 
+%%      Fields list set as a key with the corresponding value in the Record.
+%%      TypeKey is the key that is used to store the record type
+%%      Fields should be obtained by calling record_info(fields, record_type)
+%%      where record_type is the record type of Record
+record_to_proplist(Record, Fields, TypeKey)
+  when is_tuple(Record),
+       is_list(Fields),
+       size(Record) - 1 =:= length(Fields) ->
+    lists:zip([TypeKey | Fields], tuple_to_list(Record)).
+
 
 shell_quote([], Acc) ->
     lists:reverse([$\" | Acc]);

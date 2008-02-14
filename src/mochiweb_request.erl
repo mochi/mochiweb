@@ -96,7 +96,7 @@ get(range) ->
         undefined ->
             undefined;
         RawRange ->
-            parse_range_request(RawRange) 
+            parse_range_request(RawRange)
     end.
 
 %% @spec dump() -> {mochiweb_request, [{atom(), term()}]}
@@ -164,6 +164,12 @@ recv_body() ->
 %% @doc Receive the body of the HTTP request (defined by Content-Length).
 %%      Will receive up to MaxBody bytes.
 recv_body(MaxBody) ->
+    case get_header_value("expect") of
+        "100-continue" ->
+            start_raw_response({100, gb_trees:empty()});
+        _Else ->
+            ok
+    end,
     Body = case body_length() of
                undefined ->
                    undefined;
@@ -192,7 +198,7 @@ start_response({Code, ResponseHeaders}) ->
 						    HResponse),
     start_raw_response({Code, HResponse1}).
 
-%% @spec start_raw_response({integer(), ioheaders()}) -> response()
+%% @spec start_raw_response({integer(), headers()}) -> response()
 %% @doc Start the HTTP response by sending the Code HTTP response and
 %%      ResponseHeaders.
 start_raw_response({Code, ResponseHeaders}) ->
@@ -429,7 +435,9 @@ serve_file(Path, DocRoot) ->
 	    case file:open(File, [raw, binary]) of
 		{ok, IoDevice} ->
 		    ContentType = mochiweb_util:guess_mime(File),
-		    ok({ContentType, {file, IoDevice}});
+		    Res = ok({ContentType, {file, IoDevice}}),
+                    file:close(IoDevice),
+                    Res;
 		_ ->
 		    not_found()
 	    end;
@@ -529,7 +537,7 @@ range_parts(Body0, Ranges) ->
     Size = size(Body),
     F = fun(Spec, Acc) ->
                 case range_skip_length(Spec, Size) of
-                    invalid ->
+                    invalid_range ->
                         Acc;
                     {Skip, Length} ->
                         <<_:Skip/binary, PartialBody:Length/binary, _/binary>> = Body,
@@ -619,7 +627,7 @@ test_range() ->
     
     Body = <<"012345678901234567890123456789012345678901234567890123456789">>,
     BodySize = size(Body), %% 60
-    BodySize =:= 60,
+    BodySize = 60,
 
     %% these values assume BodySize =:= 60
     io:format("Testing out range_skip_length on valid ranges~n"),
