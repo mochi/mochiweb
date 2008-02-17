@@ -174,8 +174,8 @@ json_encode_string_utf8(S) ->
 
 json_encode_string_utf8_1([C | Cs]) when C >= 0, C =< 16#7f ->
     NewC = case C of
-               _ when C >= $\s, C < 16#7f -> C;
                $\\ -> "\\\\";
+               _ when C >= $\s, C < 16#7f -> C;
                $\t -> "\\t";
                $\n -> "\\n";
                $\r -> "\\r";
@@ -195,8 +195,8 @@ json_encode_string_unicode(S) ->
 
 json_encode_string_unicode_1([C | Cs]) ->
     NewC = case C of
-               _ when C >= $\s, C < 16#7f -> C;
                $\\ -> "\\\\";
+               _ when C >= $\s, C < 16#7f -> C;
                $\t -> "\\t";
                $\n -> "\\n";
                $\r -> "\\r";
@@ -498,6 +498,7 @@ e2j_test_vec(utf8) ->
     {"", "\"\""},
     {[], "\"\""},
     {"\n\n\n", "\"\\n\\n\\n\""},
+    {"\\", "\"\\\\\""},
     {obj_new(), "{}"},
     {obj_from_list([{"foo", "bar"}]), "{\"foo\":\"bar\"}"},
     {obj_from_list([{"foo", "bar"}, {"baz", 123}]),
