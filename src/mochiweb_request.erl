@@ -10,7 +10,7 @@
 
 -define(QUIP, "Any of you quaids got a smint?").
 
--export([get_header_value/1, get/1, dump/0]).
+-export([get_header_value/1, get_primary_header_value/1, get/1, dump/0]).
 -export([send/1, recv/1, recv/2, recv_body/0, recv_body/1]).
 -export([start_response/1, start_raw_response/1, respond/1, ok/1]).
 -export([not_found/0]).
@@ -46,6 +46,9 @@
 %% @doc Get the value of a given request header.
 get_header_value(K) ->
     mochiweb_headers:get_value(K, Headers).
+
+get_primary_header_value(K) ->
+    mochiweb_headers:get_primary_value(K, Headers).
 
 %% @type field() = socket | method | raw_path | version | headers | peer | path | body_length | range
 
@@ -354,7 +357,7 @@ parse_post() ->
 			 undefined ->
 			     [];
 			 Binary ->
-			     case get_header_value("content-type") of
+			     case get_primary_header_value("content-type") of
 				 "application/x-www-form-urlencoded" ->
 				     mochiweb_util:parse_qs(Binary);
 				 _ ->

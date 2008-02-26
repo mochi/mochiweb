@@ -6,6 +6,7 @@
 -module(mochiweb_headers).
 -author('bob@mochimedia.com').
 -export([empty/0, from_list/1, insert/3, enter/3, get_value/2, lookup/2]).
+-export([get_primary_value/2]).
 -export([default/3, enter_from_list/2, default_from_list/2]).
 -export([to_list/1, make/1]).
 -export([test/0]).
@@ -29,6 +30,11 @@ test() ->
     {value, {"Set-Cookie", "foo, bar"}} = ?MODULE:lookup("set-cookie", H3),
     undefined = ?MODULE:get_value("shibby", H3),
     none = ?MODULE:lookup("shibby", H3),
+    H4 = ?MODULE:insert("content-type",
+                        "application/x-www-form-urlencoded; charset=utf8",
+                        H3),
+    "application/x-www-form-urlencoded" = ?MODULE:get_primary_value(
+                                             "content-type", H4),
     ok.
 
 %% @spec empty() -> headers()
@@ -81,6 +87,18 @@ get_value(K, T) ->
 	    expand(V);
 	none ->
 	    undefined
+    end.
+
+%% @spec get_primary_value(key(), headers()) -> string() | undefined
+%% @doc Return the value of the given header up to the first semicolon using
+%%      a case insensitive search. undefined will be returned for keys
+%%      that are not present.
+get_primary_value(K, T) ->
+    case get_value(K, T) of
+        undefined ->
+            undefined;
+        V ->
+            lists:takewhile(fun (C) -> C =/= $; end, V)
     end.
 
 %% @spec lookup(key(), headers()) -> {value, {key(), string()}} | none
