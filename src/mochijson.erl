@@ -2,7 +2,6 @@
 %% @copyright 2006 Mochi Media, Inc.
 
 %% @doc Yet another JSON (RFC 4627) library for Erlang.
-
 -module(mochijson).
 -author('bob@mochimedia.com').
 -export([encoder/1, encode/1]).
@@ -175,6 +174,7 @@ json_encode_string_utf8(S) ->
 json_encode_string_utf8_1([C | Cs]) when C >= 0, C =< 16#7f ->
     NewC = case C of
                $\\ -> "\\\\";
+               ?Q -> "\\\"";
                _ when C >= $\s, C < 16#7f -> C;
                $\t -> "\\t";
                $\n -> "\\n";
@@ -196,6 +196,7 @@ json_encode_string_unicode(S) ->
 json_encode_string_unicode_1([C | Cs]) ->
     NewC = case C of
                $\\ -> "\\\\";
+               ?Q -> "\\\"";
                _ when C >= $\s, C < 16#7f -> C;
                $\t -> "\\t";
                $\n -> "\\n";
@@ -308,7 +309,7 @@ tokenize_string("\\/" ++ Rest, S, Acc) ->
 tokenize_string("\\b" ++ Rest, S, Acc) ->
     tokenize_string(Rest, ?ADV_COL(S, 2), [$\b | Acc]);
 tokenize_string("\\f" ++ Rest, S, Acc) ->
-    tokenize_string(Rest, ?ADV_COL(S, 2), [$\\ | Acc]);
+    tokenize_string(Rest, ?ADV_COL(S, 2), [$\f | Acc]);
 tokenize_string("\\n" ++ Rest, S, Acc) ->
     tokenize_string(Rest, ?ADV_COL(S, 2), [$\n | Acc]);
 tokenize_string("\\r" ++ Rest, S, Acc) ->
@@ -496,9 +497,10 @@ e2j_test_vec(utf8) ->
     {"foo", "\"foo\""},
     {"foo" ++ [5] ++ "bar", "\"foo\\u0005bar\""},
     {"", "\"\""},
-    {[], "\"\""},
+    {"\"", "\"\\\"\""},
     {"\n\n\n", "\"\\n\\n\\n\""},
     {"\\", "\"\\\\\""},
+    {"\" \b\f\r\n\t\"", "\"\\\" \\b\\f\\r\\n\\t\\\"\""},
     {obj_new(), "{}"},
     {obj_from_list([{"foo", "bar"}]), "{\"foo\":\"bar\"}"},
     {obj_from_list([{"foo", "bar"}, {"baz", 123}]),
