@@ -477,9 +477,13 @@ make_version(_) ->
 
 
 read_iodevice(IoDevice) ->
-    {ok, Size} = file:position(IoDevice, eof),
-    {ok, Data} = file:pread(IoDevice, 0, Size),
-    {ok, Data}.    
+    case file:position(IoDevice, eof) of
+        {ok, 0} ->
+            {ok, <<>>};
+        {ok, Size} ->
+            {ok, Data} = file:pread(IoDevice, 0, Size),
+            {ok, Data}
+    end.
 
 parts_to_body([{Start, End, Body}], ContentType, Size) ->
     %% return body for a range reponse with a single body
