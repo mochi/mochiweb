@@ -122,7 +122,7 @@ escape_attr(S) when is_list(S) ->
 escape_attr(I) when is_integer(I) ->
     escape_attr(integer_to_list(I), []);
 escape_attr(F) when is_float(F) ->
-    escape_attr(mochijson:encode(F), []).
+    escape_attr(mochinum:digits(F), []).
 
 %% @spec test() -> ok
 %% @doc Run tests for mochiweb_html.
