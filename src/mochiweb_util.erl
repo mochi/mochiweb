@@ -300,6 +300,8 @@ guess_mime(File) ->
             "audio/x-mpegurl";
         ".exe" ->
             "application/octet-stream";
+        ".csv" ->
+            "text/csv";
         _ ->
             "text/plain"
     end.
