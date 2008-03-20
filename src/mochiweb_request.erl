@@ -86,8 +86,8 @@ get(peer) ->
 get(path) ->
     case erlang:get(?SAVE_PATH) of
 	undefined ->
-	    {RawPath, _, _} = mochiweb_util:urlsplit_path(RawPath),
-            Path = mochiweb_util:unquote(RawPath),
+	    {Path0, _, _} = mochiweb_util:urlsplit_path(RawPath),
+            Path = mochiweb_util:unquote(Path0),
 	    put(?SAVE_PATH, Path),
 	    Path;
 	Cached ->
