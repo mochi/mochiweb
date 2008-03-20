@@ -6,13 +6,55 @@
 -module(mochiweb_multipart).
 -author('bob@mochimedia.com').
 
--compile([export_all]).
+-export([parse_form/2]).
 -export([parse_multipart_request/2]).
 -export([test/0]).
 
 -define(CHUNKSIZE, 4096).
 
 -record(mp, {state, boundary, length, buffer, callback, req}).
+
+%% TODO: DOCUMENT THIS MODULE.
+
+parse_form(Req, FileHandler) ->
+    Callback = fun (Next) -> parse_form_outer(Next, FileHandler, []) end,
+    {_, _, Res} = parse_multipart_request(Req, Callback),
+    Res.
+
+parse_form_outer(eof, _, Acc) ->
+    lists:reverse(Acc);
+parse_form_outer({headers, H}, FileHandler, State) ->
+    {"form-data", H1} = proplists:get_value("content-disposition", H),
+    Name = proplists:get_value("name", H1),
+    Filename = proplists:get_value("filename", H1),
+    case Filename of
+        undefined ->
+            fun (Next) ->
+                    parse_form_value(Next, {Name, []}, FileHandler, State)
+            end;
+        _ ->
+            ContentType = proplists:get_value("content-type", H),
+            Handler = FileHandler(Filename, ContentType),
+            fun (Next) ->
+                    parse_form_file(Next, {Name, Handler}, FileHandler, State)
+            end
+    end.
+
+parse_form_value(body_end, {Name, Acc}, FileHandler, State) ->
+    Value = binary_to_list(iolist_to_binary(lists:reverse(Acc))),
+    State1 = [{Name, Value} | State],
+    fun (Next) -> parse_form_outer(Next, FileHandler, State1) end;
+parse_form_value({body, Data}, {Name, Acc}, FileHandler, State) ->
+    Acc1 = [Data | Acc],
+    fun (Next) -> parse_form_value(Next, {Name, Acc1}, FileHandler, State) end.
+
+parse_form_file(body_end, {Name, Handler}, FileHandler, State) ->
+    Value = Handler(eof),
+    State1 = [{Name, Value} | State],
+    fun (Next) -> parse_form_outer(Next, FileHandler, State1) end;
+parse_form_file({body, Data}, {Name, Handler}, FileHandler, State) ->
+    H1 = Handler(Data),
+    fun (Next) -> parse_form_file(Next, {Name, H1}, FileHandler, State) end.
 
 parse_multipart_request(Req, Callback) ->
     %% TODO: Support chunked?
@@ -94,7 +136,7 @@ feed_mp(body, State=#mp{boundary=Prefix, buffer=Buffer, callback=Callback}) ->
 	{maybe, Start} ->
 	    <<Data:Start/binary, Rest/binary>> = Buffer,
 	    feed_mp(body, read_more(State#mp{callback=Callback({body, Data}),
-					     buffer=Rest}));	    
+					     buffer=Rest}));
 	not_found ->
 	    {Data, Rest} = {Buffer, <<>>},
 	    feed_mp(body, read_more(State#mp{callback=Callback({body, Data}),
@@ -181,7 +223,7 @@ fake_request(Socket, ContentType, Length) ->
 			    {"content-length", Length}])).
 
 test_callback(Expect, [Expect | Rest]) ->
-    case Rest of 
+    case Rest of
 	[] ->
 	    ok;
 	_ ->
@@ -202,7 +244,7 @@ test_parse3() ->
 		{"content-type", {"text/plain", []}}]},
 	      {body, <<"Woo multiline text file\n\nLa la la">>},
 	      body_end,
-	      eof],	      
+	      eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
 			case gen_tcp:send(Socket, BinContent) of
@@ -220,7 +262,7 @@ test_parse3() ->
     ok = with_socket_server(ServerFun, ClientFun),
     ok.
 
- 
+
 test_parse2() ->
     ContentType = "multipart/form-data; boundary=---------------------------6072231407570234361599764024",
     BinContent = <<"-----------------------------6072231407570234361599764024\r\nContent-Disposition: form-data; name=\"hidden\"\r\n\r\nmultipart message\r\n-----------------------------6072231407570234361599764024\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\"\r\nContent-Type: application/octet-stream\r\n\r\n\r\n-----------------------------6072231407570234361599764024--\r\n">>,
@@ -235,7 +277,7 @@ test_parse2() ->
 		{"content-type", {"application/octet-stream", []}}]},
 	      {body, <<>>},
 	      body_end,
-	      eof],	      
+	      eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
 			case gen_tcp:send(Socket, BinContent) of
@@ -248,6 +290,55 @@ test_parse2() ->
 					   size(BinContent)),
 			Res = parse_multipart_request(Req, TestCallback),
 			{0, <<>>, ok} = Res,
+			ok
+		end,
+    ok = with_socket_server(ServerFun, ClientFun),
+    ok.
+
+handler_test(Filename, ContentType) ->
+    fun (Next) ->
+            handler_test_read(Next, {Filename, ContentType}, [])
+    end.
+
+handler_test_read(eof, {Filename, ContentType}, Acc) ->
+    Value = iolist_to_binary(lists:reverse(Acc)),
+    {Filename, ContentType, Value};
+handler_test_read(Data, H, Acc) ->
+    Acc1 = [Data | Acc],
+    fun (Next) -> handler_test_read(Next, H, Acc1) end.
+
+
+test_parse_form() ->
+    ContentType = "multipart/form-data; boundary=AaB03x",
+    "AaB03x" = get_boundary(ContentType),
+    Content = mochiweb_util:join(
+		["--AaB03x",
+		 "Content-Disposition: form-data; name=\"submit-name\"",
+		 "",
+		 "Larry",
+		 "--AaB03x",
+		 "Content-Disposition: form-data; name=\"files\";"
+		 ++ "filename=\"file1.txt\"",
+		 "Content-Type: text/plain",
+		 "",
+		 "... contents of file1.txt ...",
+		 "--AaB03x--",
+		 ""], "\r\n"),
+    BinContent = iolist_to_binary(Content),
+    ServerFun = fun (Socket) ->
+			case gen_tcp:send(Socket, BinContent) of
+			    ok ->
+				exit(normal)
+			end
+		end,
+    ClientFun = fun (Socket) ->
+			Req = fake_request(Socket, ContentType,
+					   size(BinContent)),
+			Res = parse_form(Req, fun handler_test/2),
+                        [{"submit-name", "Larry"},
+                         {"files", {"file1.txt", {"text/plain",[]},
+                                    <<"... contents of file1.txt ...">>}
+                         }] = Res,
 			ok
 		end,
     ok = with_socket_server(ServerFun, ClientFun),
@@ -281,7 +372,7 @@ test_parse() ->
 		 {"content-type", {"text/plain", []}}]},
 	      {body, <<"... contents of file1.txt ...">>},
 	      body_end,
-	      eof],	      
+	      eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
 			case gen_tcp:send(Socket, BinContent) of
@@ -333,4 +424,5 @@ test() ->
     test_parse(),
     test_parse2(),
     test_parse3(),
+    test_parse_form(),
     ok.

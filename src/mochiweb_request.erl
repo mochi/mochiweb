@@ -86,7 +86,8 @@ get(peer) ->
 get(path) ->
     case erlang:get(?SAVE_PATH) of
 	undefined ->
-	    {Path, _, _} = mochiweb_util:urlsplit_path(RawPath),
+	    {RawPath, _, _} = mochiweb_util:urlsplit_path(RawPath),
+            Path = mochiweb_util:unquote(RawPath),
 	    put(?SAVE_PATH, Path),
 	    Path;
 	Cached ->
@@ -585,7 +586,7 @@ parse_range_request(RawRange) when is_list(RawRange) ->
                   end,
                   Ranges)
     catch
-        _:_ -> 
+        _:_ ->
             fail
     end.
 

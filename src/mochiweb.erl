@@ -35,6 +35,7 @@ test() ->
     mochijson:test(),
     mochiweb_charref:test(),
     mochiweb_html:test(),
+    test_request(),
     ok.
 
 reload() ->
@@ -58,8 +59,6 @@ all_loaded(Base) ->
                 end
         end,
     lists:foldl(F, [], code:all_loaded()).
-                    
-    
 
 
 %% @spec new_request({Socket, Request, Headers}) -> MochiWebRequest
@@ -87,7 +86,12 @@ new_response({Request, Code, Headers}) ->
 			  mochiweb_headers:make(Headers)).
 
 %% Internal API
-    
+
+test_request() ->
+    R = mochiweb_request:new(z, z, "/foo/bar/baz%20wibble+quux", z, []),
+    "/foo/bar/baz wibble quux" = R:get(path),
+    ok.
+
 ensure_started(App) ->
     case application:start(App) of
 	ok ->

@@ -13,7 +13,7 @@
 -export([record_to_proplist/2, record_to_proplist/3]).
 -export([test/0]).
 
--define(PERCENT, 37).  % $\% 
+-define(PERCENT, 37).  % $\%
 -define(FULLSTOP, 46). % $\.
 -define(IS_HEX(C), ((C >= $0 andalso C =< $9) orelse
 		    (C >= $a andalso C =< $f) orelse
@@ -23,7 +23,6 @@
 		     (C >= $0 andalso C =< $9) orelse
 		     (C =:= ?FULLSTOP orelse C =:= $- orelse C =:= $~ orelse
 		      C =:= $_))).
-                                 
 
 hexdigit(C) when C < 10 -> $0 + C;
 hexdigit(C) when C < 16 -> $A + (C - 10).
@@ -68,7 +67,7 @@ revjoin([], _Separator, Acc) ->
 revjoin([S | Rest], Separator, []) ->
     revjoin(Rest, Separator, [S]);
 revjoin([S | Rest], Separator, Acc) ->
-    revjoin(Rest, Separator, [S, Separator | Acc]).    
+    revjoin(Rest, Separator, [S, Separator | Acc]).
 
 %% @spec quote_plus(atom() | integer() | string()) -> string()
 %% @doc URL safe encoding of the given term.
@@ -259,6 +258,8 @@ guess_mime(File) ->
 	    "image/jpeg";
 	".gif" ->
 	    "image/gif";
+	".png" ->
+	    "image/png";
 	".swf" ->
 	    "application/x-shockwave-flash";
 	".zip" ->
@@ -271,8 +272,34 @@ guess_mime(File) ->
 	    "application/x-tar";
 	".tgz" ->
 	    "application/x-gzip";
-	_ ->
-	    "text/plain"
+	".txt" ->
+	    "text/plain";
+        ".doc" ->
+            "application/msword";
+        ".pdf" ->
+            "application/pdf";
+        ".xls" ->
+            "application/vnd.ms-excel";
+        ".rtf" ->
+            "application/rtf";
+        ".mov" ->
+            "video/quicktime";
+        ".mp3" ->
+            "audio/mpeg";
+        ".z" ->
+            "application/x-compress";
+        ".wav" ->
+            "audio/x-wav";
+        ".ico" ->
+            "image/x-icon";
+        ".bmp" ->
+            "image/bmp";
+        ".m4a" ->
+            "audio/mpeg";
+        ".m3u" ->
+            "audio/x-mpegurl";
+        _ ->
+            "application/octet-stream"
     end.
 
 %% @spec parse_header(string()) -> {Type, [{K, V}]}
@@ -372,9 +399,10 @@ test_parse_header() ->
     {"multipart/form-data", [{"boundary", "AaB03x"}]} =
 	parse_header("multipart/form-data; boundary=AaB03x"),
     ok.
-    
+
 test_guess_mime() ->
-    "text/plain" = guess_mime(""),
+    "application/octet-stream" = guess_mime(""),
+    "application/octet-stream" = guess_mime(".text"),
     "application/zip" = guess_mime(".zip"),
     "application/zip" = guess_mime("x.zip"),
     "text/html" = guess_mime("x.html"),
@@ -441,7 +469,7 @@ test_unquote() ->
     "foo bar" = unquote("foo%20bar"),
     "foo\r\n" = unquote("foo%0D%0A"),
     ok.
-    
+
 test_urlencode() ->
     "foo=bar&baz=wibble+%0D%0A&z=1" = urlencode([{foo, "bar"},
 						 {"baz", "wibble \r\n"},
