@@ -298,8 +298,10 @@ guess_mime(File) ->
             "audio/mpeg";
         ".m3u" ->
             "audio/x-mpegurl";
+        ".exe" ->
+            "application/octet-stream";
         _ ->
-            "application/octet-stream"
+            "text/plain"
     end.
 
 %% @spec parse_header(string()) -> {Type, [{K, V}]}
