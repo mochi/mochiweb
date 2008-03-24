@@ -405,8 +405,8 @@ test_parse_header() ->
     ok.
 
 test_guess_mime() ->
-    "application/octet-stream" = guess_mime(""),
-    "application/octet-stream" = guess_mime(".text"),
+    "text/plain" = guess_mime(""),
+    "text/plain" = guess_mime(".text"),
     "application/zip" = guess_mime(".zip"),
     "application/zip" = guess_mime("x.zip"),
     "text/html" = guess_mime("x.html"),
