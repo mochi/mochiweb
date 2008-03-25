@@ -9,10 +9,12 @@
 -include_lib("kernel/include/file.hrl").
 
 -define(QUIP, "Any of you quaids got a smint?").
+-define(READ_SIZE, 8192).
 
 -export([get_header_value/1, get_primary_header_value/1, get/1, dump/0]).
 -export([send/1, recv/1, recv/2, recv_body/0, recv_body/1]).
--export([start_response/1, start_raw_response/1, respond/1, ok/1]).
+-export([start_response/1, start_response_length/1, start_raw_response/1]).
+-export([respond/1, ok/1]).
 -export([not_found/0]).
 -export([parse_post/0, parse_qs/0]).
 -export([should_close/0, cleanup/0]).
@@ -215,14 +217,31 @@ start_raw_response({Code, ResponseHeaders}) ->
     mochiweb:new_response({THIS, Code, ResponseHeaders}).
 
 
+%% @spec start_response_length({integer(), ioheaders(), integer()}) -> response()
+%% @doc Start the HTTP response by sending the Code HTTP response and
+%%      ResponseHeaders including a Content-Length of Length. The server
+%%      will set header defaults such as Server
+%%      and Date if not present in ResponseHeaders.
+start_response_length({Code, ResponseHeaders, Length}) ->
+    HResponse = mochiweb_headers:make(ResponseHeaders),
+    HResponse1 = mochiweb_headers:enter("Content-Length", Length, HResponse),
+    start_response({Code, HResponse1}).
+
 %% @spec respond({integer(), ioheaders(), iodata() | chunked | {file, IoDevice}}) -> response()
 %% @doc Start the HTTP response with start_response, and send Body to the
 %%      client (if the get(method) /= 'HEAD'). The Content-Length header
 %%      will be set by the Body length, and the server will insert header
 %%      defaults.
 respond({Code, ResponseHeaders, {file, IoDevice}}) ->
-    {ok, Body} = read_iodevice(IoDevice),
-    respond({Code, ResponseHeaders, Body});
+    Length = iodevice_size(IoDevice),
+    Response = start_response_length({Code, ResponseHeaders, Length}),
+    case Method of
+        'HEAD' ->
+            ok;
+        _ ->
+            iodevice_stream(IoDevice)
+    end,
+    Response;
 respond({Code, ResponseHeaders, chunked}) ->
     HResponse = mochiweb_headers:make(ResponseHeaders),
     HResponse1 = case Method of
@@ -238,10 +257,7 @@ respond({Code, ResponseHeaders, chunked}) ->
 		 end,
     start_response({Code, HResponse1});
 respond({Code, ResponseHeaders, Body}) ->
-    Length = iolist_size(Body),
-    HResponse = mochiweb_headers:make(ResponseHeaders),
-    HResponse1 = mochiweb_headers:enter("Content-Length", Length, HResponse),
-    Response = start_response({Code, HResponse1}),
+    Response = start_response_length({Code, ResponseHeaders, iolist_size(Body)}),
     case Method of
 	'HEAD' ->
 	    ok;
@@ -473,18 +489,15 @@ make_version({1, 0}) ->
 make_version(_) ->
     <<"HTTP/1.1 ">>.
 
-
-
-
-
-read_iodevice(IoDevice) ->
-    case file:position(IoDevice, eof) of
-        {ok, 0} ->
-            {ok, <<>>};
-        {ok, Size} ->
-            {ok, Data} = file:pread(IoDevice, 0, Size),
-            {ok, Data}
+iodevice_stream(IoDevice) ->
+    case file:read(IoDevice, ?READ_SIZE) of
+        eof ->
+            ok;
+        {ok, Data} ->
+            ok = send(Data),
+            iodevice_stream(IoDevice)
     end.
+
 
 parts_to_body([{Start, End, Body}], ContentType, Size) ->
     %% return body for a range reponse with a single body
