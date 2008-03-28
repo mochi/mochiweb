@@ -21,7 +21,8 @@
 	 max=2048,
 	 ip=any,
 	 listen=null,
-	 acceptor=null}).
+	 acceptor=null,
+         backlog=30}).
 
 start(State=#mochiweb_socket_server{}) ->
     start_server(State);
@@ -76,6 +77,8 @@ parse_options([{ip, Ip} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{ip=ParsedIp});
 parse_options([{loop, Loop} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{loop=Loop});
+parse_options([{backlog, Backlog} | Rest], State) ->
+    parse_options(Rest, State#mochiweb_socket_server{backlog=Backlog});
 parse_options([{max, Max} | Rest], State) ->
     MaxInt = case Max of
 		 Max when is_list(Max) ->
@@ -93,12 +96,12 @@ start_server(State=#mochiweb_socket_server{name=Name}) ->
 	    gen_server:start_link(Name, ?MODULE, State, [])
     end.
 
-init(State=#mochiweb_socket_server{ip=Ip, port=Port}) ->
+init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog}) ->
     process_flag(trap_exit, true),
     BaseOpts = [binary, 
 		{reuseaddr, true},
 		{packet, 0},
-		{backlog, 30},
+		{backlog, Backlog},
 		{recbuf, 8192},
 		{active, false}],
     Opts = case Ip of
