@@ -13,8 +13,8 @@
 start(Options) ->
     {DocRoot, Options1} = get_option(docroot, Options),
     Loop = fun (Req) ->
-		   ?MODULE:loop(Req, DocRoot)
-	   end,
+                   ?MODULE:loop(Req, DocRoot)
+           end,
     mochiweb_http:start([{name, ?MODULE}, {loop, Loop} | Options1]).
 
 stop() ->
@@ -23,18 +23,18 @@ stop() ->
 loop(Req, DocRoot) ->
     "/" ++ Path = Req:get(path),
     case Req:get(method) of
-	Method when Method =:= 'GET'; Method =:= 'HEAD' ->
-	    case Path of
-		_ ->
-		    Req:serve_file(Path, DocRoot)
-	    end;
-	'POST' ->
-	    case Path of
-		_ ->
-		    Req:not_found()
-	    end;
-	_ ->
-	    Req:respond({501, [], []})
+        Method when Method =:= 'GET'; Method =:= 'HEAD' ->
+            case Path of
+                _ ->
+                    Req:serve_file(Path, DocRoot)
+            end;
+        'POST' ->
+            case Path of
+                _ ->
+                    Req:not_found()
+            end;
+        _ ->
+            Req:respond({501, [], []})
     end.
 
 %% Internal API
