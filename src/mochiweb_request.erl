@@ -463,13 +463,24 @@ serve_file(Path, DocRoot) ->
            end,
     case lists:prefix(DocRoot, File) of
         true ->
-            case file:open(File, [raw, binary]) of
-                {ok, IoDevice} ->
-                    ContentType = mochiweb_util:guess_mime(File),
-                    Res = ok({ContentType, {file, IoDevice}}),
-                    file:close(IoDevice),
-                    Res;
-                _ ->
+            case file:read_file_info(File) of
+                {ok, FileInfo} ->
+                    LastModified = httpd_util:rfc1123_date(FileInfo#file_info.mtime),
+                    case get_header_value("if-modified-since") of
+                        LastModified ->
+                            respond({304, [], ""});
+                        _ ->
+                            case file:open(File, [raw, binary]) of
+                                {ok, IoDevice} ->
+                                    ContentType = mochiweb_util:guess_mime(File),
+                                    Res = ok({ContentType, [{"last-modified", LastModified}], {file, IoDevice}}),
+                                    file:close(IoDevice),
+                                    Res;
+                                _ ->
+                                    not_found()
+                            end
+                    end;
+                {error, _} ->
                     not_found()
             end;
         false ->
