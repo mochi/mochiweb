@@ -305,7 +305,8 @@ convert2(Arg, #conversion{ctype=char}) ->
 convert2(Arg, #conversion{ctype=decimal}) ->
     integer_to_list(Arg);
 convert2(Arg, #conversion{ctype=general, precision=undefined}) ->
-    mochinum:digits(Arg);
+    try mochinum:digits(Arg)
+    catch error:undef -> io_lib:format("~g", [Arg]) end;
 convert2(Arg, #conversion{ctype=fixed, precision=undefined}) ->
     io_lib:format("~f", [Arg]);
 convert2(Arg, #conversion{ctype=exp, precision=undefined}) ->
@@ -322,7 +323,8 @@ str(A) when is_atom(A) ->
 str(I) when is_integer(I) ->
     integer_to_list(I);
 str(F) when is_float(F) ->
-    mochinum:digits(F);
+    try mochinum:digits(F)
+    catch error:undef -> io_lib:format("~g", [F]) end;
 str(L) when is_list(L) ->
     L;
 str(B) when is_binary(B) ->
@@ -331,7 +333,8 @@ str(P) ->
     repr(P).
 
 repr(P) when is_float(P) ->
-    mochinum:digits(P);
+    try mochinum:digits(P)
+    catch error:undef -> float_to_list(P) end;
 repr(P) ->
     io_lib:format("~p", [P]).
 
