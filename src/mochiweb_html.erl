@@ -816,12 +816,15 @@ tokenize_textarea(Bin, S=#decoder{offset=O}) ->
 tokenize_textarea(Bin, S=#decoder{offset=O}, Start) ->
     case Bin of
         %% Just a look-ahead, we want the end_tag separately
-        <<_:O/binary, $<, $/, TT, EE, XX, TT, AA, RR, EE, AA, _/binary>>
+        <<_:O/binary, $<, $/, TT, EE, XX, TT2, AA, RR, EE2, AA2, _/binary>>
         when (TT =:= $t orelse TT =:= $T) andalso
              (EE =:= $e orelse EE =:= $E) andalso
              (XX =:= $x orelse XX =:= $X) andalso
+             (TT2 =:= $t orelse TT2 =:= $T) andalso
              (AA =:= $a orelse AA =:= $A) andalso
-             (RR =:= $r orelse RR =:= $R) ->
+             (RR =:= $r orelse RR =:= $R) andalso
+             (EE2 =:= $e orelse EE2 =:= $E) andalso
+             (AA2 =:= $a orelse AA2 =:= $A) ->
             Len = O - Start,
             <<_:Start/binary, Raw:Len/binary, _/binary>> = Bin,
             {{data, Raw, false}, S};
