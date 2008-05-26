@@ -325,7 +325,8 @@ should_close() ->
                 andalso get_header_value("connection") =/= "Keep-Alive")
         %% unread data left on the socket, can't safely continue
         orelse (DidNotRecv
-                andalso get_header_value("content-length") =/= undefined).
+                andalso get_header_value("content-length") =/= undefined
+                andalso list_to_integer(get_header_value("content-length")) > 0).
 
 %% @spec cleanup() -> ok
 %% @doc Clean up any junk in the process dictionary, required before continuing
