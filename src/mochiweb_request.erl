@@ -277,7 +277,6 @@ respond({Code, ResponseHeaders, Body}) ->
 
 %% @spec not_found() -> response()
 %% @doc Alias for <code>not_found([])</code>.
-%% @doc respond({404, [{"Content-Type", "text/plain"}], "Not found."}).
 not_found() ->
     not_found([]).
 
@@ -472,7 +471,7 @@ serve_file(Path, DocRoot) ->
 serve_file(Path, DocRoot, ExtraHeaders) ->
     case mochiweb_util:safe_relative_path(Path) of
         undefined ->
-            not_found();
+            not_found(ExtraHeaders);
         RelPath ->
             FullPath = filename:join([DocRoot, RelPath]),
             File = case filelib:is_dir(FullPath) of
