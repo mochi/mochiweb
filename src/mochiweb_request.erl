@@ -282,7 +282,7 @@ not_found() ->
 
 %% @spec not_found(ExtraHeaders) -> response()
 %% @doc Alias for <code>respond({404, [{"Content-Type", "text/plain"}
-%% | ExtraHeaders], <<"Not found.">>})</code>.
+%% | ExtraHeaders], &lt;&lt;"Not found."&gt;&gt;})</code>.
 not_found(ExtraHeaders) ->
     respond({404, [{"Content-Type", "text/plain"} | ExtraHeaders],
              <<"Not found.">>}).
