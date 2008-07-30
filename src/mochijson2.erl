@@ -132,13 +132,81 @@ json_encode_proplist(Props, State) ->
     lists:reverse([$\} | Acc1]).
 
 json_encode_string(A, _State) when is_atom(A) ->
-    json_encode_string_unicode(xmerl_ucs:from_utf8(atom_to_list(A)), [?Q]);
+    L = atom_to_list(A),
+    case json_string_is_safe(L) of
+        true ->
+            [?Q, L, ?Q];
+        false ->
+            json_encode_string_unicode(xmerl_ucs:from_utf8(L), [?Q])
+    end;
 json_encode_string(B, _State) when is_binary(B) ->
-    json_encode_string_unicode(xmerl_ucs:from_utf8(B), [?Q]);
+    case json_bin_is_safe(B) of
+        true ->
+            [?Q, B, ?Q];
+        false ->
+            json_encode_string_unicode(xmerl_ucs:from_utf8(B), [?Q])
+    end;
 json_encode_string(I, _State) when is_integer(I) ->
-    json_encode_string_unicode(integer_to_list(I), [?Q]);
+    [?Q, integer_to_list(I), ?Q];
 json_encode_string(L, _State) when is_list(L) ->
-    json_encode_string_unicode(L, [?Q]).
+    case json_string_is_safe(L) of
+        true ->
+            [?Q, L, ?Q];
+        false ->
+            json_encode_string_unicode(L, [?Q])
+    end.
+
+json_string_is_safe([]) ->
+    true;
+json_string_is_safe([C | Rest]) ->
+    case C of
+        ?Q ->
+            false;
+        $\\ ->
+            false;
+        $\b ->
+            false;
+        $\f ->
+            false;
+        $\n ->
+            false;
+        $\r ->
+            false;
+        $\t ->
+            false;
+        C when C >= 0, C < $\s; C >= 16#7f, C =< 16#10FFFF ->
+            false;
+        C when C < 16#7f ->
+            json_string_is_safe(Rest);
+        _ ->
+            false
+    end.
+
+json_bin_is_safe(<<>>) ->
+    true;
+json_bin_is_safe(<<C, Rest/binary>>) ->
+    case C of
+        ?Q ->
+            false;
+        $\\ ->
+            false;
+        $\b ->
+            false;
+        $\f ->
+            false;
+        $\n ->
+            false;
+        $\r ->
+            false;
+        $\t ->
+            false;
+        C when C >= 0, C < $\s; C >= 16#7f, C =< 16#10FFFF ->
+            false;
+        C when C < 16#7f ->
+            json_bin_is_safe(Rest);
+        _ ->
+            false
+    end.
 
 json_encode_string_unicode([], Acc) ->
     lists:reverse([$\" | Acc]);
