@@ -330,8 +330,11 @@ decode_array(B, S=#decoder{state=comma}, Acc) ->
 
 tokenize_string(B, S=#decoder{offset=O}) ->
     case tokenize_string_fast(B, O) of
-        null ->
-            tokenize_string(B, S, []);
+        {escape, O1} ->
+            Length = O1 - O,
+            S1 = ?ADV_COL(S, Length),
+            <<_:O/binary, Head:Length/binary, _/binary>> = B,
+            tokenize_string(B, S1, lists:reverse(binary_to_list(Head)));
         O1 ->
             Length = O1 - O,
             <<_:O/binary, String:Length/binary, ?Q, _/binary>> = B,
@@ -345,7 +348,7 @@ tokenize_string_fast(B, O) ->
         <<_:O/binary, C, _/binary>> when C =/= $\\ ->
             tokenize_string_fast(B, 1 + O);
         _ ->
-            null
+            {escape, O}
     end.
 
 tokenize_string(B, S=#decoder{offset=O}, Acc) ->
