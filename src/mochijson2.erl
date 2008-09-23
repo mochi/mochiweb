@@ -328,8 +328,25 @@ decode_array(B, S=#decoder{state=comma}, Acc) ->
             decode_array(B, S1#decoder{state=any}, Acc)
     end.
 
-tokenize_string(B, S) ->
-    tokenize_string(B, S, []).
+tokenize_string(B, S=#decoder{offset=O}) ->
+    case tokenize_string_fast(B, O) of
+        null ->
+            tokenize_string(B, S, []);
+        O1 ->
+            Length = O1 - O,
+            <<_:O/binary, String:Length/binary, ?Q, _/binary>> = B,
+            {{const, String}, ?ADV_COL(S, Length + 1)}
+    end.
+
+tokenize_string_fast(B, O) ->
+    case B of
+        <<_:O/binary, ?Q, _/binary>> ->
+            O;
+        <<_:O/binary, C, _/binary>> when C =/= $\\ ->
+            tokenize_string_fast(B, 1 + O);
+        _ ->
+            null
+    end.
 
 tokenize_string(B, S=#decoder{offset=O}, Acc) ->
     case B of
