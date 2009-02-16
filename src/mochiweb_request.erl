@@ -246,12 +246,18 @@ start_raw_response({Code, ResponseHeaders}) ->
 
 %% @spec start_response_length({integer(), ioheaders(), integer()}) -> response()
 %% @doc Start the HTTP response by sending the Code HTTP response and
-%%      ResponseHeaders including a Content-Length of Length. The server
-%%      will set header defaults such as Server
+%%      ResponseHeaders including a Content-Length of Length if appropriate.
+%%      The server will set header defaults such as Server
 %%      and Date if not present in ResponseHeaders.
 start_response_length({Code, ResponseHeaders, Length}) ->
     HResponse = mochiweb_headers:make(ResponseHeaders),
-    HResponse1 = mochiweb_headers:enter("Content-Length", Length, HResponse),
+    HResponse1 = case (Length =/= 0 orelse (Code >= 200 andalso Code < 300)) of
+                     true ->
+                         mochiweb_headers:enter("Content-Length", Length,
+                                                HResponse);
+                     false ->
+                         HResponse
+                 end,
     start_response({Code, HResponse1}).
 
 %% @spec respond({integer(), ioheaders(), iodata() | chunked | {file, IoDevice}}) -> response()
