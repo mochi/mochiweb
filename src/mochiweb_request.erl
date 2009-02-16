@@ -12,7 +12,7 @@
 -define(READ_SIZE, 8192).
 
 -export([get_header_value/1, get_primary_header_value/1, get/1, dump/0]).
--export([send/1, recv/1, recv/2, recv_body/0, recv_body/1]).
+-export([send/1, recv/1, recv/2, recv_body/0, recv_body/1, stream_body/3]).
 -export([start_response/1, start_response_length/1, start_raw_response/1]).
 -export([respond/1, ok/1]).
 -export([not_found/0, not_found/1]).
@@ -171,28 +171,54 @@ recv_body() ->
 %% @doc Receive the body of the HTTP request (defined by Content-Length).
 %%      Will receive up to MaxBody bytes.
 recv_body(MaxBody) ->
+    % we could use a sane constant for max chunk size
+    Body = stream_body(?MAX_RECV_BODY, fun
+        ({0, _ChunkedFooter}, {_LengthAcc, BinAcc}) -> 
+            iolist_to_binary(lists:reverse(BinAcc));
+        ({Length, Bin}, {LengthAcc, BinAcc}) ->
+            NewLength = Length + LengthAcc,
+            if NewLength > MaxBody ->
+                exit({body_too_large, chunked});
+            true -> 
+                {NewLength, [Bin | BinAcc]}
+            end
+        end, {0, []}, ?MAX_RECV_BODY),
+    put(?SAVE_BODY, Body),
+    Body.
+
+stream_body(MaxChunkSize, ChunkFun, FunState) ->
+    stream_body(MaxChunkSize, ChunkFun, FunState, undefined).
+    
+stream_body(MaxChunkSize, ChunkFun, FunState, MaxBodyLength) ->
+
     case get_header_value("expect") of
         "100-continue" ->
             start_raw_response({100, gb_trees:empty()});
         _Else ->
             ok
     end,
-    Body = case body_length() of
-               undefined ->
-                   undefined;
-               {unknown_transfer_encoding, Unknown} ->
-                   exit({unknown_transfer_encoding, Unknown});
-               chunked ->
-                   read_chunked_body(MaxBody, []);
-               0 ->
-                   <<>>;
-               Length when is_integer(Length), Length =< MaxBody ->
-                   recv(Length);
-               Length ->
-                   exit({body_too_large, Length})
-           end,
-    put(?SAVE_BODY, Body),
-    Body.
+    case body_length() of
+        undefined ->
+            undefined;
+        {unknown_transfer_encoding, Unknown} ->
+            exit({unknown_transfer_encoding, Unknown});
+        chunked ->
+            % In this case the MaxBody is actually used to
+            % determine the maximum allowed size of a single
+            % chunk.
+            stream_chunked_body(MaxChunkSize, ChunkFun, FunState);
+        0 ->
+            <<>>;
+        Length when is_integer(Length) ->
+            case MaxBodyLength of
+            MaxBodyLength when is_integer(MaxBodyLength), MaxBodyLength < Length ->
+                exit({body_too_large, content_length});
+            _ ->
+                stream_unchunked_body(Length, MaxChunkSize, ChunkFun, FunState)
+            end;     
+        Length ->
+            exit({length_not_integer, Length})
+    end.
 
 
 %% @spec start_response({integer(), ioheaders()}) -> response()
@@ -408,16 +434,32 @@ parse_post() ->
             Cached
     end.
 
-read_chunked_body(Max, Acc) ->
+%% @spec stream_chunked_body(integer(), fun(), term()) -> term()
+%% @doc The function is called for each chunk.
+%%      Used internally by read_chunked_body.
+stream_chunked_body(MaxChunkSize, Fun, FunState) ->
     case read_chunk_length() of
         0 ->
-            read_chunk(0),
-            iolist_to_binary(lists:reverse(Acc));
-        Length when Length > Max ->
-            exit({body_too_large, chunked});
+            Fun({0, read_chunk(0)}, FunState);
+        Length when Length > MaxChunkSize ->
+            NewState = read_sub_chunks(Length, MaxChunkSize, Fun, FunState),
+            stream_chunked_body(MaxChunkSize, Fun, NewState);
         Length ->
-            read_chunked_body(Max - Length, [read_chunk(Length) | Acc])
+            NewState = Fun({Length, read_chunk(Length)}, FunState),
+            stream_chunked_body(MaxChunkSize, Fun, NewState)
     end.
+
+stream_unchunked_body(0, _MaxChunkSize, Fun, FunState) ->
+    Fun({0, <<>>}, FunState);
+stream_unchunked_body(Length, MaxChunkSize, Fun, FunState) when Length > MaxChunkSize ->
+    Bin = recv(MaxChunkSize),
+    NewState = Fun({MaxChunkSize, Bin}, FunState),
+    stream_unchunked_body(Length - MaxChunkSize, MaxChunkSize, Fun, NewState);
+stream_unchunked_body(Length, MaxChunkSize, Fun, FunState) ->
+    Bin = recv(Length),
+    NewState = Fun({Length, Bin}, FunState),
+    stream_unchunked_body(0, MaxChunkSize, Fun, NewState).
+
 
 %% @spec read_chunk_length() -> integer()
 %% @doc Read the length of the next HTTP chunk.
@@ -461,6 +503,14 @@ read_chunk(Length) ->
             exit(normal)
     end.
 
+read_sub_chunks(Length, MaxChunkSize, Fun, FunState) when Length > MaxChunkSize ->
+    Bin = recv(MaxChunkSize),
+    NewState = Fun({size(Bin), Bin}, FunState),
+    read_sub_chunks(Length - MaxChunkSize, MaxChunkSize, Fun, NewState);
+
+read_sub_chunks(Length, _MaxChunkSize, Fun, FunState) ->
+    Fun({Length, read_chunk(Length)}, FunState).
+    
 %% @spec serve_file(Path, DocRoot) -> Response
 %% @doc Serve a file relative to DocRoot.
 serve_file(Path, DocRoot) ->
