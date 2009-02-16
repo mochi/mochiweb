@@ -133,7 +133,7 @@ revjoin([S | Rest], Separator, []) ->
 revjoin([S | Rest], Separator, Acc) ->
     revjoin(Rest, Separator, [S, Separator | Acc]).
 
-%% @spec quote_plus(atom() | integer() | string() | binary()) -> string()
+%% @spec quote_plus(atom() | integer() | float() | string() | binary()) -> string()
 %% @doc URL safe encoding of the given term.
 quote_plus(Atom) when is_atom(Atom) ->
     quote_plus(atom_to_list(Atom));
@@ -141,6 +141,8 @@ quote_plus(Int) when is_integer(Int) ->
     quote_plus(integer_to_list(Int));
 quote_plus(Binary) when is_binary(Binary) ->
     quote_plus(binary_to_list(Binary));
+quote_plus(Float) when is_float(Float) ->
+    quote_plus(mochinum:digits(Float));
 quote_plus(String) ->
     quote_plus(String, []).
 
@@ -529,6 +531,7 @@ test_join() ->
 test_quote_plus() ->
     "foo" = quote_plus(foo),
     "1" = quote_plus(1),
+    "1.1" = quote_plus(1.1),
     "foo" = quote_plus("foo"),
     "foo+bar" = quote_plus("foo bar"),
     "foo%0A" = quote_plus("foo\n"),
