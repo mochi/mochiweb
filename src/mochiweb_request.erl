@@ -191,7 +191,7 @@ stream_body(MaxChunkSize, ChunkFun, FunState) ->
     
 stream_body(MaxChunkSize, ChunkFun, FunState, MaxBodyLength) ->
 
-    case get_header_value("expect") of
+    case string:to_lower(get_header_value("expect")) of
         "100-continue" ->
             start_raw_response({100, gb_trees:empty()});
         _Else ->
