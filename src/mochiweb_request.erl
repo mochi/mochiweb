@@ -529,39 +529,68 @@ serve_file(Path, DocRoot, ExtraHeaders) ->
             not_found(ExtraHeaders);
         RelPath ->
             FullPath = filename:join([DocRoot, RelPath]),
-            File = case filelib:is_dir(FullPath) of
-                       true ->
-                           filename:join([FullPath, "index.html"]);
-                       false ->
-                           FullPath
-                   end,
-            case file:read_file_info(File) of
-                {ok, FileInfo} ->
-                    LastModified = httpd_util:rfc1123_date(FileInfo#file_info.mtime),
-                    case get_header_value("if-modified-since") of
-                        LastModified ->
-                            respond({304, ExtraHeaders, ""});
-                        _ ->
-                            case file:open(File, [raw, binary]) of
-                                {ok, IoDevice} ->
-                                    ContentType = mochiweb_util:guess_mime(File),
-                                    Res = ok({ContentType,
-                                              [{"last-modified", LastModified}
-                                               | ExtraHeaders],
-                                              {file, IoDevice}}),
-                                    file:close(IoDevice),
-                                    Res;
-                                _ ->
-                                    not_found(ExtraHeaders)
-                            end
-                    end;
-                {error, _} ->
-                    not_found(ExtraHeaders)
+            case filelib:is_dir(FullPath) of
+                true ->
+                    maybe_redirect(RelPath, FullPath, ExtraHeaders);
+                false ->
+                    maybe_serve_file(FullPath, ExtraHeaders)
             end
     end.
 
-
 %% Internal API
+
+%% This has the same effect as the DirectoryIndex directive in httpd
+directory_index(FullPath) ->
+    filename:join([FullPath, "index.html"]).
+
+maybe_redirect([], FullPath, ExtraHeaders) ->
+    maybe_serve_file(directory_index(FullPath), ExtraHeaders);
+
+maybe_redirect(RelPath, FullPath, ExtraHeaders) ->
+    case string:right(RelPath, 1) of
+        "/" ->
+            maybe_serve_file(directory_index(FullPath), ExtraHeaders);
+        _   ->
+            Host = mochiweb_headers:get_value("host", Headers),
+            Location = "http://" ++ Host  ++ "/" ++ RelPath ++ "/",
+            LocationBin = list_to_binary(Location),
+            MoreHeaders = [{"Location", Location},
+                           {"Content-Type", "text/html"} | ExtraHeaders],
+            Top = <<"<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">"
+            "<html><head>"
+            "<title>301 Moved Permanently</title>"
+            "</head><body>"
+            "<h1>Moved Permanently</h1>"
+            "<p>The document has moved <a href=\"">>,
+            Bottom = <<">here</a>.</p></body></html>\n">>,
+            Body = <<Top/binary, LocationBin/binary, Bottom/binary>>,
+            respond({301, MoreHeaders, Body})
+    end.
+
+maybe_serve_file(File, ExtraHeaders) ->
+    case file:read_file_info(File) of
+        {ok, FileInfo} ->
+            LastModified = httpd_util:rfc1123_date(FileInfo#file_info.mtime),
+            case get_header_value("if-modified-since") of
+                LastModified ->
+                    respond({304, ExtraHeaders, ""});
+                _ ->
+                    case file:open(File, [raw, binary]) of
+                        {ok, IoDevice} ->
+                            ContentType = mochiweb_util:guess_mime(File),
+                            Res = ok({ContentType,
+                                      [{"last-modified", LastModified}
+                                       | ExtraHeaders],
+                                      {file, IoDevice}}),
+                            file:close(IoDevice),
+                            Res;
+                        _ ->
+                            not_found(ExtraHeaders)
+                    end
+            end;
+        {error, _} ->
+            not_found(ExtraHeaders)
+    end.
 
 server_headers() ->
     [{"Server", "MochiWeb/1.0 (" ++ ?QUIP ++ ")"},
