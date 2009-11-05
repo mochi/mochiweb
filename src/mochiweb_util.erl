@@ -423,9 +423,7 @@ record_to_proplist(Record, Fields) ->
 %%      Fields should be obtained by calling record_info(fields, record_type)
 %%      where record_type is the record type of Record
 record_to_proplist(Record, Fields, TypeKey)
-  when is_tuple(Record),
-       is_list(Fields),
-       size(Record) - 1 =:= length(Fields) ->
+  when tuple_size(Record) - 1 =:= length(Fields) ->
     lists:zip([TypeKey | Fields], tuple_to_list(Record)).
 
 

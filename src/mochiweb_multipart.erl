@@ -76,9 +76,9 @@ parse_multipart_request(Req, Callback) ->
     Boundary = iolist_to_binary(
                  get_boundary(Req:get_header_value("content-type"))),
     Prefix = <<"\r\n--", Boundary/binary>>,
-    BS = size(Boundary),
+    BS = byte_size(Boundary),
     Chunk = read_chunk(Req, Length),
-    Length1 = Length - size(Chunk),
+    Length1 = Length - byte_size(Chunk),
     <<"--", Boundary:BS/binary, "\r\n", Rest/binary>> = Chunk,
     feed_mp(headers, flash_multipart_hack(#mp{boundary=Prefix,
                                               length=Length1,
@@ -117,7 +117,7 @@ read_chunk(Req, Length) when Length > 0 ->
 read_more(State=#mp{length=Length, buffer=Buffer, req=Req}) ->
     Data = read_chunk(Req, Length),
     Buffer1 = <<Buffer/binary, Data/binary>>,
-    flash_multipart_hack(State#mp{length=Length - size(Data),
+    flash_multipart_hack(State#mp{length=Length - byte_size(Data),
                                   buffer=Buffer1}).
 
 flash_multipart_hack(State=#mp{length=0, buffer=Buffer, boundary=Prefix}) ->
@@ -285,14 +285,12 @@ test_parse3() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        case gen_tcp:send(Socket, BinContent) of
-                            ok ->
-                                exit(normal)
-                        end
+                        ok = gen_tcp:send(Socket, BinContent),
+			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
                         Req = fake_request(Socket, ContentType,
-                                           size(BinContent)),
+                                           byte_size(BinContent)),
                         Res = parse_multipart_request(Req, TestCallback),
                         {0, <<>>, ok} = Res,
                         ok
@@ -318,14 +316,12 @@ test_parse2() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        case gen_tcp:send(Socket, BinContent) of
-                            ok ->
-                                exit(normal)
-                        end
+                        ok = gen_tcp:send(Socket, BinContent),
+			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
                         Req = fake_request(Socket, ContentType,
-                                           size(BinContent)),
+                                           byte_size(BinContent)),
                         Res = parse_multipart_request(Req, TestCallback),
                         {0, <<>>, ok} = Res,
                         ok
@@ -351,14 +347,12 @@ test_parse_form() ->
                  ""], "\r\n"),
     BinContent = iolist_to_binary(Content),
     ServerFun = fun (Socket) ->
-                        case gen_tcp:send(Socket, BinContent) of
-                            ok ->
-                                exit(normal)
-                        end
+                        ok = gen_tcp:send(Socket, BinContent),
+			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
                         Req = fake_request(Socket, ContentType,
-                                           size(BinContent)),
+                                           byte_size(BinContent)),
                         Res = parse_form(Req),
                         [{"submit-name", "Larry"},
                          {"files", {"file1.txt", {"text/plain",[]},
@@ -400,14 +394,12 @@ test_parse() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        case gen_tcp:send(Socket, BinContent) of
-                            ok ->
-                                exit(normal)
-                        end
+                        ok = gen_tcp:send(Socket, BinContent),
+			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
                         Req = fake_request(Socket, ContentType,
-                                           size(BinContent)),
+                                           byte_size(BinContent)),
                         Res = parse_multipart_request(Req, TestCallback),
                         {0, <<>>, ok} = Res,
                         ok
@@ -471,14 +463,12 @@ test_flash_parse() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        case gen_tcp:send(Socket, BinContent) of
-                            ok ->
-                                exit(normal)
-                        end
+                        ok = gen_tcp:send(Socket, BinContent),
+			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
                         Req = fake_request(Socket, ContentType,
-                                           size(BinContent)),
+                                           byte_size(BinContent)),
                         Res = parse_multipart_request(Req, TestCallback),
                         {0, <<>>, ok} = Res,
                         ok
@@ -515,14 +505,12 @@ test_flash_parse2() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        case gen_tcp:send(Socket, BinContent) of
-                            ok ->
-                                exit(normal)
-                        end
+                        ok = gen_tcp:send(Socket, BinContent),
+			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
                         Req = fake_request(Socket, ContentType,
-                                           size(BinContent)),
+                                           byte_size(BinContent)),
                         Res = parse_multipart_request(Req, TestCallback),
                         {0, <<>>, ok} = Res,
                         ok

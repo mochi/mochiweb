@@ -550,12 +550,7 @@ equiv_object(Props1, Props2) ->
 equiv_list([], []) ->
     true;
 equiv_list([V1 | L1], [V2 | L2]) ->
-    case equiv(V1, V2) of
-        true ->
-            equiv_list(L1, L2);
-        false ->
-            false
-    end.
+    equiv(V1, V2) andalso equiv_list(L1, L2).
 
 test_all() ->
     [1199344435545.0, 1] = decode(<<"[1199344435545.0,1]">>),

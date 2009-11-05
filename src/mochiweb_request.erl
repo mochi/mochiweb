@@ -676,7 +676,6 @@ range_parts({file, IoDevice}, Ranges) ->
                            end,
                            LocNums, Data),
     {Bodies, Size};
-
 range_parts(Body0, Ranges) ->
     Body = iolist_to_binary(Body0),
     Size = size(Body),
@@ -743,7 +742,6 @@ test_range() ->
     [{none, 20}] = parse_range_request("bytes=-20"),
     io:format(".. ok ~n"),
 
-
     %% invalid, single ranges
     io:format("Testing parse_range_request with invalid ranges~n"),
     io:format("1"),
@@ -771,7 +769,7 @@ test_range() ->
     io:format(".. ok~n"),
 
     Body = <<"012345678901234567890123456789012345678901234567890123456789">>,
-    BodySize = size(Body), %% 60
+    BodySize = byte_size(Body), %% 60
     BodySize = 60,
 
     %% these values assume BodySize =:= 60
