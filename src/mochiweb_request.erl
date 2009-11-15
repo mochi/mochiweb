@@ -219,7 +219,7 @@ stream_body(MaxChunkSize, ChunkFun, FunState, MaxBodyLength) ->
             MaxBodyLength when is_integer(MaxBodyLength), MaxBodyLength < Length ->
                 exit({body_too_large, content_length});
             _ ->
-                stream_unchunked_body(Length, MaxChunkSize, ChunkFun, FunState)
+                stream_unchunked_body(Length, ChunkFun, FunState)
             end;
         Length ->
             exit({length_not_integer, Length})
@@ -454,16 +454,20 @@ stream_chunked_body(MaxChunkSize, Fun, FunState) ->
             stream_chunked_body(MaxChunkSize, Fun, NewState)
     end.
 
-stream_unchunked_body(0, _MaxChunkSize, Fun, FunState) ->
+stream_unchunked_body(0, Fun, FunState) ->
     Fun({0, <<>>}, FunState);
-stream_unchunked_body(Length, MaxChunkSize, Fun, FunState) when Length > MaxChunkSize ->
-    Bin = recv(MaxChunkSize),
-    NewState = Fun({MaxChunkSize, Bin}, FunState),
-    stream_unchunked_body(Length - MaxChunkSize, MaxChunkSize, Fun, NewState);
-stream_unchunked_body(Length, MaxChunkSize, Fun, FunState) ->
-    Bin = recv(Length),
-    NewState = Fun({Length, Bin}, FunState),
-    stream_unchunked_body(0, MaxChunkSize, Fun, NewState).
+stream_unchunked_body(Length, Fun, FunState) when Length > 0 ->
+    Bin = recv(0),
+    BinSize = byte_size(Bin),
+    if BinSize > Length ->
+        <<OurBody:Length/binary, Extra/binary>> = Bin,
+        gen_tcp:unrecv(Socket, Extra),
+        NewState = Fun({Length, OurBody}, FunState),
+        stream_unchunked_body(0, Fun, NewState);
+    true ->
+        NewState = Fun({BinSize, Bin}, FunState),
+        stream_unchunked_body(Length - BinSize, Fun, NewState)
+    end.
 
 
 %% @spec read_chunk_length() -> integer()
