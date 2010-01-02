@@ -20,7 +20,6 @@
 -export([should_close/0, cleanup/0]).
 -export([parse_cookie/0, get_cookie_value/1]).
 -export([serve_file/2, serve_file/3]).
--export([test/0]).
 
 -define(SAVE_QS, mochiweb_request_qs).
 -define(SAVE_PATH, mochiweb_request_path).
@@ -730,12 +729,13 @@ parse_range_request(RawRange) when is_list(RawRange) ->
             fail
     end.
 
+%%
+%% Tests
+%%
+-include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
 
-test() ->
-    ok = test_range(),
-    ok.
-
-test_range() ->
+range_test() ->
     %% valid, single ranges
     io:format("Testing parse_range_request with valid single ranges~n"),
     io:format("1"),
@@ -824,3 +824,5 @@ test_range() ->
     io:format(".. ok ~n"),
     ok.
 
+
+-endif.

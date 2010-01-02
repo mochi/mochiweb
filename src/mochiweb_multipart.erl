@@ -8,7 +8,6 @@
 
 -export([parse_form/1, parse_form/2]).
 -export([parse_multipart_request/2]).
--export([test/0]).
 
 -define(CHUNKSIZE, 4096).
 
@@ -236,6 +235,12 @@ find_boundary(Prefix, Data) ->
             not_found
     end.
 
+%%
+%% Tests
+%%
+-include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
+
 with_socket_server(ServerFun, ClientFun) ->
     {ok, Server} = mochiweb_socket_server:start([{ip, "127.0.0.1"},
                                                  {port, 0},
@@ -268,7 +273,7 @@ test_callback({body, Got}, [{body, Expect} | Rest]) ->
     <<Got:GotSize/binary, Expect1/binary>> = Expect,
     fun (Next) -> test_callback(Next, [{body, Expect1} | Rest]) end.
 
-test_parse3() ->
+parse3_test() ->
     ContentType = "multipart/form-data; boundary=---------------------------7386909285754635891697677882",
     BinContent = <<"-----------------------------7386909285754635891697677882\r\nContent-Disposition: form-data; name=\"hidden\"\r\n\r\nmultipart message\r\n-----------------------------7386909285754635891697677882\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test_file.txt\"\r\nContent-Type: text/plain\r\n\r\nWoo multiline text file\n\nLa la la\r\n-----------------------------7386909285754635891697677882--\r\n">>,
     Expect = [{headers,
@@ -299,7 +304,7 @@ test_parse3() ->
     ok.
 
 
-test_parse2() ->
+parse2_test() ->
     ContentType = "multipart/form-data; boundary=---------------------------6072231407570234361599764024",
     BinContent = <<"-----------------------------6072231407570234361599764024\r\nContent-Disposition: form-data; name=\"hidden\"\r\n\r\nmultipart message\r\n-----------------------------6072231407570234361599764024\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\"\r\nContent-Type: application/octet-stream\r\n\r\n\r\n-----------------------------6072231407570234361599764024--\r\n">>,
     Expect = [{headers,
@@ -329,7 +334,7 @@ test_parse2() ->
     ok = with_socket_server(ServerFun, ClientFun),
     ok.
 
-test_parse_form() ->
+parse_form_test() ->
     ContentType = "multipart/form-data; boundary=AaB03x",
     "AaB03x" = get_boundary(ContentType),
     Content = mochiweb_util:join(
@@ -363,7 +368,7 @@ test_parse_form() ->
     ok = with_socket_server(ServerFun, ClientFun),
     ok.
 
-test_parse() ->
+parse_test() ->
     ContentType = "multipart/form-data; boundary=AaB03x",
     "AaB03x" = get_boundary(ContentType),
     Content = mochiweb_util:join(
@@ -407,7 +412,7 @@ test_parse() ->
     ok = with_socket_server(ServerFun, ClientFun),
     ok.
 
-test_find_boundary() ->
+find_boundary_test() ->
     B = <<"\r\n--X">>,
     {next_boundary, 0, 7} = find_boundary(B, <<"\r\n--X\r\nRest">>),
     {next_boundary, 1, 7} = find_boundary(B, <<"!\r\n--X\r\nRest">>),
@@ -424,7 +429,7 @@ test_find_boundary() ->
     {maybe, 30} = find_boundary(P, B0),
     ok.
 
-test_find_in_binary() ->
+find_in_binary_test() ->
     {exact, 0} = find_in_binary(<<"foo">>, <<"foobarbaz">>),
     {exact, 1} = find_in_binary(<<"oo">>, <<"foobarbaz">>),
     {exact, 8} = find_in_binary(<<"z">>, <<"foobarbaz">>),
@@ -435,7 +440,7 @@ test_find_in_binary() ->
     {partial, 1, 3} = find_in_binary(<<"foobar">>, <<"afoo">>),
     ok.
 
-test_flash_parse() ->
+flash_parse_test() ->
     ContentType = "multipart/form-data; boundary=----------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5",
     "----------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5" = get_boundary(ContentType),
     BinContent = <<"------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"Filename\"\r\n\r\nhello.txt\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"success_action_status\"\r\n\r\n201\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\nContent-Type: application/octet-stream\r\n\r\nhello\n\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"Upload\"\r\n\r\nSubmit Query\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5--">>,
@@ -476,7 +481,7 @@ test_flash_parse() ->
     ok = with_socket_server(ServerFun, ClientFun),
     ok.
 
-test_flash_parse2() ->
+flash_parse2_test() ->
     ContentType = "multipart/form-data; boundary=----------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5",
     "----------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5" = get_boundary(ContentType),
     Chunk = iolist_to_binary(string:copies("%", 4096)),
@@ -518,13 +523,4 @@ test_flash_parse2() ->
     ok = with_socket_server(ServerFun, ClientFun),
     ok.
 
-test() ->
-    test_find_in_binary(),
-    test_find_boundary(),
-    test_parse(),
-    test_parse2(),
-    test_parse3(),
-    test_parse_form(),
-    test_flash_parse(),
-    test_flash_parse2(),
-    ok.
+-endif.

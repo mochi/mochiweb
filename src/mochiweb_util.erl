@@ -12,7 +12,6 @@
 -export([shell_quote/1, cmd/1, cmd_string/1, cmd_port/2]).
 -export([record_to_proplist/2, record_to_proplist/3]).
 -export([safe_relative_path/1, partition/2]).
--export([test/0]).
 
 -define(PERCENT, 37).  % $\%
 -define(FULLSTOP, 46). % $\.
@@ -434,45 +433,30 @@ shell_quote([C | Rest], Acc) when C =:= $\" orelse C =:= $\` orelse
     shell_quote(Rest, [C, $\\ | Acc]);
 shell_quote([C | Rest], Acc) ->
     shell_quote(Rest, [C | Acc]).
+%%
+%% Tests
+%%
+-include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
 
-test() ->
-    test_join(),
-    test_quote_plus(),
-    test_unquote(),
-    test_urlencode(),
-    test_parse_qs(),
-    test_urlsplit_path(),
-    test_urlunsplit_path(),
-    test_urlsplit(),
-    test_urlunsplit(),
-    test_path_split(),
-    test_guess_mime(),
-    test_parse_header(),
-    test_shell_quote(),
-    test_cmd(),
-    test_cmd_string(),
-    test_partition(),
-    test_safe_relative_path(),
-    ok.
-
-test_shell_quote() ->
+shell_quote_test() ->
     "\"foo \\$bar\\\"\\`' baz\"" = shell_quote("foo $bar\"`' baz"),
     ok.
 
-test_cmd() ->
+cmd_test() ->
     "$bling$ `word`!\n" = cmd(["echo", "$bling$ `word`!"]),
     ok.
 
-test_cmd_string() ->
+cmd_string_test() ->
     "\"echo\" \"\\$bling\\$ \\`word\\`!\"" = cmd_string(["echo", "$bling$ `word`!"]),
     ok.
 
-test_parse_header() ->
+parse_header_test() ->
     {"multipart/form-data", [{"boundary", "AaB03x"}]} =
         parse_header("multipart/form-data; boundary=AaB03x"),
     ok.
 
-test_guess_mime() ->
+guess_mime_test() ->
     "text/plain" = guess_mime(""),
     "text/plain" = guess_mime(".text"),
     "application/zip" = guess_mime(".zip"),
@@ -481,19 +465,19 @@ test_guess_mime() ->
     "application/xhtml+xml" = guess_mime("x.xhtml"),
     ok.
 
-test_path_split() ->
+path_split_test() ->
     {"", "foo/bar"} = path_split("/foo/bar"),
     {"foo", "bar"} = path_split("foo/bar"),
     {"bar", ""} = path_split("bar"),
     ok.
 
-test_urlsplit() ->
+urlsplit_test() ->
     {"", "", "/foo", "", "bar?baz"} = urlsplit("/foo#bar?baz"),
     {"http", "host:port", "/foo", "", "bar?baz"} =
         urlsplit("http://host:port/foo#bar?baz"),
     ok.
 
-test_urlsplit_path() ->
+urlsplit_path_test() ->
     {"/foo/bar", "", ""} = urlsplit_path("/foo/bar"),
     {"/foo", "baz", ""} = urlsplit_path("/foo?baz"),
     {"/foo", "", "bar?baz"} = urlsplit_path("/foo#bar?baz"),
@@ -502,13 +486,13 @@ test_urlsplit_path() ->
     {"/foo", "bar?baz", "baz"} = urlsplit_path("/foo?bar?baz#baz"),
     ok.
 
-test_urlunsplit() ->
+urlunsplit_test() ->
     "/foo#bar?baz" = urlunsplit({"", "", "/foo", "", "bar?baz"}),
     "http://host:port/foo#bar?baz" =
         urlunsplit({"http", "host:port", "/foo", "", "bar?baz"}),
     ok.
 
-test_urlunsplit_path() ->
+urlunsplit_path_test() ->
     "/foo/bar" = urlunsplit_path({"/foo/bar", "", ""}),
     "/foo?baz" = urlunsplit_path({"/foo", "baz", ""}),
     "/foo#bar?baz" = urlunsplit_path({"/foo", "", "bar?baz"}),
@@ -517,7 +501,7 @@ test_urlunsplit_path() ->
     "/foo?bar?baz#baz" = urlunsplit_path({"/foo", "bar?baz", "baz"}),
     ok.
 
-test_join() ->
+join_test() ->
     "foo,bar,baz" = join(["foo", "bar", "baz"], $,),
     "foo,bar,baz" = join(["foo", "bar", "baz"], ","),
     "foo bar" = join([["foo", " bar"]], ","),
@@ -526,7 +510,7 @@ test_join() ->
     "foobarbaz" = join(["foo", "bar", "baz"], ""),
     ok.
 
-test_quote_plus() ->
+quote_plus_test() ->
     "foo" = quote_plus(foo),
     "1" = quote_plus(1),
     "1.1" = quote_plus(1.1),
@@ -537,24 +521,24 @@ test_quote_plus() ->
     "foo%3B%26%3D" = quote_plus("foo;&="),
     ok.
 
-test_unquote() ->
+unquote_test() ->
     "foo bar" = unquote("foo+bar"),
     "foo bar" = unquote("foo%20bar"),
     "foo\r\n" = unquote("foo%0D%0A"),
     ok.
 
-test_urlencode() ->
+urlencode_test() ->
     "foo=bar&baz=wibble+%0D%0A&z=1" = urlencode([{foo, "bar"},
                                                  {"baz", "wibble \r\n"},
                                                  {z, 1}]),
     ok.
 
-test_parse_qs() ->
+parse_qs_test() ->
     [{"foo", "bar"}, {"baz", "wibble \r\n"}, {"z", "1"}] =
         parse_qs("foo=bar&baz=wibble+%0D%0A&z=1"),
     ok.
 
-test_partition() ->
+partition_test() ->
     {"foo", "", ""} = partition("foo", "/"),
     {"foo", "/", "bar"} = partition("foo/bar", "/"),
     {"foo", "/", ""} = partition("foo/", "/"),
@@ -562,7 +546,7 @@ test_partition() ->
     {"f", "oo/ba", "r"} = partition("foo/bar", "oo/ba"),
     ok.
 
-test_safe_relative_path() ->
+safe_relative_path_test() ->
     "foo" = safe_relative_path("foo"),
     "foo/" = safe_relative_path("foo/"),
     "foo" = safe_relative_path("foo/bar/.."),
@@ -575,3 +559,4 @@ test_safe_relative_path() ->
     undefined = safe_relative_path("foo/../.."),
     undefined = safe_relative_path("foo//"),
     ok.
+-endif.

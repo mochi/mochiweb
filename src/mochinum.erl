@@ -11,7 +11,7 @@
 
 -module(mochinum).
 -author("Bob Ippolito <bob@mochimedia.com>").
--export([digits/1, frexp/1, int_pow/2, int_ceil/1, test/0]).
+-export([digits/1, frexp/1, int_pow/2, int_ceil/1]).
 
 %% IEEE 754 Float exponent bias
 -define(FLOAT_BIAS, 1022).
@@ -205,7 +205,7 @@ generate(R0, S, MPlus, MMinus, LowOk, HighOk) ->
             end
     end.
 
-unpack(Float) ->    
+unpack(Float) ->
     <<Sign:1, Exp:11, Frac:52>> = <<Float:64/float>>,
     {Sign, Exp, Frac}.
 
@@ -228,14 +228,13 @@ log2floor(Int, N) ->
     log2floor(Int bsr 1, 1 + N).
 
 
-test() ->
-    ok = test_frexp(),
-    ok = test_int_ceil(),
-    ok = test_int_pow(),
-    ok = test_digits(),
-    ok.
+%%
+%% Tests
+%%
+-include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
 
-test_int_ceil() ->
+int_ceil_test() ->
     1 = int_ceil(0.0001),
     0 = int_ceil(0.0),
     1 = int_ceil(0.99),
@@ -243,8 +242,8 @@ test_int_ceil() ->
     -1 = int_ceil(-1.5),
     -2 = int_ceil(-2.0),
     ok.
-    
-test_int_pow() ->
+
+int_pow_test() ->
     1 = int_pow(1, 1),
     1 = int_pow(1, 0),
     1 = int_pow(10, 0),
@@ -252,8 +251,8 @@ test_int_pow() ->
     100 = int_pow(10, 2),
     1000 = int_pow(10, 3),
     ok.
-    
-test_digits() ->
+
+digits_test() ->
     "0" = digits(0),
     "0.0" = digits(0.0),
     "1.0" = digits(1.0),
@@ -263,7 +262,7 @@ test_digits() ->
     "0.001" = digits(0.001),
     ok.
 
-test_frexp() ->
+frexp_test() ->
     %% zero
     {0.0, 0} = frexp(0.0),
     %% one
@@ -287,3 +286,5 @@ test_frexp() ->
     <<LargeNorm/float>> = <<127,239,255,255,255,255,255,255>>,
     {0.99999999999999989, 1024} = frexp(LargeNorm),
     ok.
+
+-endif.

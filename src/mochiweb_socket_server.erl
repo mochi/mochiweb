@@ -175,7 +175,7 @@ acceptor_loop({Server, Listen, Loop}) ->
             gen_server:cast(Server, {accepted, self()}),
             call_loop(Loop, Socket);
         {error, closed} ->
-            exit({error, closed});
+            exit(normal);
         Other ->
             error_logger:error_report(
               [{application, mochiweb},
@@ -246,3 +246,11 @@ handle_info({'EXIT', _LoopPid, Reason},
 handle_info(Info, State) ->
     error_logger:info_report([{'INFO', Info}, {'State', State}]),
     {noreply, State}.
+
+
+%%
+%% Tests
+%%
+-include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
+-endif.

@@ -161,3 +161,11 @@ after_response(Body, Req) ->
             Req:cleanup(),
             ?MODULE:loop(Socket, Body)
     end.
+
+
+%%
+%% Tests
+%%
+-include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
+-endif.

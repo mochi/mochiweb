@@ -10,65 +10,10 @@
 -export([default/3, enter_from_list/2, default_from_list/2]).
 -export([to_list/1, make/1]).
 -export([from_binary/1]).
--export([test/0]).
 
 %% @type headers().
 %% @type key() = atom() | binary() | string().
 %% @type value() = atom() | binary() | string() | integer().
-
-%% @spec test() -> ok
-%% @doc Run tests for this module.
-test() ->
-    H = ?MODULE:make([{hdr, foo}, {"Hdr", "bar"}, {'Hdr', 2}]),
-    [{hdr, "foo, bar, 2"}] = ?MODULE:to_list(H),
-    H1 = ?MODULE:insert(taco, grande, H),
-    [{hdr, "foo, bar, 2"}, {taco, "grande"}] = ?MODULE:to_list(H1),
-    H2 = ?MODULE:make([{"Set-Cookie", "foo"}]),
-    [{"Set-Cookie", "foo"}] = ?MODULE:to_list(H2),
-    H3 = ?MODULE:insert("Set-Cookie", "bar", H2),
-    [{"Set-Cookie", "foo"}, {"Set-Cookie", "bar"}] = ?MODULE:to_list(H3),
-    "foo, bar" = ?MODULE:get_value("set-cookie", H3),
-    {value, {"Set-Cookie", "foo, bar"}} = ?MODULE:lookup("set-cookie", H3),
-    undefined = ?MODULE:get_value("shibby", H3),
-    none = ?MODULE:lookup("shibby", H3),
-    H4 = ?MODULE:insert("content-type",
-                        "application/x-www-form-urlencoded; charset=utf8",
-                        H3),
-    "application/x-www-form-urlencoded" = ?MODULE:get_primary_value(
-                                             "content-type", H4),
-    H4 = ?MODULE:delete_any("nonexistent-header", H4),
-    H3 = ?MODULE:delete_any("content-type", H4),
-    HB = <<"Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n">>,
-    H_HB = ?MODULE:from_binary(HB),
-    H_HB = ?MODULE:from_binary(binary_to_list(HB)),
-    "47" = ?MODULE:get_value("Content-Length", H_HB),
-    "text/plain" = ?MODULE:get_value("Content-Type", H_HB),
-    L_H_HB = ?MODULE:to_list(H_HB),
-    2 = length(L_H_HB),
-    true = lists:member({'Content-Length', "47"}, L_H_HB),
-    true = lists:member({'Content-Type', "text/plain"}, L_H_HB),
-    HL = [ <<"Content-Length: 47\r\n">>, <<"Content-Type: text/plain\r\n">> ],
-    HL2 = [ "Content-Length: 47\r\n", <<"Content-Type: text/plain\r\n">> ],
-    HL3 = [ <<"Content-Length: 47\r\n">>, "Content-Type: text/plain\r\n" ],
-    H_HL = ?MODULE:from_binary(HL),
-    H_HL = ?MODULE:from_binary(HL2),
-    H_HL = ?MODULE:from_binary(HL3),
-    "47" = ?MODULE:get_value("Content-Length", H_HL),
-    "text/plain" = ?MODULE:get_value("Content-Type", H_HL),
-    L_H_HL = ?MODULE:to_list(H_HL),
-    2 = length(L_H_HL),
-    true = lists:member({'Content-Length', "47"}, L_H_HL),
-    true = lists:member({'Content-Type', "text/plain"}, L_H_HL),
-    [] = ?MODULE:to_list(?MODULE:from_binary(<<>>)),
-    [] = ?MODULE:to_list(?MODULE:from_binary(<<"">>)),
-    [] = ?MODULE:to_list(?MODULE:from_binary(<<"\r\n">>)),
-    [] = ?MODULE:to_list(?MODULE:from_binary(<<"\r\n\r\n">>)),
-    [] = ?MODULE:to_list(?MODULE:from_binary("")),
-    [] = ?MODULE:to_list(?MODULE:from_binary([<<>>])),
-    [] = ?MODULE:to_list(?MODULE:from_binary([<<"">>])),
-    [] = ?MODULE:to_list(?MODULE:from_binary([<<"\r\n">>])),
-    [] = ?MODULE:to_list(?MODULE:from_binary([<<"\r\n\r\n">>])),
-    ok.
 
 %% @spec empty() -> headers()
 %% @doc Create an empty headers structure.
@@ -247,4 +192,62 @@ any_to_list(V) when is_binary(V) ->
 any_to_list(V) when is_integer(V) ->
     integer_to_list(V).
 
+%%
+%% Tests.
+%%
+-include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
 
+headers_test() ->
+    H = ?MODULE:make([{hdr, foo}, {"Hdr", "bar"}, {'Hdr', 2}]),
+    [{hdr, "foo, bar, 2"}] = ?MODULE:to_list(H),
+    H1 = ?MODULE:insert(taco, grande, H),
+    [{hdr, "foo, bar, 2"}, {taco, "grande"}] = ?MODULE:to_list(H1),
+    H2 = ?MODULE:make([{"Set-Cookie", "foo"}]),
+    [{"Set-Cookie", "foo"}] = ?MODULE:to_list(H2),
+    H3 = ?MODULE:insert("Set-Cookie", "bar", H2),
+    [{"Set-Cookie", "foo"}, {"Set-Cookie", "bar"}] = ?MODULE:to_list(H3),
+    "foo, bar" = ?MODULE:get_value("set-cookie", H3),
+    {value, {"Set-Cookie", "foo, bar"}} = ?MODULE:lookup("set-cookie", H3),
+    undefined = ?MODULE:get_value("shibby", H3),
+    none = ?MODULE:lookup("shibby", H3),
+    H4 = ?MODULE:insert("content-type",
+                        "application/x-www-form-urlencoded; charset=utf8",
+                        H3),
+    "application/x-www-form-urlencoded" = ?MODULE:get_primary_value(
+                                             "content-type", H4),
+    H4 = ?MODULE:delete_any("nonexistent-header", H4),
+    H3 = ?MODULE:delete_any("content-type", H4),
+    HB = <<"Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n">>,
+    H_HB = ?MODULE:from_binary(HB),
+    H_HB = ?MODULE:from_binary(binary_to_list(HB)),
+    "47" = ?MODULE:get_value("Content-Length", H_HB),
+    "text/plain" = ?MODULE:get_value("Content-Type", H_HB),
+    L_H_HB = ?MODULE:to_list(H_HB),
+    2 = length(L_H_HB),
+    true = lists:member({'Content-Length', "47"}, L_H_HB),
+    true = lists:member({'Content-Type', "text/plain"}, L_H_HB),
+    HL = [ <<"Content-Length: 47\r\n">>, <<"Content-Type: text/plain\r\n">> ],
+    HL2 = [ "Content-Length: 47\r\n", <<"Content-Type: text/plain\r\n">> ],
+    HL3 = [ <<"Content-Length: 47\r\n">>, "Content-Type: text/plain\r\n" ],
+    H_HL = ?MODULE:from_binary(HL),
+    H_HL = ?MODULE:from_binary(HL2),
+    H_HL = ?MODULE:from_binary(HL3),
+    "47" = ?MODULE:get_value("Content-Length", H_HL),
+    "text/plain" = ?MODULE:get_value("Content-Type", H_HL),
+    L_H_HL = ?MODULE:to_list(H_HL),
+    2 = length(L_H_HL),
+    true = lists:member({'Content-Length', "47"}, L_H_HL),
+    true = lists:member({'Content-Type', "text/plain"}, L_H_HL),
+    [] = ?MODULE:to_list(?MODULE:from_binary(<<>>)),
+    [] = ?MODULE:to_list(?MODULE:from_binary(<<"">>)),
+    [] = ?MODULE:to_list(?MODULE:from_binary(<<"\r\n">>)),
+    [] = ?MODULE:to_list(?MODULE:from_binary(<<"\r\n\r\n">>)),
+    [] = ?MODULE:to_list(?MODULE:from_binary("")),
+    [] = ?MODULE:to_list(?MODULE:from_binary([<<>>])),
+    [] = ?MODULE:to_list(?MODULE:from_binary([<<"">>])),
+    [] = ?MODULE:to_list(?MODULE:from_binary([<<"\r\n">>])),
+    [] = ?MODULE:to_list(?MODULE:from_binary([<<"\r\n\r\n">>])),
+    ok.
+
+-endif.

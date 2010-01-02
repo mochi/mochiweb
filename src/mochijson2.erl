@@ -9,7 +9,6 @@
 -author('bob@mochimedia.com').
 -export([encoder/1, encode/1]).
 -export([decoder/1, decode/1]).
--export([test/0]).
 
 % This is a macro to placate syntax highlighters..
 -define(Q, $\").
@@ -74,9 +73,6 @@ decoder(Options) ->
 %% @doc Decode the given iolist to Erlang terms.
 decode(S) ->
     json_decode(S, #decoder{}).
-
-test() ->
-    test_all().
 
 %% Internal API
 
@@ -510,6 +506,12 @@ tokenize(B, S=#decoder{offset=O}) ->
             trim = S#decoder.state,
             {eof, S}
     end.
+%%
+%% Tests
+%%
+-include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
+
 
 %% testing constructs borrowed from the Yaws JSON implementation.
 
@@ -523,7 +525,7 @@ is_obj({struct, Props}) ->
                 true;
             (_) ->
                 false
-        end,    
+        end,
     lists:all(F, Props).
 
 obj_from_list(Props) ->
@@ -566,11 +568,11 @@ equiv_list([], []) ->
 equiv_list([V1 | L1], [V2 | L2]) ->
     equiv(V1, V2) andalso equiv_list(L1, L2).
 
-test_all() ->
+decode_test() ->
     [1199344435545.0, 1] = decode(<<"[1199344435545.0,1]">>),
-    <<16#F0,16#9D,16#9C,16#95>> = decode([34,"\\ud835","\\udf15",34]),
-    test_encoder_utf8(),
-    test_input_validation(),
+    <<16#F0,16#9D,16#9C,16#95>> = decode([34,"\\ud835","\\udf15",34]).
+
+e2j_vec_test() ->
     test_one(e2j_test_vec(utf8), 1).
 
 test_one([], _N) ->
@@ -606,30 +608,30 @@ e2j_test_vec(utf8) ->
      {[], "[]"},
      {[[]], "[[]]"},
      {[1, <<"foo">>], "[1,\"foo\"]"},
-     
+
      %% json array in a json object
      {obj_from_list([{<<"foo">>, [123]}]),
       "{\"foo\":[123]}"},
-     
+
      %% json object in a json object
      {obj_from_list([{<<"foo">>, obj_from_list([{<<"bar">>, true}])}]),
       "{\"foo\":{\"bar\":true}}"},
-     
+
      %% fold evaluation order
      {obj_from_list([{<<"foo">>, []},
                      {<<"bar">>, obj_from_list([{<<"baz">>, true}])},
                      {<<"alice">>, <<"bob">>}]),
       "{\"foo\":[],\"bar\":{\"baz\":true},\"alice\":\"bob\"}"},
-     
+
      %% json object in a json array
      {[-123, <<"foo">>, obj_from_list([{<<"bar">>, []}]), null],
       "[-123,\"foo\",{\"bar\":[]},null]"}
     ].
 
 %% test utf8 encoding
-test_encoder_utf8() ->
+encoder_utf8_test() ->
     %% safe conversion case (default)
-    [34,"\\u0001","\\u0442","\\u0435","\\u0441","\\u0442",34] = 
+    [34,"\\u0001","\\u0442","\\u0435","\\u0441","\\u0442",34] =
         encode(<<1,"\321\202\320\265\321\201\321\202">>),
 
     %% raw utf8 output (optional)
@@ -637,27 +639,29 @@ test_encoder_utf8() ->
     [34,"\\u0001",[209,130],[208,181],[209,129],[209,130],34] =
         Enc(<<1,"\321\202\320\265\321\201\321\202">>).
 
-test_input_validation() ->
+input_validation_test() ->
     Good = [
-        {16#00A3, <<?Q, 16#C2, 16#A3, ?Q>>}, % pound
-        {16#20AC, <<?Q, 16#E2, 16#82, 16#AC, ?Q>>}, % euro
-        {16#10196, <<?Q, 16#F0, 16#90, 16#86, 16#96, ?Q>>} % denarius
+        {16#00A3, <<?Q, 16#C2, 16#A3, ?Q>>}, %% pound
+        {16#20AC, <<?Q, 16#E2, 16#82, 16#AC, ?Q>>}, %% euro
+        {16#10196, <<?Q, 16#F0, 16#90, 16#86, 16#96, ?Q>>} %% denarius
     ],
     lists:foreach(fun({CodePoint, UTF8}) ->
         Expect = list_to_binary(xmerl_ucs:to_utf8(CodePoint)),
         Expect = decode(UTF8)
     end, Good),
-    
+
     Bad = [
-        % 2nd, 3rd, or 4th byte of a multi-byte sequence w/o leading byte
+        %% 2nd, 3rd, or 4th byte of a multi-byte sequence w/o leading byte
         <<?Q, 16#80, ?Q>>,
-        % missing continuations, last byte in each should be 80-BF
+        %% missing continuations, last byte in each should be 80-BF
         <<?Q, 16#C2, 16#7F, ?Q>>,
         <<?Q, 16#E0, 16#80,16#7F, ?Q>>,
         <<?Q, 16#F0, 16#80, 16#80, 16#7F, ?Q>>,
-        % we don't support code points > 10FFFF per RFC 3629
+        %% we don't support code points > 10FFFF per RFC 3629
         <<?Q, 16#F5, 16#80, 16#80, 16#80, ?Q>>
     ],
     lists:foreach(fun(X) ->
         ok = try decode(X) catch invalid_utf8 -> ok end
     end, Bad).
+
+-endif.

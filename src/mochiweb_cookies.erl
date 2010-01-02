@@ -4,7 +4,7 @@
 %% @doc HTTP Cookie parsing and generating (RFC 2109, RFC 2965).
 
 -module(mochiweb_cookies).
--export([parse_cookie/1, cookie/3, cookie/2, test/0]).
+-export([parse_cookie/1, cookie/3, cookie/2]).
 
 -define(QUOTE, $\").
 
@@ -29,8 +29,8 @@
 cookie(Key, Value) ->
     cookie(Key, Value, []).
 
-%% @spec cookie(Key::string(), Value::string(), Options::[Option]) -> header() 
-%% where Option = {max_age, integer()} | {local_time, {date(), time()}} 
+%% @spec cookie(Key::string(), Value::string(), Options::[Option]) -> header()
+%% where Option = {max_age, integer()} | {local_time, {date(), time()}}
 %%                | {domain, string()} | {path, string()}
 %%                | {secure, true | false} | {http_only, true | false}
 %%
@@ -125,23 +125,16 @@ age_to_cookie_date(Age, LocalTime) ->
 %% @spec parse_cookie(string()) -> [{K::string(), V::string()}]
 %% @doc Parse the contents of a Cookie header field, ignoring cookie
 %% attributes, and return a simple property list.
-parse_cookie("") -> 
+parse_cookie("") ->
     [];
-parse_cookie(Cookie) -> 
+parse_cookie(Cookie) ->
     parse_cookie(Cookie, []).
-
-%% @spec test() -> ok
-%% @doc Run tests for mochiweb_cookies.
-test() ->
-    parse_cookie_test(),
-    cookie_test(),
-    ok.
 
 %% Internal API
 
 parse_cookie([], Acc) ->
-    lists:reverse(Acc); 
-parse_cookie(String, Acc) -> 
+    lists:reverse(Acc);
+parse_cookie(String, Acc) ->
     {{Token, Value}, Rest} = read_pair(String),
     Acc1 = case Token of
                "" ->
@@ -189,7 +182,7 @@ read_token(String) ->
     F = fun (C) -> not ?IS_SEPARATOR(C) end,
     lists:splitwith(F, String).
 
-skip_past_separator([]) ->    
+skip_past_separator([]) ->
     [];
 skip_past_separator([$; | Rest]) ->
     Rest;
@@ -198,9 +191,24 @@ skip_past_separator([$, | Rest]) ->
 skip_past_separator([_ | Rest]) ->
     skip_past_separator(Rest).
 
+any_to_list(V) when is_list(V) ->
+    V;
+any_to_list(V) when is_atom(V) ->
+    atom_to_list(V);
+any_to_list(V) when is_binary(V) ->
+    binary_to_list(V);
+any_to_list(V) when is_integer(V) ->
+    integer_to_list(V).
+
+%%
+%% Tests
+%%
+-include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
+
 parse_cookie_test() ->
     %% RFC example
-    C1 = "$Version=\"1\"; Customer=\"WILE_E_COYOTE\"; $Path=\"/acme\"; 
+    C1 = "$Version=\"1\"; Customer=\"WILE_E_COYOTE\"; $Path=\"/acme\";
     Part_Number=\"Rocket_Launcher_0001\"; $Path=\"/acme\";
     Shipping=\"FedEx\"; $Path=\"/acme\"",
     [
@@ -216,16 +224,6 @@ parse_cookie_test() ->
     [{"foo", "\";"}, {"bar", ""}] = parse_cookie("foo = \"\\\";\";bar "),
     [{"foo", "\";bar"}] = parse_cookie("foo=\"\\\";bar").
 
-any_to_list(V) when is_list(V) ->
-    V;
-any_to_list(V) when is_atom(V) ->
-    atom_to_list(V);
-any_to_list(V) when is_binary(V) ->
-    binary_to_list(V);
-any_to_list(V) when is_integer(V) ->
-    integer_to_list(V).
-
-
 cookie_test() ->
     C1 = {"Set-Cookie",
           "Customer=WILE_E_COYOTE; "
@@ -238,8 +236,7 @@ cookie_test() ->
     C1 = cookie(<<"Customer">>, <<"WILE_E_COYOTE">>, [{path, <<"/acme">>}]),
 
     {"Set-Cookie","=NoKey; Version=1"} = cookie("", "NoKey", []),
-        
-        LocalTime = calendar:universal_time_to_local_time({{2007, 5, 15}, {13, 45, 33}}), 
+        LocalTime = calendar:universal_time_to_local_time({{2007, 5, 15}, {13, 45, 33}}),
     C2 = {"Set-Cookie",
           "Customer=WILE_E_COYOTE; "
           "Version=1; "
@@ -255,3 +252,5 @@ cookie_test() ->
     C3 = cookie("Customer", "WILE_E_COYOTE",
                 [{max_age, 86417}, {local_time, LocalTime}]),
     ok.
+
+-endif.
