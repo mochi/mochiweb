@@ -332,11 +332,13 @@ tree([T={comment, _Comment} | Rest], S) ->
     tree(Rest, append_stack_child(T, S));
 tree(L=[{data, _Data, _Whitespace} | _], S) ->
     case tree_data(L, true, []) of
-        {_, true, Rest} -> 
+        {_, true, Rest} ->
             tree(Rest, S);
         {Data, false, Rest} ->
             tree(Rest, append_stack_child(Data, S))
-    end.
+    end;
+tree([{doctype, _} | Rest], Stack) ->
+    tree(Rest, Stack).
 
 norm({Tag, Attrs}) ->
     {norm(Tag), [{norm(K), iolist_to_binary(V)} || {K, V} <- Attrs], []};
@@ -881,6 +883,19 @@ destack_test() ->
     [{<<"b">>, [], [{<<"c">>, [], []}]}, {<<"a">>, [], []}] =
      destack(<<"c">>,
              [{<<"c">>, [], []}, {<<"b">>, [], []},{<<"a">>, [], []}]),
+    ok.
+
+doctype_test() ->
+    ?assertEqual(
+       {<<"html">>,[],[{<<"head">>,[],[]}]},
+       mochiweb_html:parse("<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">"
+                           "<html><head></head></body></html>")),
+    %% http://code.google.com/p/mochiweb/issues/detail?id=52
+    ?assertEqual(
+       {<<"html">>,[],[{<<"head">>,[],[]}]},
+       mochiweb_html:parse("<html>"
+                           "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">"
+                           "<head></head></body></html>")),
     ok.
 
 -endif.
