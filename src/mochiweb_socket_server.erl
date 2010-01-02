@@ -116,7 +116,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog}) ->
     Opts = case Ip of
         any ->
             case ipv6_supported() of % IPv4, and IPv6 if supported
-                true -> [inet, inet6 | BaseOpts];
+                true -> [inet6 | BaseOpts];
                 _ -> BaseOpts
             end;
         {_, _, _, _} -> % IPv4
