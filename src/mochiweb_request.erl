@@ -502,6 +502,7 @@ read_chunk(0) ->
         end,
     Footers = F(F, []),
     inet:setopts(Socket, [{packet, raw}]),
+    put(?SAVE_RECV, true),
     Footers;
 read_chunk(Length) ->
     case gen_tcp:recv(Socket, 2 + Length, ?IDLE_TIMEOUT) of
