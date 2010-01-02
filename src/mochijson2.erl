@@ -38,8 +38,9 @@
 %% @type json_number() = integer() | float()
 %% @type json_array() = [json_term()]
 %% @type json_object() = {struct, [{json_string(), json_term()}]}
+%% @type json_iolist() = {json, iolist()}
 %% @type json_term() = json_string() | json_number() | json_array() |
-%%                     json_object()
+%%                     json_object() | json_iolist()
 
 -record(encoder, {handler=null,
                   utf8=false}).
@@ -107,6 +108,8 @@ json_encode(Array, State) when is_list(Array) ->
     json_encode_array(Array, State);
 json_encode({struct, Props}, State) when is_list(Props) ->
     json_encode_proplist(Props, State);
+json_encode({json, IoList}, _State) ->
+    IoList;
 json_encode(Bad, #encoder{handler=null}) ->
     exit({json_encode, {bad_term, Bad}});
 json_encode(Bad, State=#encoder{handler=Handler}) ->
@@ -663,5 +666,15 @@ input_validation_test() ->
     lists:foreach(fun(X) ->
         ok = try decode(X) catch invalid_utf8 -> ok end
     end, Bad).
+
+inline_json_test() ->
+    ?assertEqual(<<"\"iodata iodata\"">>,
+                 iolist_to_binary(
+                   encode({json, [<<"\"iodata">>, " iodata\""]}))),
+    ?assertEqual({struct, [{<<"key">>, <<"iodata iodata">>}]},
+                 decode(
+                   encode({struct,
+                           [{key, {json, [<<"\"iodata">>, " iodata\""]}}]}))),
+    ok.
 
 -endif.
