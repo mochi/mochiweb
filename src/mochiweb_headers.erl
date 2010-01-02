@@ -20,7 +20,7 @@
 %% @doc Run tests for this module.
 test() ->
     H = ?MODULE:make([{hdr, foo}, {"Hdr", "bar"}, {'Hdr', 2}]),
-    [{hdr, "foo, bar, 2"}] = ?MODULE:to_list(H), 
+    [{hdr, "foo, bar, 2"}] = ?MODULE:to_list(H),
     H1 = ?MODULE:insert(taco, grande, H),
     [{hdr, "foo, bar, 2"}, {taco, "grande"}] = ?MODULE:to_list(H1),
     H2 = ?MODULE:make([{"Set-Cookie", "foo"}]),
@@ -83,20 +83,20 @@ make(L) when is_list(L) ->
 make(T) when is_tuple(T) ->
     T.
 
-%% @spec from_binary(RawHttpHeader()) -> headers() 
+%% @spec from_binary(RawHttpHeader()) -> headers()
 %% @type RawHttpHeader() -> string() | binary() | [ string() | binary() ]
 %%
 %% @doc Transforms a raw HTTP header into a mochiweb headers structure.
 %%
 %%      The given raw HTTP header can be one of the following:
 %%
-%%      1) A string or a binary representing a full HTTP header ending with 
+%%      1) A string or a binary representing a full HTTP header ending with
 %%         double CRLF.
 %%         Examples:
 %%         "Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n"
 %%         <<"Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n">>
 %%
-%%      2) A list of binaries or strings where each element represents a raw 
+%%      2) A list of binaries or strings where each element represents a raw
 %%         HTTP header line ending with a single CRLF.
 %%         Examples:
 %%         [ <<"Content-Length: 47\r\n">>, <<"Content-Type: text/plain\r\n">> ]
@@ -105,13 +105,12 @@ make(T) when is_tuple(T) ->
 %%
 from_binary(RawHttpHeader) when is_binary(RawHttpHeader) ->
     from_binary(RawHttpHeader, []);
-
 from_binary(RawHttpHeaderList) ->
     from_binary(list_to_binary([RawHttpHeaderList, "\r\n"])).
 
 from_binary(RawHttpHeader, Acc) ->
     case erlang:decode_packet(httph, RawHttpHeader, []) of
-        { ok, {http_header, _, H, _, V}, Rest } ->
+        {ok, {http_header, _, H, _, V}, Rest} ->
             from_binary(Rest, [{H, V} | Acc]);
         _ ->
             make(Acc)
