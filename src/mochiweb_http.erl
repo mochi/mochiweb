@@ -106,9 +106,11 @@ request(Socket, Body) ->
             request(Socket, Body);
         {error, {http_error, "\n"}} ->
             request(Socket, Body);
-        _Other ->
+        {error, closed} ->
             gen_tcp:close(Socket),
-            exit(normal)
+            exit(normal);
+        _Other ->
+            handle_invalid_request(Socket)
     end.
 
 reentry(Body) ->
@@ -119,11 +121,7 @@ reentry(Body) ->
 headers(Socket, Request, Headers, _Body, ?MAX_HEADERS) ->
     %% Too many headers sent, bad request.
     inet:setopts(Socket, [{packet, raw}]),
-    Req = mochiweb:new_request({Socket, Request,
-                                lists:reverse(Headers)}),
-    Req:respond({400, [], []}),
-    gen_tcp:close(Socket),
-    exit(normal);
+    handle_invalid_request(Socket, Request, Headers);
 headers(Socket, Request, Headers, Body, HeaderCount) ->
     case gen_tcp:recv(Socket, 0, ?IDLE_TIMEOUT) of
         {ok, http_eoh} ->
@@ -135,10 +133,23 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
         {ok, {http_header, _, Name, _, Value}} ->
             headers(Socket, Request, [{Name, Value} | Headers], Body,
                     1 + HeaderCount);
-        _Other ->
+        {error, closed} ->
             gen_tcp:close(Socket),
-            exit(normal)
+            exit(normal);
+        _Other ->
+            handle_invalid_request(Socket, Request, Headers)
     end.
+
+handle_invalid_request(Socket) ->
+    handle_invalid_request(Socket, {'GET', {abs_path, "/"}, {0,9}}, []).
+
+handle_invalid_request(Socket, Request, RevHeaders) ->
+    inet:setopts(Socket, [{packet, raw}]),
+    Req = mochiweb:new_request({Socket, Request,
+                                lists:reverse(RevHeaders)}),
+    Req:respond({400, [], []}),
+    gen_tcp:close(Socket),
+    exit(normal).
 
 after_response(Body, Req) ->
     Socket = Req:get(socket),
