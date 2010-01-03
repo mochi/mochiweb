@@ -102,7 +102,7 @@ get(range) ->
         undefined ->
             undefined;
         RawRange ->
-            parse_range_request(RawRange)
+            mochiweb_http:parse_range_request(RawRange)
     end.
 
 %% @spec dump() -> {mochiweb_request, [{atom(), term()}]}
@@ -325,8 +325,12 @@ ok({ContentType, Body}) ->
 ok({ContentType, ResponseHeaders, Body}) ->
     HResponse = mochiweb_headers:make(ResponseHeaders),
     case THIS:get(range) of
-        X when X =:= undefined; X =:= fail ->
-            HResponse1 = mochiweb_headers:enter("Content-Type", ContentType, HResponse),
+        X when (X =:= undefined orelse X =:= fail) orelse Body =:= chunked ->
+            %% http://code.google.com/p/mochiweb/issues/detail?id=54
+            %% Range header not supported when chunked, return 200 and provide
+            %% full response.
+            HResponse1 = mochiweb_headers:enter("Content-Type", ContentType,
+                                                HResponse),
             respond({200, HResponse1, Body});
         Ranges ->
             {PartList, Size} = range_parts(Body, Ranges),
@@ -666,7 +670,7 @@ iodevice_size(IoDevice) ->
 range_parts({file, IoDevice}, Ranges) ->
     Size = iodevice_size(IoDevice),
     F = fun (Spec, Acc) ->
-                case range_skip_length(Spec, Size) of
+                case mochiweb_http:range_skip_length(Spec, Size) of
                     invalid_range ->
                         Acc;
                     V ->
@@ -684,7 +688,7 @@ range_parts(Body0, Ranges) ->
     Body = iolist_to_binary(Body0),
     Size = size(Body),
     F = fun(Spec, Acc) ->
-                case range_skip_length(Spec, Size) of
+                case mochiweb_http:range_skip_length(Spec, Size) of
                     invalid_range ->
                         Acc;
                     {Skip, Length} ->
@@ -694,136 +698,9 @@ range_parts(Body0, Ranges) ->
         end,
     {lists:foldr(F, [], Ranges), Size}.
 
-range_skip_length(Spec, Size) ->
-    case Spec of
-        {none, R} when R =< Size, R >= 0 ->
-            {Size - R, R};
-        {none, _OutOfRange} ->
-            {0, Size};
-        {R, none} when R >= 0, R < Size ->
-            {R, Size - R};
-        {_OutOfRange, none} ->
-            invalid_range;
-        {Start, End} when 0 =< Start, Start =< End, End < Size ->
-            {Start, End - Start + 1};
-        {_OutOfRange, _End} ->
-            invalid_range
-    end.
-
-parse_range_request(RawRange) when is_list(RawRange) ->
-    try
-        "bytes=" ++ RangeString = RawRange,
-        Ranges = string:tokens(RangeString, ","),
-        lists:map(fun ("-" ++ V)  ->
-                          {none, list_to_integer(V)};
-                      (R) ->
-                          case string:tokens(R, "-") of
-                              [S1, S2] ->
-                                  {list_to_integer(S1), list_to_integer(S2)};
-                              [S] ->
-                                  {list_to_integer(S), none}
-                          end
-                  end,
-                  Ranges)
-    catch
-        _:_ ->
-            fail
-    end.
-
 %%
 %% Tests
 %%
 -include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
-
-range_test() ->
-    %% valid, single ranges
-    io:format("Testing parse_range_request with valid single ranges~n"),
-    io:format("1"),
-    [{20, 30}] = parse_range_request("bytes=20-30"),
-    io:format("2"),
-    [{20, none}] = parse_range_request("bytes=20-"),
-    io:format("3"),
-    [{none, 20}] = parse_range_request("bytes=-20"),
-    io:format(".. ok ~n"),
-
-    %% invalid, single ranges
-    io:format("Testing parse_range_request with invalid ranges~n"),
-    io:format("1"),
-    fail = parse_range_request(""),
-    io:format("2"),
-    fail = parse_range_request("garbage"),
-    io:format("3"),
-    fail = parse_range_request("bytes=-20-30"),
-    io:format(".. ok ~n"),
-
-    %% valid, multiple range
-    io:format("Testing parse_range_request with valid multiple ranges~n"),
-    io:format("1"),
-    [{20, 30}, {50, 100}, {110, 200}] =
-        parse_range_request("bytes=20-30,50-100,110-200"),
-    io:format("2"),
-    [{20, none}, {50, 100}, {none, 200}] =
-        parse_range_request("bytes=20-,50-100,-200"),
-    io:format(".. ok~n"),
-
-    %% no ranges
-    io:format("Testing out parse_range_request with no ranges~n"),
-    io:format("1"),
-    [] = parse_range_request("bytes="),
-    io:format(".. ok~n"),
-
-    Body = <<"012345678901234567890123456789012345678901234567890123456789">>,
-    BodySize = byte_size(Body), %% 60
-    BodySize = 60,
-
-    %% these values assume BodySize =:= 60
-    io:format("Testing out range_skip_length on valid ranges~n"),
-    io:format("1"),
-    {1,9} = range_skip_length({1,9}, BodySize), %% 1-9
-    io:format("2"),
-    {10,10} = range_skip_length({10,19}, BodySize), %% 10-19
-    io:format("3"),
-    {40, 20} = range_skip_length({none, 20}, BodySize), %% -20
-    io:format("4"),
-    {30, 30} = range_skip_length({30, none}, BodySize), %% 30-
-    io:format(".. ok ~n"),
-
-    %% valid edge cases for range_skip_length
-    io:format("Testing out range_skip_length on valid edge case ranges~n"),
-    io:format("1"),
-    {BodySize, 0} = range_skip_length({none, 0}, BodySize),
-    io:format("2"),
-    {0, BodySize} = range_skip_length({none, BodySize}, BodySize),
-    io:format("3"),
-    {0, BodySize} = range_skip_length({0, none}, BodySize),
-    BodySizeLess1 = BodySize - 1,
-    io:format("4"),
-    {BodySizeLess1, 1} = range_skip_length({BodySize - 1, none}, BodySize),
-
-    %% out of range, return whole thing
-    io:format("5"),
-    {0, BodySize} = range_skip_length({none, BodySize + 1}, BodySize),
-    io:format("6"),
-    {0, BodySize} = range_skip_length({none, -1}, BodySize),
-    io:format(".. ok ~n"),
-
-    %% invalid ranges
-    io:format("Testing out range_skip_length on invalid ranges~n"),
-    io:format("1"),
-    invalid_range = range_skip_length({-1, 30}, BodySize),
-    io:format("2"),
-    invalid_range = range_skip_length({0, BodySize + 1}, BodySize),
-    io:format("3"),
-    invalid_range = range_skip_length({-1, BodySize + 1}, BodySize),
-    io:format("4"),
-    invalid_range = range_skip_length({BodySize, 40}, BodySize),
-    io:format("5"),
-    invalid_range = range_skip_length({-1, none}, BodySize),
-    io:format("6"),
-    invalid_range = range_skip_length({BodySize, none}, BodySize),
-    io:format(".. ok ~n"),
-    ok.
-
-
 -endif.
