@@ -36,13 +36,15 @@ make(T) when is_tuple(T) ->
 %%      1) A string or a binary representing a full HTTP header ending with
 %%         double CRLF.
 %%         Examples:
-%%         ```"Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n"
-%%         "Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n">>'''
+%%         ```
+%%         "Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n"
+%%         <<"Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n">>'''
 %%
 %%      2) A list of binaries or strings where each element represents a raw
 %%         HTTP header line ending with a single CRLF.
 %%         Examples:
-%%         ```[<<"Content-Length: 47\r\n">>, <<"Content-Type: text/plain\r\n">>]
+%%         ```
+%%         [<<"Content-Length: 47\r\n">>, <<"Content-Type: text/plain\r\n">>]
 %%         ["Content-Length: 47\r\n", "Content-Type: text/plain\r\n"]
 %%         ["Content-Length: 47\r\n", <<"Content-Type: text/plain\r\n">>]'''
 %%
