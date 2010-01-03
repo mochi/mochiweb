@@ -28,9 +28,7 @@ make(L) when is_list(L) ->
 make(T) when is_tuple(T) ->
     T.
 
-%% @spec from_binary(RawHttpHeader()) -> headers()
-%% @type RawHttpHeader() -> string() | binary() | [ string() | binary() ]
-%%
+%% @spec from_binary(iolist()) -> headers()
 %% @doc Transforms a raw HTTP header into a mochiweb headers structure.
 %%
 %%      The given raw HTTP header can be one of the following:
@@ -38,15 +36,15 @@ make(T) when is_tuple(T) ->
 %%      1) A string or a binary representing a full HTTP header ending with
 %%         double CRLF.
 %%         Examples:
-%%         "Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n"
-%%         <<"Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n">>
+%%         ```"Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n"
+%%         "Content-Length: 47\r\nContent-Type: text/plain\r\n\r\n">>'''
 %%
 %%      2) A list of binaries or strings where each element represents a raw
 %%         HTTP header line ending with a single CRLF.
 %%         Examples:
-%%         [ <<"Content-Length: 47\r\n">>, <<"Content-Type: text/plain\r\n">> ]
-%%         [ "Content-Length: 47\r\n", "Content-Type: text/plain\r\n" ]
-%%         [ "Content-Length: 47\r\n", <<"Content-Type: text/plain\r\n">> ]
+%%         ```[<<"Content-Length: 47\r\n">>, <<"Content-Type: text/plain\r\n">>]
+%%         ["Content-Length: 47\r\n", "Content-Type: text/plain\r\n"]
+%%         ["Content-Length: 47\r\n", <<"Content-Type: text/plain\r\n">>]'''
 %%
 from_binary(RawHttpHeader) when is_binary(RawHttpHeader) ->
     from_binary(RawHttpHeader, []);
@@ -78,7 +76,7 @@ default_from_list(List, T) ->
 
 %% @spec to_list(headers()) -> [{key(), string()}]
 %% @doc Return the contents of the headers. The keys will be the exact key
-%%      that was first inserted (e.g. may be an atom or binary, case is 
+%%      that was first inserted (e.g. may be an atom or binary, case is
 %%      preserved).
 to_list(T) ->
     F = fun ({K, {array, L}}, Acc) ->
