@@ -40,7 +40,7 @@ digits(Float) ->
         _ ->
             R
     end.
-    
+
 %% @spec frexp(F::float()) -> {Frac::float(), Exp::float()}
 %% @doc  Return the fractional and exponent part of an IEEE 754 double,
 %%       equivalent to the libc function of the same name.
@@ -120,7 +120,7 @@ digits1(Float, Exp, Frac) ->
     case Exp >= 0 of
         true ->
             BExp = 1 bsl Exp,
-            case (Frac /= ?BIG_POW) of
+            case (Frac =/= ?BIG_POW) of
                 true ->
                     scale((Frac * BExp * 2), 2, BExp, BExp,
                           Round, Round, Float);
@@ -129,7 +129,7 @@ digits1(Float, Exp, Frac) ->
                           Round, Round, Float)
             end;
         false ->
-            case (Exp == ?MIN_EXP) orelse (Frac /= ?BIG_POW) of
+            case (Exp =:= ?MIN_EXP) orelse (Frac =/= ?BIG_POW) of
                 true ->
                     scale((Frac * 2), 1 bsl (1 - Exp), 1, 1,
                           Round, Round, Float);
@@ -253,13 +253,54 @@ int_pow_test() ->
     ok.
 
 digits_test() ->
-    "0" = digits(0),
-    "0.0" = digits(0.0),
-    "1.0" = digits(1.0),
-    "-1.0" = digits(-1.0),
-    "0.1" = digits(0.1),
-    "0.01" = digits(0.01),
-    "0.001" = digits(0.001),
+    ?assertEqual("0",
+                 digits(0)),
+    ?assertEqual("0.0",
+                 digits(0.0)),
+    ?assertEqual("1.0",
+                 digits(1.0)),
+    ?assertEqual("-1.0",
+                 digits(-1.0)),
+    ?assertEqual("0.1",
+                 digits(0.1)),
+    ?assertEqual("0.01",
+                 digits(0.01)),
+    ?assertEqual("0.001",
+                 digits(0.001)),
+    ?assertEqual("1.0e+6",
+                 digits(1000000.0)),
+    ?assertEqual("0.5",
+                 digits(0.5)),
+    ?assertEqual("4503599627370496.0",
+                 digits(4503599627370496.0)),
+    %% small denormalized number
+    %% 4.94065645841246544177e-324
+    <<SmallDenorm/float>> = <<0,0,0,0,0,0,0,1>>,
+    ?assertEqual("4.9406564584124654e-324",
+                 digits(SmallDenorm)),
+    ?assertEqual(SmallDenorm,
+                 list_to_float(digits(SmallDenorm))),
+    %% large denormalized number
+    %% 2.22507385850720088902e-308
+    <<BigDenorm/float>> = <<0,15,255,255,255,255,255,255>>,
+    ?assertEqual("2.225073858507201e-308",
+                 digits(BigDenorm)),
+    ?assertEqual(BigDenorm,
+                 list_to_float(digits(BigDenorm))),
+    %% small normalized number
+    %% 2.22507385850720138309e-308
+    <<SmallNorm/float>> = <<0,16,0,0,0,0,0,0>>,
+    ?assertEqual("2.2250738585072014e-308",
+                 digits(SmallNorm)),
+    ?assertEqual(SmallNorm,
+                 list_to_float(digits(SmallNorm))),
+    %% large normalized number
+    %% 1.79769313486231570815e+308
+    <<LargeNorm/float>> = <<127,239,255,255,255,255,255,255>>,
+    ?assertEqual("1.7976931348623157e+308",
+                 digits(LargeNorm)),
+    ?assertEqual(LargeNorm,
+                 list_to_float(digits(LargeNorm))),
     ok.
 
 frexp_test() ->
