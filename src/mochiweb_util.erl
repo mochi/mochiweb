@@ -301,67 +301,11 @@ urlsplit_query([C | Rest], Acc) ->
 %% @spec guess_mime(string()) -> string()
 %% @doc  Guess the mime type of a file by the extension of its filename.
 guess_mime(File) ->
-    case filename:extension(File) of
-        ".html" ->
-            "text/html";
-        ".xhtml" ->
-            "application/xhtml+xml";
-        ".xml" ->
-            "application/xml";
-        ".css" ->
-            "text/css";
-        ".js" ->
-            "application/x-javascript";
-        ".jpg" ->
-            "image/jpeg";
-        ".gif" ->
-            "image/gif";
-        ".png" ->
-            "image/png";
-        ".swf" ->
-            "application/x-shockwave-flash";
-        ".zip" ->
-            "application/zip";
-        ".bz2" ->
-            "application/x-bzip2";
-        ".gz" ->
-            "application/x-gzip";
-        ".tar" ->
-            "application/x-tar";
-        ".tgz" ->
-            "application/x-gzip";
-        ".txt" ->
+    case mochiweb_mime:from_extension(filename:extension(File)) of
+        undefined ->
             "text/plain";
-        ".doc" ->
-            "application/msword";
-        ".pdf" ->
-            "application/pdf";
-        ".xls" ->
-            "application/vnd.ms-excel";
-        ".rtf" ->
-            "application/rtf";
-        ".mov" ->
-            "video/quicktime";
-        ".mp3" ->
-            "audio/mpeg";
-        ".z" ->
-            "application/x-compress";
-        ".wav" ->
-            "audio/x-wav";
-        ".ico" ->
-            "image/x-icon";
-        ".bmp" ->
-            "image/bmp";
-        ".m4a" ->
-            "audio/mpeg";
-        ".m3u" ->
-            "audio/x-mpegurl";
-        ".exe" ->
-            "application/octet-stream";
-        ".csv" ->
-            "text/csv";
-        _ ->
-            "text/plain"
+        Mime ->
+            Mime
     end.
 
 %% @spec parse_header(string()) -> {Type, [{K, V}]}
@@ -429,6 +373,22 @@ shell_quote([C | Rest], Acc) ->
 %%
 -include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+
+-record(test_record, {field1=f1, field2=f2}).
+record_to_proplist_test() ->
+    ?assertEqual(
+       [{'__record', test_record},
+        {field1, f1},
+        {field2, f2}],
+       record_to_proplist(#test_record{}, record_info(fields, test_record))),
+    ?assertEqual(
+       [{'typekey', test_record},
+        {field1, f1},
+        {field2, f2}],
+       record_to_proplist(#test_record{},
+                          record_info(fields, test_record),
+                          typekey)),
+    ok.
 
 shell_quote_test() ->
     "\"foo \\$bar\\\"\\`' baz\"" = shell_quote("foo $bar\"`' baz"),

@@ -14,6 +14,7 @@
         mochiweb_headers,
         mochiweb_html,
         mochiweb_http,
+	mochiweb_mime,
         mochiweb_multipart,
         mochiweb_request,
         mochiweb_response,
