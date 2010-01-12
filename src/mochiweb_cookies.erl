@@ -173,7 +173,7 @@ read_quoted([$\\, Any | Rest], Acc) ->
     read_quoted(Rest, [Any | Acc]);
 read_quoted([C | Rest], Acc) ->
     read_quoted(Rest, [C | Acc]).
-    
+
 skip_whitespace(String) ->
     F = fun (C) -> ?IS_WHITESPACE(C) end,
     lists:dropwhile(F, String).
@@ -206,23 +206,75 @@ any_to_list(V) when is_integer(V) ->
 -include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
 
+quote_test() ->
+    %% ?assertError eunit macro is not compatible with coverage module
+    try quote(":wq")
+    catch error:{cookie_quoting_required, ":wq"} -> ok
+    end,
+    ?assertEqual(
+       "foo",
+       quote(foo)),
+    ok.
+
 parse_cookie_test() ->
     %% RFC example
     C1 = "$Version=\"1\"; Customer=\"WILE_E_COYOTE\"; $Path=\"/acme\";
     Part_Number=\"Rocket_Launcher_0001\"; $Path=\"/acme\";
     Shipping=\"FedEx\"; $Path=\"/acme\"",
-    [
-     {"Customer","WILE_E_COYOTE"},
-     {"Part_Number","Rocket_Launcher_0001"},
-     {"Shipping","FedEx"}
-    ] = parse_cookie(C1),
+    ?assertEqual(
+       [{"Customer","WILE_E_COYOTE"},
+        {"Part_Number","Rocket_Launcher_0001"},
+        {"Shipping","FedEx"}],
+       parse_cookie(C1)),
     %% Potential edge cases
-    [{"foo", "x"}] = parse_cookie("foo=\"\\x\""),
-    [] = parse_cookie("="),
-    [{"foo", ""}, {"bar", ""}] = parse_cookie("  foo ; bar  "),
-    [{"foo", ""}, {"bar", ""}] = parse_cookie("foo=;bar="),
-    [{"foo", "\";"}, {"bar", ""}] = parse_cookie("foo = \"\\\";\";bar "),
-    [{"foo", "\";bar"}] = parse_cookie("foo=\"\\\";bar").
+    ?assertEqual(
+       [{"foo", "x"}],
+       parse_cookie("foo=\"\\x\"")),
+    ?assertEqual(
+       [],
+       parse_cookie("=")),
+    ?assertEqual(
+       [{"foo", ""}, {"bar", ""}],
+       parse_cookie("  foo ; bar  ")),
+    ?assertEqual(
+       [{"foo", ""}, {"bar", ""}],
+       parse_cookie("foo=;bar=")),
+    ?assertEqual(
+       [{"foo", "\";"}, {"bar", ""}],
+       parse_cookie("foo = \"\\\";\";bar ")),
+    ?assertEqual(
+       [{"foo", "\";bar"}],
+       parse_cookie("foo=\"\\\";bar")),
+    ?assertEqual(
+       [],
+       parse_cookie([])),
+    ?assertEqual(
+       [{"foo", "bar"}, {"baz", "wibble"}],
+       parse_cookie("foo=bar , baz=wibble ")),
+    ok.
+
+domain_test() ->
+    ?assertEqual(
+       {"Set-Cookie",
+        "Customer=WILE_E_COYOTE; "
+        "Version=1; "
+        "Domain=acme.com; "
+        "HttpOnly"},
+       cookie("Customer", "WILE_E_COYOTE",
+              [{http_only, true}, {domain, "acme.com"}])),
+    ok.
+
+local_time_test() ->
+    {"Set-Cookie", S} = cookie("Customer", "WILE_E_COYOTE",
+                               [{max_age, 111}, {secure, true}]),
+    ?assertMatch(
+       ["Customer=WILE_E_COYOTE",
+        " Version=1",
+        " Expires=" ++ _,
+        " Max-Age=111",
+        " Secure"],
+       string:tokens(S, ";")),
+    ok.
 
 cookie_test() ->
     C1 = {"Set-Cookie",
@@ -236,7 +288,8 @@ cookie_test() ->
     C1 = cookie(<<"Customer">>, <<"WILE_E_COYOTE">>, [{path, <<"/acme">>}]),
 
     {"Set-Cookie","=NoKey; Version=1"} = cookie("", "NoKey", []),
-        LocalTime = calendar:universal_time_to_local_time({{2007, 5, 15}, {13, 45, 33}}),
+    {"Set-Cookie","=NoKey; Version=1"} = cookie("", "NoKey"),
+    LocalTime = calendar:universal_time_to_local_time({{2007, 5, 15}, {13, 45, 33}}),
     C2 = {"Set-Cookie",
           "Customer=WILE_E_COYOTE; "
           "Version=1; "

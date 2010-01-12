@@ -198,6 +198,52 @@ any_to_list(V) when is_integer(V) ->
 -include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
 
+make_test() ->
+    Identity = make([{hdr, foo}]),
+    ?assertEqual(
+       Identity,
+       make(Identity)).
+
+enter_from_list_test() ->
+    H = make([{hdr, foo}]),
+    ?assertEqual(
+       [{baz, "wibble"}, {hdr, "foo"}],
+       to_list(enter_from_list([{baz, wibble}], H))),
+    ?assertEqual(
+       [{hdr, "bar"}],
+       to_list(enter_from_list([{hdr, bar}], H))),
+    ok.
+
+default_from_list_test() ->
+    H = make([{hdr, foo}]),
+    ?assertEqual(
+       [{baz, "wibble"}, {hdr, "foo"}],
+       to_list(default_from_list([{baz, wibble}], H))),
+    ?assertEqual(
+       [{hdr, "foo"}],
+       to_list(default_from_list([{hdr, bar}], H))),
+    ok.
+
+get_primary_value_test() ->
+    H = make([{hdr, foo}, {baz, <<"wibble;taco">>}]),
+    ?assertEqual(
+       "foo",
+       get_primary_value(hdr, H)),
+    ?assertEqual(
+       undefined,
+       get_primary_value(bar, H)),
+    ?assertEqual(
+       "wibble",
+       get_primary_value(<<"baz">>, H)),
+    ok.
+
+set_cookie_test() ->
+    H = make([{"set-cookie", foo}, {"set-cookie", bar}, {"set-cookie", baz}]),
+    ?assertEqual(
+       [{"set-cookie", "foo"}, {"set-cookie", "bar"}, {"set-cookie", "baz"}],
+       to_list(H)),
+    ok.
+
 headers_test() ->
     H = ?MODULE:make([{hdr, foo}, {"Hdr", "bar"}, {'Hdr', 2}]),
     [{hdr, "foo, bar, 2"}] = ?MODULE:to_list(H),

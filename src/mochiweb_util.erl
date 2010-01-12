@@ -113,24 +113,14 @@ cmd(Argv) ->
 %% @spec cmd_string([string()]) -> string()
 %% @doc Create a shell quoted command string from a list of arguments.
 cmd_string(Argv) ->
-    join([shell_quote(X) || X <- Argv], " ").
+    string:join([shell_quote(X) || X <- Argv], " ").
 
 %% @spec join([string()], Separator) -> string()
-%% @doc Join a list of strings together with the given separator
-%%      string or char.
-join([], _Separator) ->
-    [];
-join([S], _Separator) ->
-    lists:flatten(S);
-join(Strings, Separator) ->
-    lists:flatten(revjoin(lists:reverse(Strings), Separator, [])).
-
-revjoin([], _Separator, Acc) ->
-    Acc;
-revjoin([S | Rest], Separator, []) ->
-    revjoin(Rest, Separator, [S]);
-revjoin([S | Rest], Separator, Acc) ->
-    revjoin(Rest, Separator, [S, Separator | Acc]).
+%% @doc Deprecated, use string:join/2.
+join(Strings, Separator) when is_integer(Separator) ->
+    lists:flatten(string:join(Strings, [Separator]));
+join(Strings, Separator) when is_list(Separator) ->
+    lists:flatten(string:join(Strings, Separator)).
 
 %% @spec quote_plus(atom() | integer() | float() | string() | binary()) -> string()
 %% @doc URL safe encoding of the given term.
@@ -158,10 +148,11 @@ quote_plus([C | Rest], Acc) ->
 %% @spec urlencode([{Key, Value}]) -> string()
 %% @doc URL encode the property list.
 urlencode(Props) ->
-    RevPairs = lists:foldl(fun ({K, V}, Acc) ->
-                                   [[quote_plus(K), $=, quote_plus(V)] | Acc]
-                           end, [], Props),
-    lists:flatten(revjoin(RevPairs, $&, [])).
+    Pairs = lists:foldr(
+              fun ({K, V}, Acc) ->
+                      [quote_plus(K) ++ "=" ++ quote_plus(V) | Acc]
+              end, [], Props),
+    string:join(Pairs, "&").
 
 %% @spec parse_qs(string() | binary()) -> [{Key, Value}]
 %% @doc Parse a query string or application/x-www-form-urlencoded.
@@ -452,8 +443,16 @@ cmd_string_test() ->
     ok.
 
 parse_header_test() ->
-    {"multipart/form-data", [{"boundary", "AaB03x"}]} =
-        parse_header("multipart/form-data; boundary=AaB03x"),
+    ?assertEqual(
+       {"multipart/form-data", [{"boundary", "AaB03x"}]},
+       parse_header("multipart/form-data; boundary=AaB03x")),
+    %% This tests (currently) intentionally broken behavior
+    ?assertEqual(
+       {"multipart/form-data",
+        [{"b", ""},
+         {"cgi", "is"},
+         {"broken", "true\"e"}]},
+       parse_header("multipart/form-data;b=;cgi=\"i\\s;broken=true\"e;=z;z")),
     ok.
 
 guess_mime_test() ->
@@ -502,12 +501,18 @@ urlunsplit_path_test() ->
     ok.
 
 join_test() ->
-    "foo,bar,baz" = join(["foo", "bar", "baz"], $,),
-    "foo,bar,baz" = join(["foo", "bar", "baz"], ","),
-    "foo bar" = join([["foo", " bar"]], ","),
-    "foo bar,baz" = join([["foo", " bar"], "baz"], ","),
-    "foo" = join(["foo"], ","),
-    "foobarbaz" = join(["foo", "bar", "baz"], ""),
+    ?assertEqual("foo,bar,baz",
+                  join(["foo", "bar", "baz"], $,)),
+    ?assertEqual("foo,bar,baz",
+                  join(["foo", "bar", "baz"], ",")),
+    ?assertEqual("foo bar",
+                  join([["foo", " bar"]], ",")),
+    ?assertEqual("foo bar,baz",
+                  join([["foo", " bar"], "baz"], ",")),
+    ?assertEqual("foo",
+                  join(["foo"], ",")),
+    ?assertEqual("foobarbaz",
+                  join(["foo", "bar", "baz"], "")),
     ok.
 
 quote_plus_test() ->
@@ -519,12 +524,18 @@ quote_plus_test() ->
     "foo%0A" = quote_plus("foo\n"),
     "foo%0A" = quote_plus("foo\n"),
     "foo%3B%26%3D" = quote_plus("foo;&="),
+    "foo%3B%26%3D" = quote_plus(<<"foo;&=">>),
     ok.
 
 unquote_test() ->
-    "foo bar" = unquote("foo+bar"),
-    "foo bar" = unquote("foo%20bar"),
-    "foo\r\n" = unquote("foo%0D%0A"),
+    ?assertEqual("foo bar",
+                 unquote("foo+bar")),
+    ?assertEqual("foo bar",
+                 unquote("foo%20bar")),
+    ?assertEqual("foo\r\n",
+                 unquote("foo%0D%0A")),
+    ?assertEqual("foo\r\n",
+                 unquote(<<"foo%0D%0A">>)),
     ok.
 
 urlencode_test() ->
@@ -534,8 +545,21 @@ urlencode_test() ->
     ok.
 
 parse_qs_test() ->
-    [{"foo", "bar"}, {"baz", "wibble \r\n"}, {"z", "1"}] =
-        parse_qs("foo=bar&baz=wibble+%0D%0A&z=1"),
+    ?assertEqual(
+       [{"foo", "bar"}, {"baz", "wibble \r\n"}, {"z", "1"}],
+       parse_qs("foo=bar&baz=wibble+%0D%0a&z=1")),
+    ?assertEqual(
+       [{"", "bar"}, {"baz", "wibble \r\n"}, {"z", ""}],
+       parse_qs("=bar&baz=wibble+%0D%0a&z=")),
+    ?assertEqual(
+       [{"foo", "bar"}, {"baz", "wibble \r\n"}, {"z", "1"}],
+       parse_qs(<<"foo=bar&baz=wibble+%0D%0a&z=1">>)),
+    ?assertEqual(
+       [],
+       parse_qs("")),
+    ?assertEqual(
+       [{"foo", ""}, {"bar", ""}, {"baz", ""}],
+       parse_qs("foo;bar&baz")),
     ok.
 
 partition_test() ->
