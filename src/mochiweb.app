@@ -10,6 +10,7 @@
         mochiweb_app,
         mochiweb_charref,
         mochiweb_cookies,
+	mochiweb_cover,
         mochiweb_echo,
         mochiweb_headers,
         mochiweb_html,
