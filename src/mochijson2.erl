@@ -677,4 +677,62 @@ inline_json_test() ->
                            [{key, {json, [<<"\"iodata">>, " iodata\""]}}]}))),
     ok.
 
+big_unicode_test() ->
+    UTF8Seq = list_to_binary(xmerl_ucs:to_utf8(16#0001d120)),
+    ?assertEqual(
+       <<"\"\\ud834\\udd20\"">>,
+       iolist_to_binary(encode(UTF8Seq))),
+    ?assertEqual(
+       UTF8Seq,
+       decode(iolist_to_binary(encode(UTF8Seq)))),
+    ok.
+
+custom_decoder_test() ->
+    ?assertEqual(
+       {struct, [{<<"key">>, <<"value">>}]},
+       (decoder([]))("{\"key\": \"value\"}")),
+    F = fun ({struct, [{<<"key">>, <<"value">>}]}) -> win end,
+    ?assertEqual(
+       win,
+       (decoder([{object_hook, F}]))("{\"key\": \"value\"}")),
+    ok.
+
+atom_test() ->
+    %% JSON native atoms
+    [begin
+         ?assertEqual(A, decode(atom_to_list(A))),
+         ?assertEqual(iolist_to_binary(atom_to_list(A)),
+                      iolist_to_binary(encode(A)))
+     end || A <- [true, false, null]],
+    %% Atom to string
+    ?assertEqual(
+       <<"\"foo\"">>,
+       iolist_to_binary(encode(foo))),
+    ?assertEqual(
+       <<"\"\\ud834\\udd20\"">>,
+       iolist_to_binary(encode(list_to_atom(xmerl_ucs:to_utf8(16#0001d120))))),
+    ok.
+
+key_encode_test() ->
+    %% Some forms are accepted as keys that would not be strings in other
+    %% cases
+    ?assertEqual(
+       <<"{\"foo\":1}">>,
+       iolist_to_binary(encode({struct, [{foo, 1}]}))),
+    ?assertEqual(
+       <<"{\"foo\":1}">>,
+       iolist_to_binary(encode({struct, [{<<"foo">>, 1}]}))),
+    ?assertEqual(
+       <<"{\"foo\":1}">>,
+       iolist_to_binary(encode({struct, [{"foo", 1}]}))),
+    ?assertEqual(
+       <<"{\"1\":1}">>,
+       iolist_to_binary(encode({struct, [{1, 1}]}))),
+    ok.
+
+float_fallback_test() ->
+    ?assertEqual(<<"-2147483649.0">>, iolist_to_binary(encode(-2147483649))),
+    ?assertEqual(<<"2147483648.0">>, iolist_to_binary(encode(2147483648))),
+    ok.
+
 -endif.
