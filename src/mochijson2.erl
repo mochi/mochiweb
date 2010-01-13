@@ -204,12 +204,10 @@ json_bin_is_safe(<<C, Rest/binary>>) ->
             false;
         $\t ->
             false;
-        C when C >= 0, C < $\s; C >= 16#7f, C =< 16#10FFFF ->
+        C when C >= 0, C < $\s; C >= 16#7f ->
             false;
         C when C < 16#7f ->
-            json_bin_is_safe(Rest);
-        _ ->
-            false
+            json_bin_is_safe(Rest)
     end.
 
 json_encode_string_unicode([], _State, Acc) ->
@@ -524,19 +522,13 @@ obj_new() ->
     {struct, []}.
 
 is_obj({struct, Props}) ->
-    F = fun ({K, _}) when is_binary(K) ->
-                true;
-            (_) ->
-                false
-        end,
+    F = fun ({K, _}) when is_binary(K) -> true end,
     lists:all(F, Props).
 
 obj_from_list(Props) ->
     Obj = {struct, Props},
-    case is_obj(Obj) of
-        true -> Obj;
-        false -> exit({json_bad_object, Obj})
-    end.
+    ?assert(is_obj(Obj)),
+    Obj.
 
 %% Test for equivalence of Erlang terms.
 %% Due to arbitrary order of construction, equivalent objects might
@@ -549,9 +541,7 @@ equiv(L1, L2) when is_list(L1), is_list(L2) ->
     equiv_list(L1, L2);
 equiv(N1, N2) when is_number(N1), is_number(N2) -> N1 == N2;
 equiv(B1, B2) when is_binary(B1), is_binary(B2) -> B1 == B2;
-equiv(true, true) -> true;
-equiv(false, false) -> true;
-equiv(null, null) -> true.
+equiv(A, A) when A =:= true orelse A =:= false orelse A =:= null -> true.
 
 %% Object representation and traversal order is unknown.
 %% Use the sledgehammer and sort property lists.
@@ -663,9 +653,13 @@ input_validation_test() ->
         %% we don't support code points > 10FFFF per RFC 3629
         <<?Q, 16#F5, 16#80, 16#80, 16#80, ?Q>>
     ],
-    lists:foreach(fun(X) ->
-        ok = try decode(X) catch invalid_utf8 -> ok end
-    end, Bad).
+    lists:foreach(
+      fun(X) ->
+              ok = try decode(X) catch invalid_utf8 -> ok end,
+              %% could be {ucs,{bad_utf8_character_code}} or
+              %%          {json_encode,{bad_char,_}}
+              {'EXIT', _} = (catch encode(X))
+      end, Bad).
 
 inline_json_test() ->
     ?assertEqual(<<"\"iodata iodata\"">>,
@@ -726,13 +720,63 @@ key_encode_test() ->
        <<"{\"foo\":1}">>,
        iolist_to_binary(encode({struct, [{"foo", 1}]}))),
     ?assertEqual(
+       <<"{\"\\ud834\\udd20\":1}">>,
+       iolist_to_binary(
+         encode({struct, [{[16#0001d120], 1}]}))),
+    ?assertEqual(
        <<"{\"1\":1}">>,
        iolist_to_binary(encode({struct, [{1, 1}]}))),
+    ok.
+
+unsafe_chars_test() ->
+    Chars = "\"\\\b\f\n\r\t",
+    [begin
+         ?assertEqual(false, json_string_is_safe([C])),
+         ?assertEqual(false, json_bin_is_safe(<<C>>)),
+         ?assertEqual(<<C>>, decode(encode(<<C>>)))
+     end || C <- Chars],
+    ?assertEqual(
+       false,
+       json_string_is_safe([16#0001d120])),
+    ?assertEqual(
+       false,
+       json_bin_is_safe(list_to_binary(xmerl_ucs:to_utf8(16#0001d120)))),
+    ?assertEqual(
+       [16#0001d120],
+       xmerl_ucs:from_utf8(
+         binary_to_list(
+           decode(encode(list_to_atom(xmerl_ucs:to_utf8(16#0001d120))))))),
+    ?assertEqual(
+       false,
+       json_string_is_safe([16#110000])),
+    ?assertEqual(
+       false,
+       json_bin_is_safe(list_to_binary(xmerl_ucs:to_utf8([16#110000])))),
+    %% solidus can be escaped but isn't unsafe by default
+    ?assertEqual(
+       <<"/">>,
+       decode(<<"\"\\/\"">>)),
+    ok.
+
+int_test() ->
+    ?assertEqual(0, decode("0")),
+    ?assertEqual(1, decode("1")),
+    ?assertEqual(11, decode("11")),
     ok.
 
 float_fallback_test() ->
     ?assertEqual(<<"-2147483649.0">>, iolist_to_binary(encode(-2147483649))),
     ?assertEqual(<<"2147483648.0">>, iolist_to_binary(encode(2147483648))),
+    ok.
+
+handler_test() ->
+    ?assertEqual(
+       {'EXIT',{json_encode,{bad_term,{}}}},
+       catch encode({})),
+    F = fun ({}) -> [] end,
+    ?assertEqual(
+       <<"[]">>,
+       iolist_to_binary((encoder([{handler, F}]))({}))),
     ok.
 
 -endif.
