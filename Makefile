@@ -1,4 +1,4 @@
-all:
+all: ebin/
 	(cd src;$(MAKE) all)
 
 edoc:
@@ -15,3 +15,6 @@ clean_plt:
 
 dialyzer:
 	(cd src;$(MAKE) dialyzer)
+
+ebin/:
+	@mkdir -p ebin
