@@ -10,7 +10,8 @@
 -export([after_response/2, reentry/1]).
 -export([parse_range_request/1, range_skip_length/2]).
 
--define(IDLE_TIMEOUT, 30000).
+-define(REQUEST_RECV_TIMEOUT, 300000).   % timeout waiting for request line
+-define(HEADERS_RECV_TIMEOUT, 30000). % timeout waiting for headers
 
 -define(MAX_HEADERS, 1000).
 -define(DEFAULTS, [{name, ?MODULE},
@@ -100,7 +101,7 @@ loop(Socket, Body) ->
     request(Socket, Body).
 
 request(Socket, Body) ->
-    case gen_tcp:recv(Socket, 0, ?IDLE_TIMEOUT) of
+    case gen_tcp:recv(Socket, 0, ?REQUEST_RECV_TIMEOUT) of
         {ok, {http_request, Method, Path, Version}} ->
             headers(Socket, {Method, Path, Version}, [], Body, 0);
         {error, {http_error, "\r\n"}} ->
@@ -108,6 +109,9 @@ request(Socket, Body) ->
         {error, {http_error, "\n"}} ->
             request(Socket, Body);
         {error, closed} ->
+            gen_tcp:close(Socket),
+            exit(normal);
+        {error, timeout} ->
             gen_tcp:close(Socket),
             exit(normal);
         _Other ->
@@ -124,7 +128,7 @@ headers(Socket, Request, Headers, _Body, ?MAX_HEADERS) ->
     inet:setopts(Socket, [{packet, raw}]),
     handle_invalid_request(Socket, Request, Headers);
 headers(Socket, Request, Headers, Body, HeaderCount) ->
-    case gen_tcp:recv(Socket, 0, ?IDLE_TIMEOUT) of
+    case gen_tcp:recv(Socket, 0, ?HEADERS_RECV_TIMEOUT) of
         {ok, http_eoh} ->
             inet:setopts(Socket, [{packet, raw}]),
             Req = mochiweb:new_request({Socket, Request,
