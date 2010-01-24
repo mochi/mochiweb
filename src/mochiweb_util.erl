@@ -224,24 +224,33 @@ urlsplit(Url) ->
     {Scheme, Netloc, Path, Query, Fragment}.
 
 urlsplit_scheme(Url) ->
-    urlsplit_scheme(Url, []).
+    case urlsplit_scheme(Url, []) of
+        no_scheme ->
+            {"", Url};
+        Res ->
+            Res
+    end.
 
-urlsplit_scheme([], Acc) ->
-    {"", lists:reverse(Acc)};
-urlsplit_scheme(":" ++ Rest, Acc) ->
+urlsplit_scheme([C | Rest], Acc) when ((C >= $a andalso C =< $z) orelse
+                                       (C >= $A andalso C =< $Z) orelse
+                                       (C >= $0 andalso C =< $9) orelse
+                                       C =:= $+ orelse C =:= $- orelse
+                                       C =:= $.) ->
+    urlsplit_scheme(Rest, [C | Acc]);
+urlsplit_scheme([$: | Rest], Acc=[_ | _]) ->
     {string:to_lower(lists:reverse(Acc)), Rest};
-urlsplit_scheme([C | Rest], Acc) ->
-    urlsplit_scheme(Rest, [C | Acc]).
+urlsplit_scheme(_Rest, _Acc) ->
+    no_scheme.
 
 urlsplit_netloc("//" ++ Rest) ->
     urlsplit_netloc(Rest, []);
 urlsplit_netloc(Path) ->
     {"", Path}.
 
+urlsplit_netloc("", Acc) ->
+    {lists:reverse(Acc), ""};
 urlsplit_netloc(Rest=[C | _], Acc) when C =:= $/; C =:= $?; C =:= $# ->
     {lists:reverse(Acc), Rest};
-urlsplit_netloc([C], Acc) ->
-    {lists:reverse([C | Acc]), ""};
 urlsplit_netloc([C | Rest], Acc) ->
     urlsplit_netloc(Rest, [C | Acc]).
 
@@ -569,6 +578,8 @@ urlsplit_test() ->
     {"http", "host:port", "/foo", "", "bar?baz"} =
         urlsplit("http://host:port/foo#bar?baz"),
     {"http", "host", "", "", ""} = urlsplit("http://host"),
+    {"", "", "/wiki/Category:Fruit", "", ""} =
+        urlsplit("/wiki/Category:Fruit"),
     ok.
 
 urlsplit_path_test() ->
