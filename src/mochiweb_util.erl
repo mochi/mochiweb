@@ -240,6 +240,8 @@ urlsplit_netloc(Path) ->
 
 urlsplit_netloc(Rest=[C | _], Acc) when C =:= $/; C =:= $?; C =:= $# ->
     {lists:reverse(Acc), Rest};
+urlsplit_netloc([C], Acc) ->
+    {lists:reverse([C | Acc]), ""};
 urlsplit_netloc([C | Rest], Acc) ->
     urlsplit_netloc(Rest, [C | Acc]).
 
@@ -566,6 +568,7 @@ urlsplit_test() ->
     {"", "", "/foo", "", "bar?baz"} = urlsplit("/foo#bar?baz"),
     {"http", "host:port", "/foo", "", "bar?baz"} =
         urlsplit("http://host:port/foo#bar?baz"),
+    {"http", "host", "", "", ""} = urlsplit("http://host"),
     ok.
 
 urlsplit_path_test() ->
