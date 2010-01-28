@@ -699,9 +699,8 @@ range_parts(Body0, Ranges) ->
         end,
     {lists:foldr(F, [], Ranges), Size}.
 
-%% @spec accepted_encodings([encoding()]) -> [encoding()] | error()
-%% @type encoding() -> string()
-%% @type error() -> bad_accept_encoding_value
+%% @spec accepted_encodings([encoding()]) -> [encoding()] | bad_accept_encoding_value
+%% @type encoding() = string().
 %%
 %% @doc Returns a list of encodings accepted by a request. Encodings that are
 %%      not supported by the server will not be included in the return list.

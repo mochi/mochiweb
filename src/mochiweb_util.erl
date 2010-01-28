@@ -381,11 +381,9 @@ shell_quote([C | Rest], Acc) when C =:= $\" orelse C =:= $\` orelse
 shell_quote([C | Rest], Acc) ->
     shell_quote(Rest, [C | Acc]).
 
-%% @spec parse_qvalues(string()) -> [qvalue()] | error()
-%% @type qvalue() -> {element(), q()}
-%% @type element() -> string()
-%% @type q() -> 0.0 .. 1.0
-%% @type error() -> invalid_qvalue_string
+%% @spec parse_qvalues(string()) -> [qvalue()] | invalid_qvalue_string
+%% @type qvalue() = {encoding(), float()}.
+%% @type encoding() = string().
 %%
 %% @doc Parses a list (given as a string) of elements with Q values associated
 %%      to them. Elements are separated by commas and each element is separated
@@ -434,11 +432,8 @@ parse_qvalues(QValuesStr) ->
             invalid_qvalue_string
     end.
 
-%% @spec pick_accepted_encodings(qvalues(), [encoding()], encoding()) ->
+%% @spec pick_accepted_encodings([qvalue()], [encoding()], encoding()) ->
 %%    [encoding()]
-%% @type qvalues() -> [ {encoding(), q()} ]
-%% @type encoding() -> string()
-%% @type q() -> 0.0 .. 1.0
 %%
 %% @doc Determines which encodings specified in the given Q values list are
 %%      valid according to a list of supported encodings and a default encoding.
