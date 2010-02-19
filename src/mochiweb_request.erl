@@ -97,7 +97,14 @@ get(path) ->
             Cached
     end;
 get(body_length) ->
-    erlang:get(?SAVE_BODY_LENGTH);
+    case erlang:get(?SAVE_BODY_LENGTH) of
+        undefined ->
+            BodyLength = body_length(),
+            put(?SAVE_BODY_LENGTH, {cached, BodyLength}),
+            BodyLength;
+        {cached, Cached} ->
+            Cached
+    end;
 get(range) ->
     case get_header_value(range) of
         undefined ->
