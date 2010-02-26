@@ -157,7 +157,9 @@ gen_tcp_listen(Port, Opts, State) ->
     end.
 
 new_acceptor(State=#mochiweb_socket_server{max=0}) ->
-    io:format("Not accepting new connections~n"),
+    error_logger:error_report(
+      [{application, mochiweb},
+       "Not accepting new connections"]),
     State#mochiweb_socket_server{acceptor=null};
 new_acceptor(State=#mochiweb_socket_server{listen=Listen,loop=Loop}) ->
     Pid = proc_lib:spawn_link(?MODULE, acceptor_loop,
