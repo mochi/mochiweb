@@ -26,7 +26,8 @@
         reloader,
         mochifmt,
         mochifmt_std,
-        mochifmt_records
+        mochifmt_records,
+	mochiutf8
 	    ]},
   {registered, []},
   {mod, {mochiweb_app, []}},
