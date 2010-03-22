@@ -213,6 +213,9 @@ to_tokens([{Tag0, [T0={'=', _C0} | R1]} | Rest], Acc) ->
 to_tokens([{Tag0, [T0={comment, _C0} | R1]} | Rest], Acc) ->
     %% Allow {comment, iolist()}
     to_tokens([{Tag0, R1} | Rest], [T0 | Acc]);
+to_tokens([{Tag0, [T0={pi, _S0, _A0} | R1]} | Rest], Acc) ->
+    %% Allow {pi, binary(), list()}
+    to_tokens([{Tag0, R1} | Rest], [T0 | Acc]);
 to_tokens([{Tag0, [{T0, A0=[{_, _} | _]} | R1]} | Rest], Acc) ->
     %% Allow {p, [{"class", "foo"}]}
     to_tokens([{Tag0, [{T0, A0, []} | R1]} | Rest], Acc);
@@ -682,6 +685,14 @@ to_html_test() ->
                          [<<"html">>, <<"PUBLIC">>,
                           <<"-//W3C//DTD XHTML 1.0 Transitional//EN">>,
                           <<"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">>]})),
+
+    Expect2 = <<"<html><?xml:namespace prefix=\"o\" ns=\"urn:schemas-microsoft-com:office:office\"?></html>">>,
+
+    Expect2 = iolist_to_binary(
+                to_html({<<"html">>,[],
+                         [{pi, <<"xml:namespace">>,
+                          [{<<"prefix">>,<<"o">>},
+                           {<<"ns">>,<<"urn:schemas-microsoft-com:office:office">>}]}]})),
     ok.
 
 escape_test() ->
@@ -725,6 +736,10 @@ tokens_test() ->
      {data, <<"<html></body>">>, false},
      {end_tag, <<"textarea">>}] =
         tokens(<<"<textarea><html></body></textarea>">>),
+    [{pi, <<"xml:namespace">>,
+     [{<<"prefix">>,<<"o">>},
+     {<<"ns">>,<<"urn:schemas-microsoft-com:office:office">>}]}]=
+        tokens(<<"<?xml:namespace prefix=\"o\" ns=\"urn:schemas-microsoft-com:office:office\"?>">>),
     ok.
 
 parse_test() ->
