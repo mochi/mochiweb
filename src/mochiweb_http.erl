@@ -17,24 +17,13 @@
 -define(DEFAULTS, [{name, ?MODULE},
                    {port, 8888}]).
 
-set_default({Prop, Value}, PropList) ->
-    case proplists:is_defined(Prop, PropList) of
-        true ->
-            PropList;
-        false ->
-            [{Prop, Value} | PropList]
-    end.
-
-set_defaults(Defaults, PropList) ->
-    lists:foldl(fun set_default/2, PropList, Defaults).
-
 parse_options(Options) ->
     {loop, HttpLoop} = proplists:lookup(loop, Options),
     Loop = fun (S) ->
                    ?MODULE:loop(S, HttpLoop)
            end,
     Options1 = [{loop, Loop} | proplists:delete(loop, Options)],
-    set_defaults(?DEFAULTS, Options1).
+    mochilists:set_defaults(?DEFAULTS, Options1).
 
 stop() ->
     mochiweb_socket_server:stop(?MODULE).

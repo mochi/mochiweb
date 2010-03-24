@@ -5,6 +5,7 @@
         mochihex,
         mochijson,
         mochijson2,
+	mochilists,
         mochinum,
         mochiweb,
         mochiweb_app,

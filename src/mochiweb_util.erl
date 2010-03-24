@@ -532,6 +532,35 @@ shell_quote_test() ->
     "\"foo \\$bar\\\"\\`' baz\"" = shell_quote("foo $bar\"`' baz"),
     ok.
 
+cmd_port_test_spool(Port, Acc) ->
+    receive
+	{Port, eof} ->
+	    Acc;
+	{Port, {data, {eol, Data}}} ->
+            cmd_port_test_spool(Port, ["\n", Data | Acc]);
+        {Port, Unknown} ->
+            throw({unknown, Unknown})
+    after 100 ->
+            throw(timeout)
+    end.
+
+cmd_port_test() ->
+    Port = cmd_port(["echo", "$bling$ `word`!"],
+                    [eof, stream, {line, 4096}]),
+    Res = try lists:append(lists:reverse(cmd_port_test_spool(Port, [])))
+          after catch port_close(Port)
+          end,
+    self() ! {Port, wtf},
+    try cmd_port_test_spool(Port, [])
+    catch throw:{unknown, wtf} -> ok
+    end,
+    try cmd_port_test_spool(Port, [])
+    catch throw:timeout -> ok
+    end,
+    ?assertEqual(
+       "$bling$ `word`!\n",
+       Res).
+
 cmd_test() ->
     "$bling$ `word`!\n" = cmd(["echo", "$bling$ `word`!"]),
     ok.
