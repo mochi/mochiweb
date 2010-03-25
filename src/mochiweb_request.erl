@@ -9,7 +9,6 @@
 -include_lib("kernel/include/file.hrl").
 
 -define(QUIP, "Any of you quaids got a smint?").
--define(READ_SIZE, 8192).
 
 -export([get_header_value/1, get_primary_header_value/1, get/1, dump/0]).
 -export([send/1, recv/1, recv/2, recv_body/0, recv_body/1, stream_body/3]).
@@ -248,7 +247,7 @@ start_response({Code, ResponseHeaders}) ->
 %%      ResponseHeaders.
 start_raw_response({Code, ResponseHeaders}) ->
     F = fun ({K, V}, Acc) ->
-                [make_io(K), <<": ">>, V, <<"\r\n">> | Acc]
+                [mochiweb_util:make_io(K), <<": ">>, V, <<"\r\n">> | Acc]
         end,
     End = lists:foldl(F, [<<"\r\n">>],
                       mochiweb_headers:to_list(ResponseHeaders)),
@@ -272,13 +271,13 @@ start_response_length({Code, ResponseHeaders, Length}) ->
 %%      will be set by the Body length, and the server will insert header
 %%      defaults.
 respond({Code, ResponseHeaders, {file, IoDevice}}) ->
-    Length = iodevice_size(IoDevice),
+    Length = mochiweb_io:iodevice_size(IoDevice),
     Response = start_response_length({Code, ResponseHeaders, Length}),
     case Method of
         'HEAD' ->
             ok;
         _ ->
-            iodevice_stream(IoDevice)
+            mochiweb_io:iodevice_stream(fun send/1, IoDevice)
     end,
     Response;
 respond({Code, ResponseHeaders, chunked}) ->
@@ -351,7 +350,7 @@ ok({ContentType, ResponseHeaders, Body}) ->
                     respond({200, HResponse1, Body});
                 PartList ->
                     {RangeHeaders, RangeBody} =
-                        parts_to_body(PartList, ContentType, Size),
+                        mochiweb_multipart:parts_to_body(PartList, ContentType, Size),
                     HResponse1 = mochiweb_headers:enter_from_list(
                                    [{"Accept-Ranges", "bytes"} |
                                     RangeHeaders],
@@ -612,13 +611,6 @@ server_headers() ->
     [{"Server", "MochiWeb/1.0 (" ++ ?QUIP ++ ")"},
      {"Date", httpd_util:rfc1123_date()}].
 
-make_io(Atom) when is_atom(Atom) ->
-    atom_to_list(Atom);
-make_io(Integer) when is_integer(Integer) ->
-    integer_to_list(Integer);
-make_io(Io) when is_list(Io); is_binary(Io) ->
-    Io.
-
 make_code(X) when is_integer(X) ->
     [integer_to_list(X), [" " | httpd_util:reason_phrase(X)]];
 make_code(Io) when is_list(Io); is_binary(Io) ->
@@ -629,54 +621,8 @@ make_version({1, 0}) ->
 make_version(_) ->
     <<"HTTP/1.1 ">>.
 
-iodevice_stream(IoDevice) ->
-    case file:read(IoDevice, ?READ_SIZE) of
-        eof ->
-            ok;
-        {ok, Data} ->
-            ok = send(Data),
-            iodevice_stream(IoDevice)
-    end.
-
-
-parts_to_body([{Start, End, Body}], ContentType, Size) ->
-    %% return body for a range reponse with a single body
-    HeaderList = [{"Content-Type", ContentType},
-                  {"Content-Range",
-                   ["bytes ",
-                    make_io(Start), "-", make_io(End),
-                    "/", make_io(Size)]}],
-    {HeaderList, Body};
-parts_to_body(BodyList, ContentType, Size) when is_list(BodyList) ->
-    %% return
-    %% header Content-Type: multipart/byteranges; boundary=441934886133bdee4
-    %% and multipart body
-    Boundary = mochihex:to_hex(crypto:rand_bytes(8)),
-    HeaderList = [{"Content-Type",
-                   ["multipart/byteranges; ",
-                    "boundary=", Boundary]}],
-    MultiPartBody = multipart_body(BodyList, ContentType, Boundary, Size),
-
-    {HeaderList, MultiPartBody}.
-
-multipart_body([], _ContentType, Boundary, _Size) ->
-    ["--", Boundary, "--\r\n"];
-multipart_body([{Start, End, Body} | BodyList], ContentType, Boundary, Size) ->
-    ["--", Boundary, "\r\n",
-     "Content-Type: ", ContentType, "\r\n",
-     "Content-Range: ",
-         "bytes ", make_io(Start), "-", make_io(End),
-             "/", make_io(Size), "\r\n\r\n",
-     Body, "\r\n"
-     | multipart_body(BodyList, ContentType, Boundary, Size)].
-
-iodevice_size(IoDevice) ->
-    {ok, Size} = file:position(IoDevice, eof),
-    {ok, 0} = file:position(IoDevice, bof),
-    Size.
-
 range_parts({file, IoDevice}, Ranges) ->
-    Size = iodevice_size(IoDevice),
+    Size = mochiweb_io:iodevice_size(IoDevice),
     F = fun (Spec, Acc) ->
                 case mochiweb_http:range_skip_length(Spec, Size) of
                     invalid_range ->

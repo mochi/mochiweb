@@ -13,6 +13,7 @@
 -export([record_to_proplist/2, record_to_proplist/3]).
 -export([safe_relative_path/1, partition/2]).
 -export([parse_qvalues/1, pick_accepted_encodings/3]).
+-export([make_io/1]).
 
 -define(PERCENT, 37).  % $\%
 -define(FULLSTOP, 46). % $\.
@@ -506,11 +507,33 @@ pick_accepted_encodings(AcceptedEncs, SupportedEncs, DefaultEnc) ->
     [E || E <- Accepted2, lists:member(E, SupportedEncs),
         not lists:member(E, Refused1)].
 
+make_io(Atom) when is_atom(Atom) ->
+    atom_to_list(Atom);
+make_io(Integer) when is_integer(Integer) ->
+    integer_to_list(Integer);
+make_io(Io) when is_list(Io); is_binary(Io) ->
+    Io.
+
 %%
 %% Tests
 %%
 -include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+
+make_io_test() ->
+    ?assertEqual(
+       <<"atom">>,
+       iolist_to_binary(make_io(atom))),
+    ?assertEqual(
+       <<"20">>,
+       iolist_to_binary(make_io(20))),
+    ?assertEqual(
+       <<"list">>,
+       iolist_to_binary(make_io("list"))),
+    ?assertEqual(
+       <<"binary">>,
+       iolist_to_binary(make_io(<<"binary">>))),
+    ok.
 
 -record(test_record, {field1=f1, field2=f2}).
 record_to_proplist_test() ->

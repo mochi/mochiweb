@@ -8,12 +8,44 @@
 
 -export([parse_form/1, parse_form/2]).
 -export([parse_multipart_request/2]).
+-export([parts_to_body/3]).
 
 -define(CHUNKSIZE, 4096).
 
 -record(mp, {state, boundary, length, buffer, callback, req}).
 
 %% TODO: DOCUMENT THIS MODULE.
+
+parts_to_body([{Start, End, Body}], ContentType, Size) ->
+    %% return body for a range reponse with a single body
+    HeaderList = [{"Content-Type", ContentType},
+                  {"Content-Range",
+                   ["bytes ",
+                    mochiweb_util:make_io(Start), "-", mochiweb_util:make_io(End),
+                    "/", mochiweb_util:make_io(Size)]}],
+    {HeaderList, Body};
+parts_to_body(BodyList, ContentType, Size) when is_list(BodyList) ->
+    %% return
+    %% header Content-Type: multipart/byteranges; boundary=441934886133bdee4
+    %% and multipart body
+    Boundary = mochihex:to_hex(crypto:rand_bytes(8)),
+    HeaderList = [{"Content-Type",
+                   ["multipart/byteranges; ",
+                    "boundary=", Boundary]}],
+    MultiPartBody = multipart_body(BodyList, ContentType, Boundary, Size),
+
+    {HeaderList, MultiPartBody}.
+
+multipart_body([], _ContentType, Boundary, _Size) ->
+    ["--", Boundary, "--\r\n"];
+multipart_body([{Start, End, Body} | BodyList], ContentType, Boundary, Size) ->
+    ["--", Boundary, "\r\n",
+     "Content-Type: ", ContentType, "\r\n",
+     "Content-Range: ",
+         "bytes ", mochiweb_util:make_io(Start), "-", mochiweb_util:make_io(End),
+             "/", mochiweb_util:make_io(Size), "\r\n\r\n",
+     Body, "\r\n"
+     | multipart_body(BodyList, ContentType, Boundary, Size)].
 
 parse_form(Req) ->
     parse_form(Req, fun default_file_handler/2).
