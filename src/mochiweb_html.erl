@@ -89,6 +89,7 @@ to_tokens(T={doctype, _}) ->
 to_tokens(T={comment, _}) ->
     [T];
 to_tokens({Tag0, Acc}) ->
+    %% This is only allowed in sub-tags: {p, [{"class", "foo"}]}
     to_tokens({Tag0, [], Acc});
 to_tokens({Tag0, Attrs, Acc}) ->
     Tag = to_tag(Tag0),
@@ -670,76 +671,110 @@ tokenize_textarea(Bin, S=#decoder{offset=O}, Start) ->
 -ifdef(TEST).
 
 to_html_test() ->
-    Expect = <<"<html><head><title>hey!</title></head><body><p class=\"foo\">what's up<br /></p><div>sucka</div><!-- comment! --></body></html>">>,
-    Expect = iolist_to_binary(
-               to_html({html, [],
-                        [{<<"head">>, [],
-                          [{title, <<"hey!">>}]},
-                         {body, [],
-                          [{p, [{class, foo}], [<<"what's">>, <<" up">>, {br}]},
-                           {'div', <<"sucka">>},
-                           {comment, <<" comment! ">>}]}]})),
-    Expect1 = <<"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">">>,
-    Expect1 = iolist_to_binary(
-                to_html({doctype,
-                         [<<"html">>, <<"PUBLIC">>,
-                          <<"-//W3C//DTD XHTML 1.0 Transitional//EN">>,
-                          <<"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">>]})),
-
-    Expect2 = <<"<html><?xml:namespace prefix=\"o\" ns=\"urn:schemas-microsoft-com:office:office\"?></html>">>,
-
-    Expect2 = iolist_to_binary(
-                to_html({<<"html">>,[],
-                         [{pi, <<"xml:namespace">>,
-                          [{<<"prefix">>,<<"o">>},
-                           {<<"ns">>,<<"urn:schemas-microsoft-com:office:office">>}]}]})),
+    ?assertEqual(
+       <<"<html><head><title>hey!</title></head><body><p class=\"foo\">what's up<br /></p><div>sucka</div>RAW!<!-- comment! --></body></html>">>,
+       iolist_to_binary(
+         to_html({html, [],
+                  [{<<"head">>, [],
+                    [{title, <<"hey!">>}]},
+                   {body, [],
+                    [{p, [{class, foo}], [<<"what's">>, <<" up">>, {br}]},
+                     {'div', <<"sucka">>},
+                     {'=', <<"RAW!">>},
+                     {comment, <<" comment! ">>}]}]}))),
+    ?assertEqual(
+       <<"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">">>,
+       iolist_to_binary(
+         to_html({doctype,
+                  [<<"html">>, <<"PUBLIC">>,
+                   <<"-//W3C//DTD XHTML 1.0 Transitional//EN">>,
+                   <<"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">>]}))),
+    ?assertEqual(
+       <<"<html><?xml:namespace prefix=\"o\" ns=\"urn:schemas-microsoft-com:office:office\"?></html>">>,
+       iolist_to_binary(
+         to_html({<<"html">>,[],
+                  [{pi, <<"xml:namespace">>,
+                    [{<<"prefix">>,<<"o">>},
+                     {<<"ns">>,<<"urn:schemas-microsoft-com:office:office">>}]}]}))),
     ok.
 
 escape_test() ->
-    <<"&amp;quot;\"word &lt;&lt;up!&amp;quot;">> =
-        escape(<<"&quot;\"word <<up!&quot;">>),
+    ?assertEqual(
+       <<"&amp;quot;\"word &gt;&lt;&lt;up!&amp;quot;">>,
+       escape(<<"&quot;\"word ><<up!&quot;">>)),
+    ?assertEqual(
+       <<"&amp;quot;\"word &gt;&lt;&lt;up!&amp;quot;">>,
+       escape("&quot;\"word ><<up!&quot;")),
+    ?assertEqual(
+       <<"&amp;quot;\"word &gt;&lt;&lt;up!&amp;quot;">>,
+       escape('&quot;\"word ><<up!&quot;')),
     ok.
 
 escape_attr_test() ->
-    <<"&amp;quot;&quot;word &lt;&lt;up!&amp;quot;">> =
-        escape_attr(<<"&quot;\"word <<up!&quot;">>),
+    ?assertEqual(
+       <<"&amp;quot;&quot;word &gt;&lt;&lt;up!&amp;quot;">>,
+       escape_attr(<<"&quot;\"word ><<up!&quot;">>)),
+    ?assertEqual(
+       <<"&amp;quot;&quot;word &gt;&lt;&lt;up!&amp;quot;">>,
+       escape_attr("&quot;\"word ><<up!&quot;")),
+    ?assertEqual(
+       <<"&amp;quot;&quot;word &gt;&lt;&lt;up!&amp;quot;">>,
+       escape_attr('&quot;\"word ><<up!&quot;')),
+    ?assertEqual(
+       <<"12345">>,
+       escape_attr(12345)),
+    ?assertEqual(
+       <<"1.5">>,
+       escape_attr(1.5)),
     ok.
 
 tokens_test() ->
-    [{start_tag, <<"foo">>, [{<<"bar">>, <<"baz">>},
-                             {<<"wibble">>, <<"wibble">>},
-                             {<<"alice">>, <<"bob">>}], true}] =
-        tokens(<<"<foo bar=baz wibble='wibble' alice=\"bob\"/>">>),
-    [{start_tag, <<"foo">>, [{<<"bar">>, <<"baz">>},
-                             {<<"wibble">>, <<"wibble">>},
-                             {<<"alice">>, <<"bob">>}], true}] =
-        tokens(<<"<foo bar=baz wibble='wibble' alice=bob/>">>),
-    [{comment, <<"[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]">>}] =
-        tokens(<<"<!--[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]-->">>),
-    [{start_tag, <<"script">>, [{<<"type">>, <<"text/javascript">>}], false},
-     {data, <<" A= B <= C ">>, false},
-     {end_tag, <<"script">>}] =
-        tokens(<<"<script type=\"text/javascript\"> A= B <= C </script>">>),
-    [{start_tag, <<"script">>, [{<<"type">>, <<"text/javascript">>}], false},
-     {data, <<" A= B <= C ">>, false},
-     {end_tag, <<"script">>}] =
-        tokens(<<"<script type =\"text/javascript\"> A= B <= C </script>">>),
-    [{start_tag, <<"script">>, [{<<"type">>, <<"text/javascript">>}], false},
-     {data, <<" A= B <= C ">>, false},
-     {end_tag, <<"script">>}] =
-        tokens(<<"<script type = \"text/javascript\"> A= B <= C </script>">>),
-    [{start_tag, <<"script">>, [{<<"type">>, <<"text/javascript">>}], false},
-     {data, <<" A= B <= C ">>, false},
-     {end_tag, <<"script">>}] =
-        tokens(<<"<script type= \"text/javascript\"> A= B <= C </script>">>),
-    [{start_tag, <<"textarea">>, [], false},
-     {data, <<"<html></body>">>, false},
-     {end_tag, <<"textarea">>}] =
-        tokens(<<"<textarea><html></body></textarea>">>),
-    [{pi, <<"xml:namespace">>,
-     [{<<"prefix">>,<<"o">>},
-     {<<"ns">>,<<"urn:schemas-microsoft-com:office:office">>}]}]=
-        tokens(<<"<?xml:namespace prefix=\"o\" ns=\"urn:schemas-microsoft-com:office:office\"?>">>),
+    ?assertEqual(
+       [{start_tag, <<"foo">>, [{<<"bar">>, <<"baz">>},
+                                {<<"wibble">>, <<"wibble">>},
+                                {<<"alice">>, <<"bob">>}], true}],
+       tokens(<<"<foo bar=baz wibble='wibble' alice=\"bob\"/>">>)),
+    ?assertEqual(
+       [{start_tag, <<"foo">>, [{<<"bar">>, <<"baz">>},
+                                {<<"wibble">>, <<"wibble">>},
+                                {<<"alice">>, <<"bob">>}], true}],
+       tokens(<<"<foo bar=baz wibble='wibble' alice=bob/>">>)),
+    ?assertEqual(
+       [{comment, <<"[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]">>}],
+       tokens(<<"<!--[if lt IE 7]>\n<style type=\"text/css\">\n.no_ie { display: none; }\n</style>\n<![endif]-->">>)),
+    ?assertEqual(
+       [{start_tag, <<"script">>, [{<<"type">>, <<"text/javascript">>}], false},
+        {data, <<" A= B <= C ">>, false},
+        {end_tag, <<"script">>}],
+       tokens(<<"<script type=\"text/javascript\"> A= B <= C </script>">>)),
+    ?assertEqual(
+       [{start_tag, <<"script">>, [{<<"type">>, <<"text/javascript">>}], false},
+        {data, <<" A= B <= C ">>, false},
+        {end_tag, <<"script">>}],
+       tokens(<<"<script type =\"text/javascript\"> A= B <= C </script>">>)),
+    ?assertEqual(
+       [{start_tag, <<"script">>, [{<<"type">>, <<"text/javascript">>}], false},
+        {data, <<" A= B <= C ">>, false},
+        {end_tag, <<"script">>}],
+       tokens(<<"<script type = \"text/javascript\"> A= B <= C </script>">>)),
+    ?assertEqual(
+       [{start_tag, <<"script">>, [{<<"type">>, <<"text/javascript">>}], false},
+        {data, <<" A= B <= C ">>, false},
+        {end_tag, <<"script">>}],
+       tokens(<<"<script type= \"text/javascript\"> A= B <= C </script>">>)),
+    ?assertEqual(
+       [{start_tag, <<"textarea">>, [], false},
+        {data, <<"<html></body>">>, false},
+        {end_tag, <<"textarea">>}],
+       tokens(<<"<textarea><html></body></textarea>">>)),
+    ?assertEqual(
+       [{pi, <<"xml:namespace">>,
+         [{<<"prefix">>,<<"o">>},
+          {<<"ns">>,<<"urn:schemas-microsoft-com:office:office">>}]}],
+       tokens(<<"<?xml:namespace prefix=\"o\" ns=\"urn:schemas-microsoft-com:office:office\"?>">>)),
+    ?assertEqual(
+       [{data, <<"<">>, false}],
+       tokens(<<"&lt;">>)),
     ok.
 
 parse_test() ->
@@ -760,84 +795,122 @@ parse_test() ->
  </head>
  <body id=\"home\" class=\"tundra\"><![CDATA[&lt;<this<!-- is -->CDATA>&gt;]]></body>
 </html>">>,
-    Expect = {<<"html">>, [],
-              [{<<"head">>, [],
-                [{<<"meta">>,
-                  [{<<"http-equiv">>,<<"Content-Type">>},
-                   {<<"content">>,<<"text/html; charset=UTF-8">>}],
-                  []},
-                 {<<"title">>,[],[<<"Foo">>]},
-                 {<<"link">>,
-                  [{<<"rel">>,<<"stylesheet">>},
-                   {<<"type">>,<<"text/css">>},
-                   {<<"href">>,<<"/static/rel/dojo/resources/dojo.css">>},
-                   {<<"media">>,<<"screen">>}],
-                  []},
-                 {<<"link">>,
-                  [{<<"rel">>,<<"stylesheet">>},
-                   {<<"type">>,<<"text/css">>},
-                   {<<"href">>,<<"/static/foo.css">>},
-                   {<<"media">>,<<"screen">>}],
-                  []},
-                 {comment,<<"[if lt IE 7]>\n   <style type=\"text/css\">\n     .no_ie { display: none; }\n   </style>\n   <![endif]">>},
-                 {<<"link">>,
-                  [{<<"rel">>,<<"icon">>},
-                   {<<"href">>,<<"/static/images/favicon.ico">>},
-                   {<<"type">>,<<"image/x-icon">>}],
-                  []},
-                 {<<"link">>,
-                  [{<<"rel">>,<<"shortcut icon">>},
-                   {<<"href">>,<<"/static/images/favicon.ico">>},
-                   {<<"type">>,<<"image/x-icon">>}],
-                  []}]},
-               {<<"body">>,
-                [{<<"id">>,<<"home">>},
-                 {<<"class">>,<<"tundra">>}],
-                [<<"&lt;<this<!-- is -->CDATA>&gt;">>]}]},
-    Expect = parse(D0),
+    ?assertEqual(
+       {<<"html">>, [],
+        [{<<"head">>, [],
+          [{<<"meta">>,
+            [{<<"http-equiv">>,<<"Content-Type">>},
+             {<<"content">>,<<"text/html; charset=UTF-8">>}],
+            []},
+           {<<"title">>,[],[<<"Foo">>]},
+           {<<"link">>,
+            [{<<"rel">>,<<"stylesheet">>},
+             {<<"type">>,<<"text/css">>},
+             {<<"href">>,<<"/static/rel/dojo/resources/dojo.css">>},
+             {<<"media">>,<<"screen">>}],
+            []},
+           {<<"link">>,
+            [{<<"rel">>,<<"stylesheet">>},
+             {<<"type">>,<<"text/css">>},
+             {<<"href">>,<<"/static/foo.css">>},
+             {<<"media">>,<<"screen">>}],
+            []},
+           {comment,<<"[if lt IE 7]>\n   <style type=\"text/css\">\n     .no_ie { display: none; }\n   </style>\n   <![endif]">>},
+           {<<"link">>,
+            [{<<"rel">>,<<"icon">>},
+             {<<"href">>,<<"/static/images/favicon.ico">>},
+             {<<"type">>,<<"image/x-icon">>}],
+            []},
+           {<<"link">>,
+            [{<<"rel">>,<<"shortcut icon">>},
+             {<<"href">>,<<"/static/images/favicon.ico">>},
+             {<<"type">>,<<"image/x-icon">>}],
+            []}]},
+         {<<"body">>,
+          [{<<"id">>,<<"home">>},
+           {<<"class">>,<<"tundra">>}],
+          [<<"&lt;<this<!-- is -->CDATA>&gt;">>]}]},
+       parse(D0)),
     ok.
 
 tokens2_test() ->
     D0 = <<"<channel><title>from __future__ import *</title><link>http://bob.pythonmac.org</link><description>Bob's Rants</description></channel>">>,
-    Expect = [{start_tag,<<"channel">>,[],false},
-              {start_tag,<<"title">>,[],false},
-              {data,<<"from __future__ import *">>,false},
-              {end_tag,<<"title">>},
-              {start_tag,<<"link">>,[],true},
-              {data,<<"http://bob.pythonmac.org">>,false},
-              {end_tag,<<"link">>},
-              {start_tag,<<"description">>,[],false},
-              {data,<<"Bob's Rants">>,false},
-              {end_tag,<<"description">>},
-              {end_tag,<<"channel">>}],
-    Expect = tokens(D0),
+    ?assertEqual(
+       [{start_tag,<<"channel">>,[],false},
+        {start_tag,<<"title">>,[],false},
+        {data,<<"from __future__ import *">>,false},
+        {end_tag,<<"title">>},
+        {start_tag,<<"link">>,[],true},
+        {data,<<"http://bob.pythonmac.org">>,false},
+        {end_tag,<<"link">>},
+        {start_tag,<<"description">>,[],false},
+        {data,<<"Bob's Rants">>,false},
+        {end_tag,<<"description">>},
+        {end_tag,<<"channel">>}],
+       tokens(D0)),
+    ok.
+
+to_tokens_test() ->
+    ?assertEqual(
+       [{start_tag, <<"p">>, [{class, 1}], false},
+        {end_tag, <<"p">>}],
+       to_tokens({p, [{class, 1}], []})),
+    ?assertEqual(
+       [{start_tag, <<"p">>, [], false},
+        {end_tag, <<"p">>}],
+       to_tokens({p})),
+    ?assertEqual(
+       [{'=', <<"data">>}],
+       to_tokens({'=', <<"data">>})),
+    ?assertEqual(
+       [{comment, <<"comment">>}],
+       to_tokens({comment, <<"comment">>})),
+    %% This is only allowed in sub-tags:
+    %% {p, [{"class", "foo"}]} as {p, [{"class", "foo"}], []}
+    %% On the outside it's always treated as follows:
+    %% {p, [], [{"class", "foo"}]} as {p, [], [{"class", "foo"}]}
+    ?assertEqual(
+       [{start_tag, <<"html">>, [], false},
+        {start_tag, <<"p">>, [{class, 1}], false},
+        {end_tag, <<"p">>},
+        {end_tag, <<"html">>}],
+       to_tokens({html, [{p, [{class, 1}]}]})),
     ok.
 
 parse2_test() ->
     D0 = <<"<channel><title>from __future__ import *</title><link>http://bob.pythonmac.org<br>foo</link><description>Bob's Rants</description></channel>">>,
-    Expect = {<<"channel">>,[],
-              [{<<"title">>,[],[<<"from __future__ import *">>]},
-               {<<"link">>,[],[
-                               <<"http://bob.pythonmac.org">>,
-                               {<<"br">>,[],[]},
-                               <<"foo">>]},
-               {<<"description">>,[],[<<"Bob's Rants">>]}]},
-    Expect = parse(D0),
+    ?assertEqual(
+       {<<"channel">>,[],
+        [{<<"title">>,[],[<<"from __future__ import *">>]},
+         {<<"link">>,[],[
+                         <<"http://bob.pythonmac.org">>,
+                         {<<"br">>,[],[]},
+                         <<"foo">>]},
+         {<<"description">>,[],[<<"Bob's Rants">>]}]},
+       parse(D0)),
     ok.
 
 parse_tokens_test() ->
     D0 = [{doctype,[<<"HTML">>,<<"PUBLIC">>,<<"-//W3C//DTD HTML 4.01 Transitional//EN">>]},
           {data,<<"\n">>,true},
           {start_tag,<<"html">>,[],false}],
-    {<<"html">>, [], []} = parse_tokens(D0),
+    ?assertEqual(
+       {<<"html">>, [], []},
+       parse_tokens(D0)),
     D1 = D0 ++ [{end_tag, <<"html">>}],
-    {<<"html">>, [], []} = parse_tokens(D1),
+    ?assertEqual(
+       {<<"html">>, [], []},
+       parse_tokens(D1)),
     D2 = D0 ++ [{start_tag, <<"body">>, [], false}],
-    {<<"html">>, [], [{<<"body">>, [], []}]} = parse_tokens(D2),
+    ?assertEqual(
+       {<<"html">>, [], [{<<"body">>, [], []}]},
+       parse_tokens(D2)),
     D3 = D0 ++ [{start_tag, <<"head">>, [], false},
                 {end_tag, <<"head">>},
                 {start_tag, <<"body">>, [], false}],
-    {<<"html">>, [], [{<<"head">>, [], []}, {<<"body">>, [], []}]} = parse_tokens(D3),
+    ?assertEqual(
+       {<<"html">>, [], [{<<"head">>, [], []}, {<<"body">>, [], []}]},
+       parse_tokens(D3)),
     D4 = D3 ++ [{data,<<"\n">>,true},
                 {start_tag,<<"div">>,[{<<"class">>,<<"a">>}],false},
                 {start_tag,<<"a">>,[{<<"name">>,<<"#anchor">>}],false},
@@ -847,24 +920,30 @@ parse_tokens_test() ->
                 {start_tag,<<"div">>,[{<<"class">>,<<"c">>}],false},
                 {end_tag,<<"div">>},
                 {end_tag,<<"div">>}],
-    {<<"html">>, [],
-     [{<<"head">>, [], []},
-      {<<"body">>, [],
-       [{<<"div">>, [{<<"class">>, <<"a">>}], [{<<"a">>, [{<<"name">>, <<"#anchor">>}], []}]},
-        {<<"div">>, [{<<"class">>, <<"b">>}], [{<<"div">>, [{<<"class">>, <<"c">>}], []}]}
-       ]}]} = parse_tokens(D4),
+    ?assertEqual(
+       {<<"html">>, [],
+        [{<<"head">>, [], []},
+         {<<"body">>, [],
+          [{<<"div">>, [{<<"class">>, <<"a">>}], [{<<"a">>, [{<<"name">>, <<"#anchor">>}], []}]},
+           {<<"div">>, [{<<"class">>, <<"b">>}], [{<<"div">>, [{<<"class">>, <<"c">>}], []}]}
+          ]}]},
+       parse_tokens(D4)),
     D5 = [{start_tag,<<"html">>,[],false},
           {data,<<"\n">>,true},
           {data,<<"boo">>,false},
           {data,<<"hoo">>,false},
           {data,<<"\n">>,true},
           {end_tag,<<"html">>}],
-    {<<"html">>, [], [<<"\nboohoo\n">>]} = parse_tokens(D5),
+    ?assertEqual(
+       {<<"html">>, [], [<<"\nboohoo\n">>]},
+       parse_tokens(D5)),
     D6 = [{start_tag,<<"html">>,[],false},
           {data,<<"\n">>,true},
           {data,<<"\n">>,true},
           {end_tag,<<"html">>}],
-    {<<"html">>, [], []} = parse_tokens(D6),
+    ?assertEqual(
+       {<<"html">>, [], []},
+       parse_tokens(D6)),
     D7 = [{start_tag,<<"html">>,[],false},
           {start_tag,<<"ul">>,[],false},
           {start_tag,<<"li">>,[],false},
@@ -878,11 +957,13 @@ parse_tokens_test() ->
           {data,<<"asdf">>,false},
           {end_tag,<<"ul">>},
           {end_tag,<<"html">>}],
-    {<<"html">>, [],
-     [{<<"ul">>, [],
-       [{<<"li">>, [], [<<"word">>]},
-        {<<"li">>, [], [<<"up">>]},
-        {<<"li">>, [], [<<"fdsa">>,{<<"br">>, [], []}, <<"asdf">>]}]}]} = parse_tokens(D7),
+    ?assertEqual(
+       {<<"html">>, [],
+        [{<<"ul">>, [],
+          [{<<"li">>, [], [<<"word">>]},
+           {<<"li">>, [], [<<"up">>]},
+           {<<"li">>, [], [<<"fdsa">>,{<<"br">>, [], []}, <<"asdf">>]}]}]},
+       parse_tokens(D7)),
     ok.
 
 destack_test() ->
