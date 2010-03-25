@@ -18,7 +18,7 @@ set_default({Key, Value}, Proplist) ->
             [{Key, Value} | Proplist]
     end.
 
-%% @spec set_default(Key::term(), Value::term(), Proplist::list()) -> list()
+%% @spec set_defaults([{Key::term(), Value::term()}], Proplist::list()) -> list()
 %%
 %% @doc Return new Proplist with {Key, Value} set if not is_defined(Key, Proplist).
 set_defaults(DefaultProps, Proplist) ->

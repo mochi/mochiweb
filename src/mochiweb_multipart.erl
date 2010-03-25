@@ -8,16 +8,28 @@
 
 -export([parse_form/1, parse_form/2]).
 -export([parse_multipart_request/2]).
--export([parts_to_body/3]).
+-export([parts_to_body/3, parts_to_multipart_body/4]).
+-export([default_file_handler/2]).
 
 -define(CHUNKSIZE, 4096).
 
 -record(mp, {state, boundary, length, buffer, callback, req}).
 
 %% TODO: DOCUMENT THIS MODULE.
+%% @type key() = atom() | string() | binary().
+%% @type value() = atom() | iolist() | integer().
+%% @type header() = {key(), value()}.
+%% @type bodypart() = {Start::integer(), End::integer(), Body::iolist()}.
+%% @type formfile() = {Name::string(), ContentType::string(), Content::binary()}.
+%% @type request().
+%% @type file_handler() = (Filename::string(), ContentType::string()) -> file_handler_callback().
+%% @type file_handler_callback() = (binary() | eof) -> file_handler_callback() | term().
 
+%% @spec parts_to_body([bodypart()], ContentType::string(),
+%%                     Size::integer()) -> {[header()], iolist()}
+%% @doc Return {[header()], iolist()} representing the body for the given
+%%      parts, may be a single part or multipart.
 parts_to_body([{Start, End, Body}], ContentType, Size) ->
-    %% return body for a range reponse with a single body
     HeaderList = [{"Content-Type", ContentType},
                   {"Content-Range",
                    ["bytes ",
@@ -25,10 +37,15 @@ parts_to_body([{Start, End, Body}], ContentType, Size) ->
                     "/", mochiweb_util:make_io(Size)]}],
     {HeaderList, Body};
 parts_to_body(BodyList, ContentType, Size) when is_list(BodyList) ->
-    %% return
-    %% header Content-Type: multipart/byteranges; boundary=441934886133bdee4
-    %% and multipart body
-    Boundary = mochihex:to_hex(crypto:rand_bytes(8)),
+    parts_to_multipart_body(BodyList, ContentType, Size,
+                            mochihex:to_hex(crypto:rand_bytes(8))).
+
+%% @spec parts_to_multipart_body([bodypart()], ContentType::string(),
+%%                               Size::integer(), Boundary::string()) ->
+%%           {[header()], iolist()}
+%% @doc Return {[header()], iolist()} representing the body for the given
+%%      parts, always a multipart response.
+parts_to_multipart_body(BodyList, ContentType, Size, Boundary) ->
     HeaderList = [{"Content-Type",
                    ["multipart/byteranges; ",
                     "boundary=", Boundary]}],
@@ -36,6 +53,9 @@ parts_to_body(BodyList, ContentType, Size) when is_list(BodyList) ->
 
     {HeaderList, MultiPartBody}.
 
+%% @spec multipart_body([bodypart()], ContentType::string(),
+%%                      Boundary::string(), Size::integer()) -> iolist()
+%% @doc Return the representation of a multipart body for the given [bodypart()].
 multipart_body([], _ContentType, Boundary, _Size) ->
     ["--", Boundary, "--\r\n"];
 multipart_body([{Start, End, Body} | BodyList], ContentType, Boundary, Size) ->
@@ -47,9 +67,14 @@ multipart_body([{Start, End, Body} | BodyList], ContentType, Boundary, Size) ->
      Body, "\r\n"
      | multipart_body(BodyList, ContentType, Boundary, Size)].
 
+%% @spec parse_form(request()) -> [{string(), string() | formfile()}]
+%% @doc Parse a multipart form from the given request using the in-memory
+%%      default_file_handler/2.
 parse_form(Req) ->
     parse_form(Req, fun default_file_handler/2).
 
+%% @spec parse_form(request(), F::file_handler()) -> [{string(), string() | term()}]
+%% @doc Parse a multipart form from the given request using the given file_handler().
 parse_form(Req, FileHandler) ->
     Callback = fun (Next) -> parse_form_outer(Next, FileHandler, []) end,
     {_, _, Res} = parse_multipart_request(Req, Callback),
@@ -664,5 +689,71 @@ flash_multipart_hack_test() ->
     State = #mp{length=0, buffer=Buffer, boundary=Prefix},
     ?assertEqual(State,
                  flash_multipart_hack(State)).
+
+parts_to_body_single_test() ->
+    {HL, B} = parts_to_body([{0, 5, <<"01234">>}],
+                            "text/plain",
+                            10),
+    [{"Content-Range", Range},
+     {"Content-Type", Type}] = lists:sort(HL),
+    ?assertEqual(
+       <<"bytes 0-5/10">>,
+       iolist_to_binary(Range)),
+    ?assertEqual(
+       <<"text/plain">>,
+       iolist_to_binary(Type)),
+    ?assertEqual(
+       <<"01234">>,
+       iolist_to_binary(B)),
+    ok.
+
+parts_to_body_multi_test() ->
+    {[{"Content-Type", Type}],
+     _B} = parts_to_body([{0, 5, <<"01234">>}, {5, 10, <<"56789">>}],
+                        "text/plain",
+                        10),
+    ?assertMatch(
+       <<"multipart/byteranges; boundary=", _/binary>>,
+       iolist_to_binary(Type)),
+    ok.
+
+parts_to_multipart_body_test() ->
+    {[{"Content-Type", V}], B} = parts_to_multipart_body(
+                                   [{0, 5, <<"01234">>}, {5, 10, <<"56789">>}],
+                                   "text/plain",
+                                   10,
+                                   "BOUNDARY"),
+    MB = multipart_body(
+           [{0, 5, <<"01234">>}, {5, 10, <<"56789">>}],
+           "text/plain",
+           "BOUNDARY",
+           10),
+    ?assertEqual(
+       <<"multipart/byteranges; boundary=BOUNDARY">>,
+       iolist_to_binary(V)),
+    ?assertEqual(
+       iolist_to_binary(MB),
+       iolist_to_binary(B)),
+    ok.
+
+multipart_body_test() ->
+    ?assertEqual(
+       <<"--BOUNDARY--\r\n">>,
+       iolist_to_binary(multipart_body([], "text/plain", "BOUNDARY", 0))),
+    ?assertEqual(
+       <<"--BOUNDARY\r\n"
+         "Content-Type: text/plain\r\n"
+         "Content-Range: bytes 0-5/10\r\n\r\n"
+         "01234\r\n"
+         "--BOUNDARY\r\n"
+         "Content-Type: text/plain\r\n"
+         "Content-Range: bytes 5-10/10\r\n\r\n"
+         "56789\r\n"
+         "--BOUNDARY--\r\n">>,
+       iolist_to_binary(multipart_body([{0, 5, <<"01234">>}, {5, 10, <<"56789">>}],
+                                       "text/plain",
+                                       "BOUNDARY",
+                                       10))),
+    ok.
 
 -endif.
