@@ -5,11 +5,16 @@
 %%      invalid bytes.
 
 -module(mochiutf8).
--export([valid_utf8_bytes/1, codepoint_to_bytes/1]).
+-export([valid_utf8_bytes/1, codepoint_to_bytes/1, bytes_to_codepoints/1]).
+-export([bytes_foldl/3, codepoint_foldl/3, read_codepoint/1, len/1]).
 
 %% External API
 
-%% @spec codepoint_to_binary(integer()) -> binary()
+-type unichar_low() :: 0..16#d7ff.
+-type unichar_high() :: 16#e000..16#10ffff.
+-type unichar() :: unichar_low() | unichar_high().
+
+-spec codepoint_to_bytes(unichar()) -> binary().
 %% @doc Convert a unicode codepoint to UTF-8 bytes.
 codepoint_to_bytes(C) when (C >= 16#00 andalso C =< 16#7f) ->
     %% U+0000 - U+007F - 7 bits
@@ -34,7 +39,74 @@ codepoint_to_bytes(C) when (C >= 16#010000 andalso C =< 16#10FFFF) ->
       2#10:2, B1:6,
       2#10:2, B0:6>>.
 
-%% @spec valid_utf8_bytes(B::binary()) -> binary()
+-spec codepoints_to_bytes([unichar()]) -> binary().
+%% @doc Convert a list of codepoints to a UTF-8 binary.
+codepoints_to_bytes(L) ->
+    <<<<(codepoint_to_bytes(C))/binary>> || C <- L>>.
+
+-spec read_codepoint(binary()) -> {unichar(), binary(), binary()}.
+read_codepoint(Bin = <<2#0:1, C:7, Rest/binary>>) ->
+    %% U+0000 - U+007F - 7 bits
+    <<B:1/binary, _/binary>> = Bin,
+    {C, B, Rest};
+read_codepoint(Bin = <<2#110:3, B1:5,
+                       2#10:2, B0:6,
+                       Rest/binary>>) ->
+    %% U+0080 - U+07FF - 11 bits
+    case <<B1:5, B0:6>> of
+        <<C:11>> when C >= 16#80 ->
+            <<B:2/binary, _/binary>> = Bin,
+            {C, B, Rest}
+    end;
+read_codepoint(Bin = <<2#1110:4, B2:4,
+                       2#10:2, B1:6,
+                       2#10:2, B0:6,
+                       Rest/binary>>) ->
+    %% U+0800 - U+FFFF - 16 bits (excluding UTC-16 surrogate code points)
+    case <<B2:4, B1:6, B0:6>> of
+        <<C:16>> when (C >= 16#0800 andalso C =< 16#FFFF) andalso
+                      (C < 16#D800 orelse C > 16#DFFF) ->
+            <<B:3/binary, _/binary>> = Bin,
+            {C, B, Rest}
+    end;
+read_codepoint(Bin = <<2#11110:5, B3:3,
+                       2#10:2, B2:6,
+                       2#10:2, B1:6,
+                       2#10:2, B0:6,
+                       Rest/binary>>) ->
+    %% U+10000 - U+10FFFF - 21 bits
+    case <<B3:3, B2:6, B1:6, B0:6>> of
+        <<C:21>> when (C >= 16#010000 andalso C =< 16#10FFFF) ->
+            <<B:4/binary, _/binary>> = Bin,
+            {C, B, Rest}
+    end.
+
+-spec codepoint_foldl(fun((unichar(), _) -> _), _, binary()) -> _.
+codepoint_foldl(F, Acc, <<>>) when is_function(F, 2) ->
+    Acc;
+codepoint_foldl(F, Acc, Bin) ->
+    {C, _, Rest} = read_codepoint(Bin),
+    codepoint_foldl(F, F(C, Acc), Rest).
+
+-spec bytes_foldl(fun((binary(), _) -> _), _, binary()) -> _.
+bytes_foldl(F, Acc, <<>>) when is_function(F, 2) ->
+    Acc;
+bytes_foldl(F, Acc, Bin) ->
+    {_, B, Rest} = read_codepoint(Bin),
+    bytes_foldl(F, F(B, Acc), Rest).
+
+-spec bytes_to_codepoints(binary()) -> [unichar()].
+bytes_to_codepoints(B) ->
+    lists:reverse(codepoint_foldl(fun (C, Acc) -> [C | Acc] end, [], B)).
+
+-spec len(binary()) -> non_neg_integer().
+len(<<>>) ->
+    0;
+len(B) ->
+    {_, _, Rest} = read_codepoint(B),
+    1 + len(Rest).
+
+-spec valid_utf8_bytes(B::binary()) -> binary().
 %% @doc Return only the bytes in B that represent valid UTF-8. Uses
 %%      the following recursive algorithm: skip one byte if B does not
 %%      follow UTF-8 syntax (a 1-4 byte encoding of some number),
@@ -43,9 +115,9 @@ codepoint_to_bytes(C) when (C >= 16#010000 andalso C =< 16#10FFFF) ->
 valid_utf8_bytes(B) when is_binary(B) ->
     binary_skip_bytes(B, invalid_utf8_indexes(B)).
 
-%% Interal API
+%% Internal API
 
-%% @spec binary_skip_bytes(B::binary(), L::[integer()]) -> binary()
+-spec binary_skip_bytes(binary(), [non_neg_integer()]) -> binary().
 %% @doc Return B, but skipping the 0-based indexes in L.
 binary_skip_bytes(B, []) ->
     B;
@@ -53,6 +125,7 @@ binary_skip_bytes(B, L) ->
     binary_skip_bytes(B, L, 0, []).
 
 %% @private
+-spec binary_skip_bytes(binary(), [non_neg_integer()], non_neg_integer(), iolist()) -> binary().
 binary_skip_bytes(B, [], _N, Acc) ->
     iolist_to_binary(lists:reverse([B | Acc]));
 binary_skip_bytes(<<_, RestB/binary>>, [N | RestL], N, Acc) ->
@@ -60,12 +133,13 @@ binary_skip_bytes(<<_, RestB/binary>>, [N | RestL], N, Acc) ->
 binary_skip_bytes(<<C, RestB/binary>>, L, N, Acc) ->
     binary_skip_bytes(RestB, L, 1 + N, [C | Acc]).
 
-%% @spec invalid_utf8_indexes(B::binary()) -> [integer()]
+-spec invalid_utf8_indexes(binary()) -> [non_neg_integer()].
 %% @doc Return the 0-based indexes in B that are not valid UTF-8.
 invalid_utf8_indexes(B) ->
     invalid_utf8_indexes(B, 0, []).
 
 %% @private.
+-spec invalid_utf8_indexes(binary(), non_neg_integer(), [non_neg_integer()]) -> [non_neg_integer()].
 invalid_utf8_indexes(<<C, Rest/binary>>, N, Acc) when C < 16#80 ->
     %% U+0000 - U+007F - 7 bits
     invalid_utf8_indexes(Rest, 1 + N, Acc);
@@ -165,6 +239,44 @@ codepoint_to_bytes_test() ->
     ?assertEqual(
        <<16#f4, 16#8f, 16#bf, 16#bf>>,
        codepoint_to_bytes(16#10ffff)),
+    ok.
+
+bytes_foldl_test() ->
+    ?assertEqual(
+       <<"abc">>,
+       bytes_foldl(fun (B, Acc) -> <<Acc/binary, B/binary>> end, <<>>, <<"abc">>)),
+    ?assertEqual(
+       <<"abc", 226, 152, 131, 228, 184, 173, 194, 133, 244,143,191,191>>,
+       bytes_foldl(fun (B, Acc) -> <<Acc/binary, B/binary>> end, <<>>,
+                   <<"abc", 226, 152, 131, 228, 184, 173, 194, 133, 244,143,191,191>>)),
+    ok.
+
+bytes_to_codepoints_test() ->
+    ?assertEqual(
+       "abc" ++ [16#2603, 16#4e2d, 16#85, 16#10ffff],
+       bytes_to_codepoints(<<"abc", 226, 152, 131, 228, 184, 173, 194, 133, 244,143,191,191>>)),
+    ok.
+
+codepoint_foldl_test() ->
+    ?assertEqual(
+       "cba",
+       codepoint_foldl(fun (C, Acc) -> [C | Acc] end, [], <<"abc">>)),
+    ?assertEqual(
+       [16#10ffff, 16#85, 16#4e2d, 16#2603 | "cba"],
+       codepoint_foldl(fun (C, Acc) -> [C | Acc] end, [],
+                       <<"abc", 226, 152, 131, 228, 184, 173, 194, 133, 244,143,191,191>>)),
+    ok.
+
+len_test() ->
+    ?assertEqual(
+       29,
+       len(<<"unicode snowman for you: ", 226, 152, 131, 228, 184, 173, 194, 133, 244, 143, 191, 191>>)),
+    ok.
+
+codepoints_to_bytes_test() ->
+    ?assertEqual(
+       iolist_to_binary(lists:map(fun codepoint_to_bytes/1, lists:seq(1, 1000))),
+       codepoints_to_bytes(lists:seq(1, 1000))),
     ok.
 
 valid_utf8_bytes_test() ->
