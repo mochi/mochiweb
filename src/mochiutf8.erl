@@ -5,9 +5,34 @@
 %%      invalid bytes.
 
 -module(mochiutf8).
--export([valid_utf8_bytes/1]).
+-export([valid_utf8_bytes/1, codepoint_to_bytes/1]).
 
 %% External API
+
+%% @spec codepoint_to_binary(integer()) -> binary()
+%% @doc Convert a unicode codepoint to UTF-8 bytes.
+codepoint_to_bytes(C) when (C >= 16#00 andalso C =< 16#7f) ->
+    %% U+0000 - U+007F - 7 bits
+    <<C>>;
+codepoint_to_bytes(C) when (C >= 16#080 andalso C =< 16#07FF) ->
+    %% U+0080 - U+07FF - 11 bits
+    <<0:5, B1:5, B0:6>> = <<C:16>>,
+    <<2#110:3, B1:5,
+      2#10:2, B0:6>>;
+codepoint_to_bytes(C) when (C >= 16#0800 andalso C =< 16#FFFF) andalso
+                           (C < 16#D800 orelse C > 16#DFFF) ->
+    %% U+0800 - U+FFFF - 16 bits (excluding UTC-16 surrogate code points)
+    <<B2:4, B1:6, B0:6>> = <<C:16>>,
+    <<2#1110:4, B2:4,
+      2#10:2, B1:6,
+      2#10:2, B0:6>>;
+codepoint_to_bytes(C) when (C >= 16#010000 andalso C =< 16#10FFFF) ->
+    %% U+10000 - U+10FFFF - 21 bits
+    <<0:3, B3:3, B2:6, B1:6, B0:6>> = <<C:24>>,
+    <<2#11110:5, B3:3,
+      2#10:2, B2:6,
+      2#10:2, B1:6,
+      2#10:2, B0:6>>.
 
 %% @spec valid_utf8_bytes(B::binary()) -> binary()
 %% @doc Return only the bytes in B that represent valid UTF-8. Uses
@@ -118,6 +143,28 @@ invalid_utf8_indexes_test() ->
        [57,59,60,64,66,67],
        invalid_utf8_indexes(<<"Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; (",
                               167, 65, 170, 186, 73, 83, 80, 166, 87, 186, 217, 41, 41>>)),
+    ok.
+
+codepoint_to_bytes_test() ->
+    %% U+0000 - U+007F - 7 bits
+    %% U+0080 - U+07FF - 11 bits
+    %% U+0800 - U+FFFF - 16 bits (excluding UTC-16 surrogate code points)
+    %% U+10000 - U+10FFFF - 21 bits
+    ?assertEqual(
+       <<"a">>,
+       codepoint_to_bytes($a)),
+    ?assertEqual(
+       <<16#c2, 16#80>>,
+       codepoint_to_bytes(16#80)),
+    ?assertEqual(
+       <<16#df, 16#bf>>,
+       codepoint_to_bytes(16#07ff)),
+    ?assertEqual(
+       <<16#ef, 16#bf, 16#bf>>,
+       codepoint_to_bytes(16#ffff)),
+    ?assertEqual(
+       <<16#f4, 16#8f, 16#bf, 16#bf>>,
+       codepoint_to_bytes(16#10ffff)),
     ok.
 
 valid_utf8_bytes_test() ->

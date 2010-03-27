@@ -35,6 +35,8 @@
 -define(IS_LITERAL_SAFE(C),
         ((C >= $A andalso C =< $Z) orelse (C >= $a andalso C =< $z)
          orelse (C >= $0 andalso C =< $9))).
+-define(PROBABLE_CLOSE(C),
+        (C =:= $> orelse ?IS_WHITESPACE(C))).
 
 -record(decoder, {line=1,
                   column=1,
@@ -301,7 +303,8 @@ tokenize(B, S=#decoder{offset=O}) ->
             {{end_tag, Tag}, S2};
         <<_:O/binary, "<", C, _/binary>> when ?IS_WHITESPACE(C) ->
             %% This isn't really strict HTML
-            tokenize_data(B, ?INC_COL(S));
+            {{data, Data, _Whitespace}, S1} = tokenize_data(B, ?INC_COL(S)),
+            {{data, <<$<, Data/binary>>, false}, S1};
         <<_:O/binary, "<", _/binary>> ->
             {Tag, S1} = tokenize_literal(B, ?INC_COL(S)),
             {Attrs, S2} = tokenize_attributes(B, S1),
@@ -490,9 +493,10 @@ find_qgt(Bin, S=#decoder{offset=O}) ->
     case Bin of
         <<_:O/binary, "?>", _/binary>> ->
             ?ADV_COL(S, 2);
-        <<_:O/binary, C, _/binary>> ->
-            find_qgt(Bin, ?INC_CHAR(S, C));
-        _ ->
+        %% tokenize_attributes takes care of this state:
+        %% <<_:O/binary, C, _/binary>> ->
+        %%     find_qgt(Bin, ?INC_CHAR(S, C));
+        <<_:O/binary>> ->
             S
     end.
 
@@ -537,7 +541,7 @@ tokenize_charref(Bin, S=#decoder{offset=O}, Start) ->
                            <<_:Start1/binary, R:Len1/binary, _/binary>> = Bin,
                            R;
                        Unichar ->
-                           list_to_binary(xmerl_ucs:to_utf8(Unichar))
+                           mochiutf8:codepoint_to_bytes(Unichar)
                    end,
             {{data, Data, false}, ?INC_COL(S)};
         _ ->
@@ -562,11 +566,10 @@ tokenize_doctype(Bin, S=#decoder{offset=O}, Acc) ->
 
 tokenize_word_or_literal(Bin, S=#decoder{offset=O}) ->
     case Bin of
-        <<_:O/binary, C, _/binary>> when ?IS_WHITESPACE(C) ->
-            {error, {whitespace, [C], S}};
         <<_:O/binary, C, _/binary>> when C =:= ?QUOTE orelse C =:= ?SQUOTE ->
             tokenize_word(Bin, ?INC_COL(S), C);
-        _ ->
+        <<_:O/binary, C, _/binary>> when not ?IS_WHITESPACE(C) ->
+            %% Sanity check for whitespace
             tokenize_literal(Bin, S, [])
     end.
 
@@ -623,13 +626,14 @@ tokenize_script(Bin, S=#decoder{offset=O}) ->
 tokenize_script(Bin, S=#decoder{offset=O}, Start) ->
     case Bin of
         %% Just a look-ahead, we want the end_tag separately
-        <<_:O/binary, $<, $/, SS, CC, RR, II, PP, TT, _/binary>>
+        <<_:O/binary, $<, $/, SS, CC, RR, II, PP, TT, ZZ, _/binary>>
         when (SS =:= $s orelse SS =:= $S) andalso
              (CC =:= $c orelse CC =:= $C) andalso
              (RR =:= $r orelse RR =:= $R) andalso
              (II =:= $i orelse II =:= $I) andalso
              (PP =:= $p orelse PP =:= $P) andalso
-             (TT=:= $t orelse TT =:= $T) ->
+             (TT=:= $t orelse TT =:= $T) andalso
+             ?PROBABLE_CLOSE(ZZ) ->
             Len = O - Start,
             <<_:Start/binary, Raw:Len/binary, _/binary>> = Bin,
             {{data, Raw, false}, S};
@@ -645,7 +649,7 @@ tokenize_textarea(Bin, S=#decoder{offset=O}) ->
 tokenize_textarea(Bin, S=#decoder{offset=O}, Start) ->
     case Bin of
         %% Just a look-ahead, we want the end_tag separately
-        <<_:O/binary, $<, $/, TT, EE, XX, TT2, AA, RR, EE2, AA2, _/binary>>
+        <<_:O/binary, $<, $/, TT, EE, XX, TT2, AA, RR, EE2, AA2, ZZ, _/binary>>
         when (TT =:= $t orelse TT =:= $T) andalso
              (EE =:= $e orelse EE =:= $E) andalso
              (XX =:= $x orelse XX =:= $X) andalso
@@ -653,7 +657,8 @@ tokenize_textarea(Bin, S=#decoder{offset=O}, Start) ->
              (AA =:= $a orelse AA =:= $A) andalso
              (RR =:= $r orelse RR =:= $R) andalso
              (EE2 =:= $e orelse EE2 =:= $E) andalso
-             (AA2 =:= $a orelse AA2 =:= $A) ->
+             (AA2 =:= $a orelse AA2 =:= $A) andalso
+             ?PROBABLE_CLOSE(ZZ) ->
             Len = O - Start,
             <<_:Start/binary, Raw:Len/binary, _/binary>> = Bin,
             {{data, Raw, false}, S};
@@ -768,13 +773,31 @@ tokens_test() ->
         {end_tag, <<"textarea">>}],
        tokens(<<"<textarea><html></body></textarea>">>)),
     ?assertEqual(
+       [{start_tag, <<"textarea">>, [], false},
+        {data, <<"<html></body></textareaz>">>, false}],
+       tokens(<<"<textarea ><html></body></textareaz>">>)),
+    ?assertEqual(
        [{pi, <<"xml:namespace">>,
          [{<<"prefix">>,<<"o">>},
           {<<"ns">>,<<"urn:schemas-microsoft-com:office:office">>}]}],
        tokens(<<"<?xml:namespace prefix=\"o\" ns=\"urn:schemas-microsoft-com:office:office\"?>">>)),
     ?assertEqual(
+       [{pi, <<"xml:namespace">>,
+         [{<<"prefix">>,<<"o">>},
+          {<<"ns">>,<<"urn:schemas-microsoft-com:office:office">>}]}],
+       tokens(<<"<?xml:namespace prefix=o ns=urn:schemas-microsoft-com:office:office \n?>">>)),
+    ?assertEqual(
+       [{pi, <<"xml:namespace">>,
+         [{<<"prefix">>,<<"o">>},
+          {<<"ns">>,<<"urn:schemas-microsoft-com:office:office">>}]}],
+       tokens(<<"<?xml:namespace prefix=o ns=urn:schemas-microsoft-com:office:office">>)),
+    ?assertEqual(
        [{data, <<"<">>, false}],
        tokens(<<"&lt;">>)),
+    ?assertEqual(
+       [{data, <<"not html ">>, false},
+        {data, <<"< at all">>, false}],
+       tokens(<<"not html < at all">>)),
     ok.
 
 parse_test() ->
@@ -831,6 +854,47 @@ parse_test() ->
            {<<"class">>,<<"tundra">>}],
           [<<"&lt;<this<!-- is -->CDATA>&gt;">>]}]},
        parse(D0)),
+    ?assertEqual(
+       {<<"html">>,[],
+        [{pi, <<"xml:namespace">>,
+          [{<<"prefix">>,<<"o">>},
+           {<<"ns">>,<<"urn:schemas-microsoft-com:office:office">>}]}]},
+       parse(
+         <<"<html><?xml:namespace prefix=\"o\" ns=\"urn:schemas-microsoft-com:office:office\"?></html>">>)),
+    ?assertEqual(
+       {<<"html">>, [],
+        [{<<"dd">>, [], [<<"foo">>]},
+         {<<"dt">>, [], [<<"bar">>]}]},
+       parse(<<"<html><dd>foo<dt>bar</html>">>)),
+    %% Singleton sadness
+    ?assertEqual(
+       {<<"html">>, [],
+        [{<<"link">>, [], []},
+         <<"foo">>,
+         {<<"br">>, [], []},
+         <<"bar">>]},
+       parse(<<"<html><link>foo<br>bar</html>">>)),
+    ?assertEqual(
+       {<<"html">>, [],
+        [{<<"link">>, [], [<<"foo">>,
+                           {<<"br">>, [], []},
+                           <<"bar">>]}]},
+       parse(<<"<html><link>foo<br>bar</link></html>">>)),
+    ok.
+
+exhaustive_is_singleton_test() ->
+    T = mochiweb_cover:clause_lookup_table(?MODULE, is_singleton),
+    [?assertEqual(V, is_singleton(K)) || {K, V} <- T].
+
+tokenize_attributes_test() ->
+    ?assertEqual(
+       {<<"foo">>,
+        [{<<"bar">>, <<"b\"az">>},
+         {<<"wibble">>, <<"wibble">>},
+         {<<"taco", 16#c2, 16#a9>>, <<"bell">>},
+         {<<"quux">>, <<"quux">>}],
+        []},
+       parse(<<"<foo bar=\"b&quot;az\" wibble taco&copy;=bell quux">>)),
     ok.
 
 tokens2_test() ->
