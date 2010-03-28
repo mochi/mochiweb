@@ -2,6 +2,7 @@
  [{description, "MochiMedia Web Server"},
   {vsn, "0.01"},
   {modules, [
+  	mochiglobal,
         mochihex,
         mochijson,
         mochijson2,
