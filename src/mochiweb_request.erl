@@ -7,6 +7,7 @@
 -author('bob@mochimedia.com').
 
 -include_lib("kernel/include/file.hrl").
+-include("internal.hrl").
 
 -define(QUIP, "Any of you quaids got a smint?").
 
@@ -52,12 +53,23 @@ get_header_value(K) ->
 get_primary_header_value(K) ->
     mochiweb_headers:get_primary_value(K, Headers).
 
-%% @type field() = socket | method | raw_path | version | headers | peer | path | body_length | range
+%% @type field() = socket | scheme | method | raw_path | version | headers | peer | path | body_length | range
 
 %% @spec get(field()) -> term()
-%% @doc Return the internal representation of the given field.
+%% @doc Return the internal representation of the given field. If
+%%      <code>socket</code> is requested on a HTTPS connection, then
+%%      an ssl socket will be returned as <code>{ssl, SslSocket}</code>.
+%%      You can use <code>SslSocket</code> with the <code>ssl</code>
+%%      application, eg: <code>ssl:peercert(SslSocket)</code>.
 get(socket) ->
     Socket;
+get(scheme) ->
+    case mochiweb_socket:type(Socket) of
+        plain ->
+            http;
+        ssl ->
+            https
+    end;
 get(method) ->
     Method;
 get(raw_path) ->
@@ -67,7 +79,7 @@ get(version) ->
 get(headers) ->
     Headers;
 get(peer) ->
-    case inet:peername(Socket) of
+    case mochiweb_socket:peername(Socket) of
         {ok, {Addr={10, _, _, _}, _Port}} ->
             case get_header_value("x-forwarded-for") of
                 undefined ->
@@ -124,7 +136,7 @@ dump() ->
 %% @spec send(iodata()) -> ok
 %% @doc Send data over the socket.
 send(Data) ->
-    case gen_tcp:send(Socket, Data) of
+    case mochiweb_socket:send(Socket, Data) of
         ok ->
             ok;
         _ ->
@@ -141,7 +153,7 @@ recv(Length) ->
 %% @doc Receive Length bytes from the client as a binary, with the given
 %%      Timeout in msec.
 recv(Length, Timeout) ->
-    case gen_tcp:recv(Socket, Length, Timeout) of
+    case mochiweb_socket:recv(Socket, Length, Timeout) of
         {ok, Data} ->
             put(?SAVE_RECV, true),
             Data;
@@ -467,26 +479,23 @@ stream_chunked_body(MaxChunkSize, Fun, FunState) ->
 stream_unchunked_body(0, Fun, FunState) ->
     Fun({0, <<>>}, FunState);
 stream_unchunked_body(Length, Fun, FunState) when Length > 0 ->
-    Bin = recv(0),
-    BinSize = byte_size(Bin),
-    if BinSize > Length ->
-        <<OurBody:Length/binary, Extra/binary>> = Bin,
-        gen_tcp:unrecv(Socket, Extra),
-        NewState = Fun({Length, OurBody}, FunState),
-        stream_unchunked_body(0, Fun, NewState);
-    true ->
-        NewState = Fun({BinSize, Bin}, FunState),
-        stream_unchunked_body(Length - BinSize, Fun, NewState)
-    end.
-
+    PktSize = case Length > ?RECBUF_SIZE of
+        true ->
+            ?RECBUF_SIZE;
+        false ->
+            Length
+    end,
+    Bin = recv(PktSize),
+    NewState = Fun({PktSize, Bin}, FunState),
+    stream_unchunked_body(Length - PktSize, Fun, NewState).
 
 %% @spec read_chunk_length() -> integer()
 %% @doc Read the length of the next HTTP chunk.
 read_chunk_length() ->
-    inet:setopts(Socket, [{packet, line}]),
-    case gen_tcp:recv(Socket, 0, ?IDLE_TIMEOUT) of
+    mochiweb_socket:setopts(Socket, [{packet, line}]),
+    case mochiweb_socket:recv(Socket, 0, ?IDLE_TIMEOUT) of
         {ok, Header} ->
-            inet:setopts(Socket, [{packet, raw}]),
+            mochiweb_socket:setopts(Socket, [{packet, raw}]),
             Splitter = fun (C) ->
                                C =/= $\r andalso C =/= $\n andalso C =/= $
                        end,
@@ -500,9 +509,9 @@ read_chunk_length() ->
 %% @doc Read in a HTTP chunk of the given length. If Length is 0, then read the
 %%      HTTP footers (as a list of binaries, since they're nominal).
 read_chunk(0) ->
-    inet:setopts(Socket, [{packet, line}]),
+    mochiweb_socket:setopts(Socket, [{packet, line}]),
     F = fun (F1, Acc) ->
-                case gen_tcp:recv(Socket, 0, ?IDLE_TIMEOUT) of
+                case mochiweb_socket:recv(Socket, 0, ?IDLE_TIMEOUT) of
                     {ok, <<"\r\n">>} ->
                         Acc;
                     {ok, Footer} ->
@@ -512,11 +521,11 @@ read_chunk(0) ->
                 end
         end,
     Footers = F(F, []),
-    inet:setopts(Socket, [{packet, raw}]),
+    mochiweb_socket:setopts(Socket, [{packet, raw}]),
     put(?SAVE_RECV, true),
     Footers;
 read_chunk(Length) ->
-    case gen_tcp:recv(Socket, 2 + Length, ?IDLE_TIMEOUT) of
+    case mochiweb_socket:recv(Socket, 2 + Length, ?IDLE_TIMEOUT) of
         {ok, <<Chunk:Length/binary, "\r\n">>} ->
             Chunk;
         _ ->

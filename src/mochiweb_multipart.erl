@@ -298,13 +298,32 @@ find_boundary(Prefix, Data) ->
 -include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
 
-with_socket_server(ServerFun, ClientFun) ->
-    {ok, Server} = mochiweb_socket_server:start([{ip, "127.0.0.1"},
-                                                 {port, 0},
-                                                 {loop, ServerFun}]),
+ssl_cert_opts() ->
+    EbinDir = filename:dirname(code:which(?MODULE)),
+    CertDir = filename:join([EbinDir, "..", "support", "test-materials"]),
+    CertFile = filename:join(CertDir, "test_ssl_cert.pem"),
+    KeyFile = filename:join(CertDir, "test_ssl_key.pem"),
+    [{certfile, CertFile}, {keyfile, KeyFile}].
+
+with_socket_server(Transport, ServerFun, ClientFun) ->
+    ServerOpts0 = [{ip, "127.0.0.1"}, {port, 0}, {loop, ServerFun}],
+    ServerOpts = case Transport of
+        plain ->
+            ServerOpts0;
+        ssl ->
+            ServerOpts0 ++ [{ssl, true}, {ssl_opts, ssl_cert_opts()}]
+    end,
+    {ok, Server} = mochiweb_socket_server:start(ServerOpts),
     Port = mochiweb_socket_server:get(Server, port),
-    {ok, Client} = gen_tcp:connect("127.0.0.1", Port,
-                                   [binary, {active, false}]),
+    ClientOpts = [binary, {active, false}],
+    {ok, Client} = case Transport of
+        plain ->
+            gen_tcp:connect("127.0.0.1", Port, ClientOpts);
+        ssl ->
+            ClientOpts1 = [{ssl_imp, new} | ClientOpts],
+            {ok, SslSocket} = ssl:connect("127.0.0.1", Port, ClientOpts1),
+            {ok, {ssl, SslSocket}}
+    end,
     Res = (catch ClientFun(Client)),
     mochiweb_socket_server:stop(Server),
     Res.
@@ -335,7 +354,13 @@ test_callback(Got, [Expect | Rest]) ->
             fun (Next) -> test_callback(Next, Rest) end
     end.
 
-parse3_test() ->
+parse3_http_test() ->
+    parse3(plain).
+
+parse3_https_test() ->
+    parse3(ssl).
+
+parse3(Transport) ->
     ContentType = "multipart/form-data; boundary=---------------------------7386909285754635891697677882",
     BinContent = <<"-----------------------------7386909285754635891697677882\r\nContent-Disposition: form-data; name=\"hidden\"\r\n\r\nmultipart message\r\n-----------------------------7386909285754635891697677882\r\nContent-Disposition: form-data; name=\"file\"; filename=\"test_file.txt\"\r\nContent-Type: text/plain\r\n\r\nWoo multiline text file\n\nLa la la\r\n-----------------------------7386909285754635891697677882--\r\n">>,
     Expect = [{headers,
@@ -352,7 +377,7 @@ parse3_test() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        ok = gen_tcp:send(Socket, BinContent),
+                        ok = mochiweb_socket:send(Socket, BinContent),
 			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
@@ -362,11 +387,16 @@ parse3_test() ->
                         {0, <<>>, ok} = Res,
                         ok
                 end,
-    ok = with_socket_server(ServerFun, ClientFun),
+    ok = with_socket_server(Transport, ServerFun, ClientFun),
     ok.
 
+parse2_http_test() ->
+    parse2(plain).
 
-parse2_test() ->
+parse2_https_test() ->
+    parse2(ssl).
+
+parse2(Transport) ->
     ContentType = "multipart/form-data; boundary=---------------------------6072231407570234361599764024",
     BinContent = <<"-----------------------------6072231407570234361599764024\r\nContent-Disposition: form-data; name=\"hidden\"\r\n\r\nmultipart message\r\n-----------------------------6072231407570234361599764024\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\"\r\nContent-Type: application/octet-stream\r\n\r\n\r\n-----------------------------6072231407570234361599764024--\r\n">>,
     Expect = [{headers,
@@ -383,7 +413,7 @@ parse2_test() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        ok = gen_tcp:send(Socket, BinContent),
+                        ok = mochiweb_socket:send(Socket, BinContent),
 			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
@@ -393,10 +423,16 @@ parse2_test() ->
                         {0, <<>>, ok} = Res,
                         ok
                 end,
-    ok = with_socket_server(ServerFun, ClientFun),
+    ok = with_socket_server(Transport, ServerFun, ClientFun),
     ok.
 
-parse_form_test() ->
+parse_form_http_test() ->
+    do_parse_form(plain).
+
+parse_form_https_test() ->
+    do_parse_form(ssl).
+
+do_parse_form(Transport) ->
     ContentType = "multipart/form-data; boundary=AaB03x",
     "AaB03x" = get_boundary(ContentType),
     Content = mochiweb_util:join(
@@ -414,7 +450,7 @@ parse_form_test() ->
                  ""], "\r\n"),
     BinContent = iolist_to_binary(Content),
     ServerFun = fun (Socket) ->
-                        ok = gen_tcp:send(Socket, BinContent),
+                        ok = mochiweb_socket:send(Socket, BinContent),
 			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
@@ -427,10 +463,16 @@ parse_form_test() ->
                          }] = Res,
                         ok
                 end,
-    ok = with_socket_server(ServerFun, ClientFun),
+    ok = with_socket_server(Transport, ServerFun, ClientFun),
     ok.
 
-parse_test() ->
+parse_http_test() ->
+    do_parse(plain).
+
+parse_https_test() ->
+    do_parse(ssl).
+
+do_parse(Transport) ->
     ContentType = "multipart/form-data; boundary=AaB03x",
     "AaB03x" = get_boundary(ContentType),
     Content = mochiweb_util:join(
@@ -461,7 +503,7 @@ parse_test() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        ok = gen_tcp:send(Socket, BinContent),
+                        ok = mochiweb_socket:send(Socket, BinContent),
 			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
@@ -471,10 +513,16 @@ parse_test() ->
                         {0, <<>>, ok} = Res,
                         ok
                 end,
-    ok = with_socket_server(ServerFun, ClientFun),
+    ok = with_socket_server(Transport, ServerFun, ClientFun),
     ok.
 
-parse_partial_body_boundary_test() ->
+parse_partial_body_boundary_http_test() ->
+   parse_partial_body_boundary(plain).
+
+parse_partial_body_boundary_https_test() ->
+   parse_partial_body_boundary(ssl).
+
+parse_partial_body_boundary(Transport) ->
     Boundary = string:copies("$", 2048),
     ContentType = "multipart/form-data; boundary=" ++ Boundary,
     ?assertEqual(Boundary, get_boundary(ContentType)),
@@ -507,7 +555,7 @@ parse_partial_body_boundary_test() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        ok = gen_tcp:send(Socket, BinContent),
+                        ok = mochiweb_socket:send(Socket, BinContent),
 			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
@@ -517,11 +565,16 @@ parse_partial_body_boundary_test() ->
                         {0, <<>>, ok} = Res,
                         ok
                 end,
-    ok = with_socket_server(ServerFun, ClientFun),
+    ok = with_socket_server(Transport, ServerFun, ClientFun),
     ok.
 
+parse_large_header_http_test() ->
+    parse_large_header(plain).
 
-parse_large_header_test() ->
+parse_large_header_https_test() ->
+    parse_large_header(ssl).
+
+parse_large_header(Transport) ->
     ContentType = "multipart/form-data; boundary=AaB03x",
     "AaB03x" = get_boundary(ContentType),
     Content = mochiweb_util:join(
@@ -555,7 +608,7 @@ parse_large_header_test() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        ok = gen_tcp:send(Socket, BinContent),
+                        ok = mochiweb_socket:send(Socket, BinContent),
 			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
@@ -565,7 +618,7 @@ parse_large_header_test() ->
                         {0, <<>>, ok} = Res,
                         ok
                 end,
-    ok = with_socket_server(ServerFun, ClientFun),
+    ok = with_socket_server(Transport, ServerFun, ClientFun),
     ok.
 
 find_boundary_test() ->
@@ -597,7 +650,13 @@ find_in_binary_test() ->
     {partial, 1, 3} = find_in_binary(<<"foobar">>, <<"afoo">>),
     ok.
 
-flash_parse_test() ->
+flash_parse_http_test() ->
+    flash_parse(plain).
+
+flash_parse_https_test() ->
+    flash_parse(ssl).
+
+flash_parse(Transport) ->
     ContentType = "multipart/form-data; boundary=----------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5",
     "----------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5" = get_boundary(ContentType),
     BinContent = <<"------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"Filename\"\r\n\r\nhello.txt\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"success_action_status\"\r\n\r\n201\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\nContent-Type: application/octet-stream\r\n\r\nhello\n\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"Upload\"\r\n\r\nSubmit Query\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5--">>,
@@ -625,7 +684,7 @@ flash_parse_test() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        ok = gen_tcp:send(Socket, BinContent),
+                        ok = mochiweb_socket:send(Socket, BinContent),
 			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
@@ -635,10 +694,16 @@ flash_parse_test() ->
                         {0, <<>>, ok} = Res,
                         ok
                 end,
-    ok = with_socket_server(ServerFun, ClientFun),
+    ok = with_socket_server(Transport, ServerFun, ClientFun),
     ok.
 
-flash_parse2_test() ->
+flash_parse2_http_test() ->
+    flash_parse2(plain).
+
+flash_parse2_https_test() ->
+    flash_parse2(ssl).
+
+flash_parse2(Transport) ->
     ContentType = "multipart/form-data; boundary=----------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5",
     "----------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5" = get_boundary(ContentType),
     Chunk = iolist_to_binary(string:copies("%", 4096)),
@@ -667,7 +732,7 @@ flash_parse2_test() ->
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
     ServerFun = fun (Socket) ->
-                        ok = gen_tcp:send(Socket, BinContent),
+                        ok = mochiweb_socket:send(Socket, BinContent),
 			exit(normal)
                 end,
     ClientFun = fun (Socket) ->
@@ -677,7 +742,7 @@ flash_parse2_test() ->
                         {0, <<>>, ok} = Res,
                         ok
                 end,
-    ok = with_socket_server(ServerFun, ClientFun),
+    ok = with_socket_server(Transport, ServerFun, ClientFun),
     ok.
 
 parse_headers_test() ->

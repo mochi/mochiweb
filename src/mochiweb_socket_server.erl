@@ -7,6 +7,8 @@
 -author('bob@mochimedia.com').
 -behaviour(gen_server).
 
+-include("internal.hrl").
+
 -export([start/1, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2, code_change/3,
          handle_info/2]).
@@ -22,7 +24,9 @@
          ip=any,
          listen=null,
          acceptor=null,
-         backlog=128}).
+         backlog=128,
+         ssl=false,
+         ssl_opts=[{ssl_imp, new}]}).
 
 start(State=#mochiweb_socket_server{}) ->
     start_server(State);
@@ -86,9 +90,21 @@ parse_options([{max, Max} | Rest], State) ->
                  Max when is_integer(Max) ->
                      Max
              end,
-    parse_options(Rest, State#mochiweb_socket_server{max=MaxInt}).
+    parse_options(Rest, State#mochiweb_socket_server{max=MaxInt});
+parse_options([{ssl, Ssl} | Rest], State) when is_boolean(Ssl) ->
+    parse_options(Rest, State#mochiweb_socket_server{ssl=Ssl});
+parse_options([{ssl_opts, SslOpts} | Rest], State) when is_list(SslOpts) ->
+    SslOpts1 = [{ssl_imp, new} | proplists:delete(ssl_imp, SslOpts)],
+    parse_options(Rest, State#mochiweb_socket_server{ssl_opts=SslOpts1}).
 
-start_server(State=#mochiweb_socket_server{name=Name}) ->
+start_server(State=#mochiweb_socket_server{ssl=Ssl, name=Name}) ->
+    case Ssl of
+        true ->
+            application:start(crypto),
+            application:start(ssl);
+        false ->
+            void
+    end,
     case Name of
         undefined ->
             gen_server:start_link(?MODULE, State, []);
@@ -110,7 +126,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog}) ->
                 {reuseaddr, true},
                 {packet, 0},
                 {backlog, Backlog},
-                {recbuf, 8192},
+                {recbuf, ?RECBUF_SIZE},
                 {active, false},
                 {nodelay, true}],
     Opts = case Ip of
@@ -124,7 +140,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog}) ->
         {_, _, _, _, _, _, _, _} -> % IPv6
             [inet6, {ip, Ip} | BaseOpts]
     end,
-    case gen_tcp_listen(Port, Opts, State) of
+    case listen(Port, Opts, State) of
         {stop, eacces} ->
             case Port < 1024 of
                 true ->
@@ -132,7 +148,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog}) ->
                         {ok, _} ->
                             case fdsrv:bind_socket(tcp, Port) of
                                 {ok, Fd} ->
-                                    gen_tcp_listen(Port, [{fd, Fd} | Opts], State);
+                                    listen(Port, [{fd, Fd} | Opts], State);
                                 _ ->
                                     {stop, fdsrv_bind_failed}
                             end;
@@ -146,10 +162,10 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog}) ->
             Other
     end.
 
-gen_tcp_listen(Port, Opts, State) ->
-    case gen_tcp:listen(Port, Opts) of
+listen(Port, Opts, State=#mochiweb_socket_server{ssl=Ssl, ssl_opts=SslOpts}) ->
+    case mochiweb_socket:listen(Ssl, Port, Opts, SslOpts) of
         {ok, Listen} ->
-            {ok, ListenPort} = inet:port(Listen),
+            {ok, ListenPort} = mochiweb_socket:port(Listen),
             {ok, new_acceptor(State#mochiweb_socket_server{listen=Listen,
                                                            port=ListenPort})};
         {error, Reason} ->
@@ -172,7 +188,7 @@ call_loop(Loop, Socket) ->
     Loop(Socket).
 
 acceptor_loop({Server, Listen, Loop}) ->
-    case catch gen_tcp:accept(Listen) of
+    case catch mochiweb_socket:accept(Listen) of
         {ok, Socket} ->
             gen_server:cast(Server, {accepted, self()}),
             call_loop(Loop, Socket);
@@ -206,7 +222,7 @@ handle_cast(stop, State) ->
     {stop, normal, State}.
 
 terminate(_Reason, #mochiweb_socket_server{listen=Listen, port=Port}) ->
-    gen_tcp:close(Listen),
+    mochiweb_socket:close(Listen),
     case Port < 1024 of
         true ->
             catch fdsrv:stop(),
