@@ -122,7 +122,7 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
             inet:setopts(Socket, [{packet, raw}]),
             Req = mochiweb:new_request({Socket, Request,
                                         lists:reverse(Headers)}),
-            Body(Req),
+            call_body(Body, Req),
             ?MODULE:after_response(Body, Req);
         {ok, {http_header, _, Name, _, Value}} ->
             headers(Socket, Request, [{Name, Value} | Headers], Body,
@@ -133,6 +133,11 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
         _Other ->
             handle_invalid_request(Socket, Request, Headers)
     end.
+
+call_body({M, F}, Req) ->
+    M:F(Req);
+call_body(Body, Req) ->
+    Body(Req).
 
 handle_invalid_request(Socket) ->
     handle_invalid_request(Socket, {'GET', {abs_path, "/"}, {0,9}}, []).
