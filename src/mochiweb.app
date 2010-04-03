@@ -36,4 +36,4 @@
   {registered, []},
   {mod, {mochiweb_app, []}},
   {env, []},
-  {applications, [kernel, stdlib]}]}.
+  {applications, [kernel, stdlib, crypto, inets]}]}.
