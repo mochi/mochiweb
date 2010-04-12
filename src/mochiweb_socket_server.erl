@@ -58,6 +58,8 @@ parse_options([], State) ->
 parse_options([{name, L} | Rest], State) when is_list(L) ->
     Name = {local, list_to_atom(L)},
     parse_options(Rest, State#mochiweb_socket_server{name=Name});
+parse_options([{name, A} | Rest], State) when A =:= undefined ->
+    parse_options(Rest, State#mochiweb_socket_server{name=A});
 parse_options([{name, A} | Rest], State) when is_atom(A) ->
     Name = {local, A},
     parse_options(Rest, State#mochiweb_socket_server{name=Name});
