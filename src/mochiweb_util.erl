@@ -9,7 +9,7 @@
 -export([path_split/1]).
 -export([urlsplit/1, urlsplit_path/1, urlunsplit/1, urlunsplit_path/1]).
 -export([guess_mime/1, parse_header/1]).
--export([shell_quote/1, cmd/1, cmd_string/1, cmd_port/2]).
+-export([shell_quote/1, cmd/1, cmd_string/1, cmd_port/2, cmd_status/1]).
 -export([record_to_proplist/2, record_to_proplist/3]).
 -export([safe_relative_path/1, partition/2]).
 -export([parse_qvalues/1, pick_accepted_encodings/3]).
@@ -116,6 +116,24 @@ cmd(Argv) ->
 %% @doc Create a shell quoted command string from a list of arguments.
 cmd_string(Argv) ->
     string:join([shell_quote(X) || X <- Argv], " ").
+
+%% @spec cmd_status([string()]) -> {ExitStatus::integer(), Stdout::binary()}
+%% @doc Accumulate the output and exit status from the given application, will be
+%%      spawned with cmd_port/2.
+cmd_status(Argv) ->
+    Port = cmd_port(Argv, [exit_status, stderr_to_stdout,
+                           use_stdio, binary]),
+    cmd_loop(Port, []).
+
+%% @spec cmd_loop(port(), list()) -> {ExitStatus::integer(), Stdout::binary()}
+%% @doc Accumulate the output and exit status from a port.
+cmd_loop(Port, Acc) ->
+    receive
+        {Port, {exit_status, Status}} ->
+            {Status, iolist_to_binary(lists:reverse(Acc))};
+        {Port, {data, Data}} ->
+            cmd_loop(Port, [Data | Acc])
+    end.
 
 %% @spec join([string()], Separator) -> string()
 %% @doc Deprecated, use string:join/2.
@@ -552,7 +570,9 @@ record_to_proplist_test() ->
     ok.
 
 shell_quote_test() ->
-    "\"foo \\$bar\\\"\\`' baz\"" = shell_quote("foo $bar\"`' baz"),
+    ?assertEqual(
+       "\"foo \\$bar\\\"\\`' baz\"",
+       shell_quote("foo $bar\"`' baz")),
     ok.
 
 cmd_port_test_spool(Port, Acc) ->
@@ -585,12 +605,23 @@ cmd_port_test() ->
        Res).
 
 cmd_test() ->
-    "$bling$ `word`!\n" = cmd(["echo", "$bling$ `word`!"]),
+    ?assertEqual(
+       "$bling$ `word`!\n",
+       cmd(["echo", "$bling$ `word`!"])),
     ok.
 
 cmd_string_test() ->
-    "\"echo\" \"\\$bling\\$ \\`word\\`!\"" = cmd_string(["echo", "$bling$ `word`!"]),
+    ?assertEqual(
+       "\"echo\" \"\\$bling\\$ \\`word\\`!\"",
+       cmd_string(["echo", "$bling$ `word`!"])),
     ok.
+
+cmd_status_test() ->
+    ?assertEqual(
+       {0, <<"$bling$ `word`!\n">>},
+       cmd_status(["echo", "$bling$ `word`!"])),
+    ok.
+
 
 parse_header_test() ->
     ?assertEqual(
