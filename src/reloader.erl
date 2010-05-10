@@ -15,6 +15,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([all_changed/0]).
 -export([is_changed/1]).
+-export([reload_modules/1]).
 -record(state, {last, tref}).
 
 %% External API
@@ -74,6 +75,12 @@ terminate(_Reason, State) ->
 %% @doc gen_server code_change callback (trivial).
 code_change(_Vsn, State, _Extra) ->
     {ok, State}.
+
+%% @spec reload_modules([atom()]) -> [{module, atom()} | {error, term()}]
+%% @doc code:purge/1 and code:load_file/1 the given list of modules in order,
+%%      return the results of code:load_file/1.
+reload_modules(Modules) ->
+    [begin code:purge(M), code:load_file(M) end || M <- Modules].
 
 %% @spec all_changed() -> [atom()]
 %% @doc Return a list of beam modules that have changed.
