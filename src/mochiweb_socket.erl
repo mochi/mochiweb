@@ -7,6 +7,8 @@
 -export([listen/4, accept/1, recv/3, send/2, close/1, port/1, peername/1,
          setopts/2, type/1]).
 
+-define(ACCEPT_TIMEOUT, 2000).
+
 listen(Ssl, Port, Opts, SslOpts) ->
     case Ssl of
         true ->
@@ -38,7 +40,7 @@ accept({ssl, ListenSocket}) ->
             {error, Reason}
     end;
 accept(ListenSocket) ->
-    gen_tcp:accept(ListenSocket).
+    gen_tcp:accept(ListenSocket, ?ACCEPT_TIMEOUT).
 
 recv({ssl, Socket}, Length, Timeout) ->
     ssl:recv(Socket, Length, Timeout);

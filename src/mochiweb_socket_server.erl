@@ -14,19 +14,21 @@
          handle_info/2]).
 -export([get/2]).
 
--export([acceptor_loop/1]).
-
 -record(mochiweb_socket_server,
         {port,
          loop,
          name=undefined,
+         %% NOTE: This is currently ignored.
          max=2048,
          ip=any,
          listen=null,
-         acceptor=null,
+         nodelay=true,
          backlog=128,
+         active_sockets=0,
+         acceptor_pool_size=16,
          ssl=false,
-         ssl_opts=[{ssl_imp, new}]}).
+         ssl_opts=[{ssl_imp, new}],
+         acceptor_pool=sets:new()}).
 
 start(State=#mochiweb_socket_server{}) ->
     start_server(State);
@@ -85,13 +87,16 @@ parse_options([{loop, Loop} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{loop=Loop});
 parse_options([{backlog, Backlog} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{backlog=Backlog});
+parse_options([{nodelay, NoDelay} | Rest], State) ->
+    parse_options(Rest, State#mochiweb_socket_server{nodelay=NoDelay});
+parse_options([{acceptor_pool_size, Max} | Rest], State) ->
+    MaxInt = ensure_int(Max),
+    parse_options(Rest,
+                  State#mochiweb_socket_server{acceptor_pool_size=MaxInt});
 parse_options([{max, Max} | Rest], State) ->
-    MaxInt = case Max of
-                 Max when is_list(Max) ->
-                     list_to_integer(Max);
-                 Max when is_integer(Max) ->
-                     Max
-             end,
+    error_logger:info_report([{warning, "TODO: max is currently unsupported"},
+                              {max, Max}]),
+    MaxInt = ensure_int(Max),
     parse_options(Rest, State#mochiweb_socket_server{max=MaxInt});
 parse_options([{ssl, Ssl} | Rest], State) when is_boolean(Ssl) ->
     parse_options(Rest, State#mochiweb_socket_server{ssl=Ssl});
@@ -114,6 +119,11 @@ start_server(State=#mochiweb_socket_server{ssl=Ssl, name=Name}) ->
             gen_server:start_link(Name, ?MODULE, State, [])
     end.
 
+ensure_int(N) when is_integer(N) ->
+    N;
+ensure_int(S) when is_list(S) ->
+    integer_to_list(S).
+
 ipv6_supported() ->
     case (catch inet:getaddr("localhost", inet6)) of
         {ok, _Addr} ->
@@ -122,7 +132,7 @@ ipv6_supported() ->
             false
     end.
 
-init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog}) ->
+init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog, nodelay=NoDelay}) ->
     process_flag(trap_exit, true),
     BaseOpts = [binary,
                 {reuseaddr, true},
@@ -130,7 +140,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog}) ->
                 {backlog, Backlog},
                 {recbuf, ?RECBUF_SIZE},
                 {active, false},
-                {nodelay, true}],
+                {nodelay, NoDelay}],
     Opts = case Ip of
         any ->
             case ipv6_supported() of % IPv4, and IPv6 if supported
@@ -164,49 +174,33 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog}) ->
             Other
     end.
 
+new_acceptor_pool(Listen,
+                  State=#mochiweb_socket_server{acceptor_pool=Pool,
+                                                acceptor_pool_size=Size,
+                                                loop=Loop}) ->
+    F = fun (_, S) ->
+                Pid = mochiweb_acceptor:start_link(self(), Listen, Loop),
+                sets:add_element(Pid, S)
+        end,
+    Pool1 = lists:foldl(F, Pool, lists:seq(1, Size)),
+    State#mochiweb_socket_server{acceptor_pool=Pool1}.
+
 listen(Port, Opts, State=#mochiweb_socket_server{ssl=Ssl, ssl_opts=SslOpts}) ->
     case mochiweb_socket:listen(Ssl, Port, Opts, SslOpts) of
         {ok, Listen} ->
             {ok, ListenPort} = mochiweb_socket:port(Listen),
-            {ok, new_acceptor(State#mochiweb_socket_server{listen=Listen,
-                                                           port=ListenPort})};
+            {ok, new_acceptor_pool(
+                   Listen,
+                   State#mochiweb_socket_server{listen=Listen,
+                                                port=ListenPort})};
         {error, Reason} ->
             {stop, Reason}
     end.
 
-new_acceptor(State=#mochiweb_socket_server{max=0}) ->
-    error_logger:error_report(
-      [{application, mochiweb},
-       "Not accepting new connections"]),
-    State#mochiweb_socket_server{acceptor=null};
-new_acceptor(State=#mochiweb_socket_server{listen=Listen,loop=Loop}) ->
-    Pid = proc_lib:spawn_link(?MODULE, acceptor_loop,
-                              [{self(), Listen, Loop}]),
-    State#mochiweb_socket_server{acceptor=Pid}.
-
-call_loop({M, F}, Socket) ->
-    M:F(Socket);
-call_loop(Loop, Socket) ->
-    Loop(Socket).
-
-acceptor_loop({Server, Listen, Loop}) ->
-    case catch mochiweb_socket:accept(Listen) of
-        {ok, Socket} ->
-            gen_server:cast(Server, {accepted, self()}),
-            call_loop(Loop, Socket);
-        {error, closed} ->
-            exit(normal);
-        Other ->
-            error_logger:error_report(
-              [{application, mochiweb},
-               "Accept failed error",
-               lists:flatten(io_lib:format("~p", [Other]))]),
-            exit({error, accept_failed})
-    end.
-
-
 do_get(port, #mochiweb_socket_server{port=Port}) ->
-    Port.
+    Port;
+do_get(active_sockets, #mochiweb_socket_server{active_sockets=ActiveSockets}) ->
+    ActiveSockets.
 
 handle_call({get, Property}, _From, State) ->
     Res = do_get(Property, State),
@@ -215,11 +209,10 @@ handle_call(_Message, _From, State) ->
     Res = error,
     {reply, Res, State}.
 
-handle_cast({accepted, Pid},
-            State=#mochiweb_socket_server{acceptor=Pid, max=Max}) ->
-    % io:format("accepted ~p~n", [Pid]),
-    State1 = State#mochiweb_socket_server{max=Max - 1},
-    {noreply, new_acceptor(State1)};
+handle_cast({accepted, Pid, _Timing},
+            State=#mochiweb_socket_server{active_sockets=ActiveSockets}) ->
+    State1 = State#mochiweb_socket_server{active_sockets=1 + ActiveSockets},
+    {noreply, recycle_acceptor(Pid, State1)};
 handle_cast(stop, State) ->
     {stop, normal, State}.
 
@@ -236,36 +229,38 @@ terminate(_Reason, #mochiweb_socket_server{listen=Listen, port=Port}) ->
 code_change(_OldVsn, State, _Extra) ->
     State.
 
-handle_info({'EXIT', Pid, normal},
-            State=#mochiweb_socket_server{acceptor=Pid}) ->
-    % io:format("normal acceptor down~n"),
-    {noreply, new_acceptor(State)};
+recycle_acceptor(Pid, State=#mochiweb_socket_server{
+                        acceptor_pool=Pool,
+                        listen=Listen,
+                        loop=Loop,
+                        active_sockets=ActiveSockets}) ->
+    case sets:is_element(Pid, Pool) of
+        true ->
+            Acceptor = mochiweb_acceptor:start_link(self(), Listen, Loop),
+            Pool1 = sets:add_element(Acceptor, sets:del_element(Pid, Pool)),
+            State#mochiweb_socket_server{acceptor_pool=Pool1};
+        false ->
+            State#mochiweb_socket_server{active_sockets=ActiveSockets - 1}
+    end.
+
+handle_info({'EXIT', Pid, normal}, State) ->
+    {noreply, recycle_acceptor(Pid, State)};
 handle_info({'EXIT', Pid, Reason},
-            State=#mochiweb_socket_server{acceptor=Pid}) ->
-    error_logger:error_report({?MODULE, ?LINE,
-                               {acceptor_error, Reason}}),
-    timer:sleep(100),
-    {noreply, new_acceptor(State)};
-handle_info({'EXIT', _LoopPid, Reason},
-            State=#mochiweb_socket_server{acceptor=Pid, max=Max}) ->
-    case Reason of
-        normal ->
-            ok;
-        _ ->
+            State=#mochiweb_socket_server{acceptor_pool=Pool}) ->
+    case sets:is_element(Pid, Pool) of
+        true ->
+            %% If there was an unexpected error accepting, log and sleep.
             error_logger:error_report({?MODULE, ?LINE,
-                                       {child_error, Reason}})
+                                       {acceptor_error, Reason}}),
+            timer:sleep(100);
+        false ->
+            ok
     end,
-    State1 = State#mochiweb_socket_server{max=Max + 1},
-    State2 = case Pid of
-                 null ->
-                     new_acceptor(State1);
-                 _ ->
-                     State1
-             end,
-    {noreply, State2};
+    {noreply, recycle_acceptor(Pid, State)};
 handle_info(Info, State) ->
     error_logger:info_report([{'INFO', Info}, {'State', State}]),
     {noreply, State}.
+
 
 
 %%
