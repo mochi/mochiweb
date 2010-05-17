@@ -22,7 +22,7 @@
          max=2048,
          ip=any,
          listen=null,
-         nodelay=true,
+         nodelay=false,
          backlog=128,
          active_sockets=0,
          acceptor_pool_size=16,
