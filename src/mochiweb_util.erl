@@ -135,12 +135,23 @@ cmd_loop(Port, Acc) ->
             cmd_loop(Port, [Data | Acc])
     end.
 
-%% @spec join([string()], Separator) -> string()
-%% @doc Deprecated, use string:join/2.
-join(Strings, Separator) when is_integer(Separator) ->
-    lists:flatten(string:join(Strings, [Separator]));
-join(Strings, Separator) when is_list(Separator) ->
-    lists:flatten(string:join(Strings, Separator)).
+%% @spec join([iolist()], iolist()) -> iolist()
+%% @doc Join a list of strings or binaries together with the given separator
+%%      string or char or binary. The output is flattened, but may be an
+%%      iolist() instead of a string() if any of the inputs are binary().
+join([], _Separator) ->
+    [];
+join([S], _Separator) ->
+    lists:flatten(S);
+join(Strings, Separator) ->
+    lists:flatten(revjoin(lists:reverse(Strings), Separator, [])).
+
+revjoin([], _Separator, Acc) ->
+    Acc;
+revjoin([S | Rest], Separator, []) ->
+    revjoin(Rest, Separator, [S]);
+revjoin([S | Rest], Separator, Acc) ->
+    revjoin(Rest, Separator, [S, Separator | Acc]).
 
 %% @spec quote_plus(atom() | integer() | float() | string() | binary()) -> string()
 %% @doc URL safe encoding of the given term.
@@ -577,9 +588,9 @@ shell_quote_test() ->
 
 cmd_port_test_spool(Port, Acc) ->
     receive
-	{Port, eof} ->
-	    Acc;
-	{Port, {data, {eol, Data}}} ->
+        {Port, eof} ->
+            Acc;
+        {Port, {data, {eol, Data}}} ->
             cmd_port_test_spool(Port, ["\n", Data | Acc]);
         {Port, Unknown} ->
             throw({unknown, Unknown})
@@ -697,6 +708,12 @@ join_test() ->
                   join(["foo"], ",")),
     ?assertEqual("foobarbaz",
                   join(["foo", "bar", "baz"], "")),
+    ?assertEqual("foo" ++ [<<>>] ++ "bar" ++ [<<>>] ++ "baz",
+                 join(["foo", "bar", "baz"], <<>>)),
+    ?assertEqual("foobar" ++ [<<"baz">>],
+                 join(["foo", "bar", <<"baz">>], "")),
+    ?assertEqual("",
+                 join([], "any")),
     ok.
 
 quote_plus_test() ->
