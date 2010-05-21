@@ -123,7 +123,9 @@ cmd_string(Argv) ->
 cmd_status(Argv) ->
     Port = cmd_port(Argv, [exit_status, stderr_to_stdout,
                            use_stdio, binary]),
-    cmd_loop(Port, []).
+    try cmd_loop(Port, [])
+    after catch port_close(Port)
+    end.
 
 %% @spec cmd_loop(port(), list()) -> {ExitStatus::integer(), Stdout::binary()}
 %% @doc Accumulate the output and exit status from a port.
