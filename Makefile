@@ -4,7 +4,7 @@ all: ebin/
 edoc:
 	(cd src;$(MAKE) edoc)
 
-test:
+test: ebin/
 	(cd src;$(MAKE) test)
 
 clean:
