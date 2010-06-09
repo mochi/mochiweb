@@ -23,6 +23,8 @@ init(Server, Listen, Loop) ->
             exit(normal);
         {error, timeout} ->
             exit(normal);
+        {error, esslaccept} ->
+            exit(normal);
         Other ->
             error_logger:error_report(
               [{application, mochiweb},
