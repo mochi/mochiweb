@@ -189,20 +189,24 @@ recv_body() ->
 %% @doc Receive the body of the HTTP request (defined by Content-Length).
 %%      Will receive up to MaxBody bytes.
 recv_body(MaxBody) ->
-    % we could use a sane constant for max chunk size
-    Body = stream_body(?MAX_RECV_BODY, fun
-        ({0, _ChunkedFooter}, {_LengthAcc, BinAcc}) ->
-            iolist_to_binary(lists:reverse(BinAcc));
-        ({Length, Bin}, {LengthAcc, BinAcc}) ->
-            NewLength = Length + LengthAcc,
-            if NewLength > MaxBody ->
-                exit({body_too_large, chunked});
-            true ->
-                {NewLength, [Bin | BinAcc]}
-            end
-        end, {0, []}, MaxBody),
-    put(?SAVE_BODY, Body),
-    Body.
+    case erlang:get(?SAVE_BODY) of
+        undefined ->
+            % we could use a sane constant for max chunk size
+            Body = stream_body(?MAX_RECV_BODY, fun
+                ({0, _ChunkedFooter}, {_LengthAcc, BinAcc}) ->
+                    iolist_to_binary(lists:reverse(BinAcc));
+                ({Length, Bin}, {LengthAcc, BinAcc}) ->
+                    NewLength = Length + LengthAcc,
+                    if NewLength > MaxBody ->
+                        exit({body_too_large, chunked});
+                    true ->
+                        {NewLength, [Bin | BinAcc]}
+                    end
+                end, {0, []}, MaxBody),
+            put(?SAVE_BODY, Body),
+            Body;
+        Cached -> Cached
+    end.
 
 stream_body(MaxChunkSize, ChunkFun, FunState) ->
     stream_body(MaxChunkSize, ChunkFun, FunState, undefined).
