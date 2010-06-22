@@ -9,6 +9,16 @@ main([Name]) ->
 main([Name, Dest]) ->
     ensure(),
     DestDir = filename:absname(Dest),
+    case code:which(mochiweb_skel) of
+        non_existing ->
+            io:format("mochiweb not compiled, running make~n"),
+            os:cmd("(cd \"" ++ filename:dirname(escript:script_name())
+                   ++ "/..\"; make)"),
+            ensure(),
+            code:rehash();
+        _ ->
+            ok
+    end,
     ok = mochiweb_skel:skelcopy(DestDir, Name);
 main(_) ->
     usage().
