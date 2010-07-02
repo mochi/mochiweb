@@ -14,9 +14,11 @@ skelcopy(DestDir, Name) ->
                    N + 1
            end,
     skelcopy(src(), DestDir, Name, LDst),
+    DestLink = filename:join([DestDir, Name, "deps", "mochiweb-src"]),
+    ok = filelib:ensure_dir(DestLink),
     ok = file:make_symlink(
-        filename:join(filename:dirname(code:which(?MODULE)), ".."),
-        filename:join([DestDir, Name, "deps", "mochiweb-src"])).
+           filename:join(filename:dirname(code:which(?MODULE)), ".."),
+           DestLink).
 
 %% Internal API
 

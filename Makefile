@@ -8,7 +8,7 @@ test: ebin/
 	(cd src;$(MAKE) test)
 
 clean:
-	(cd src;$(MAKE) clean)
+	rm -rf ebin
 
 clean_plt:
 	(cd src;$(MAKE) clean_plt)
