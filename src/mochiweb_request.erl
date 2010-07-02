@@ -95,7 +95,9 @@ get(peer) ->
                     string:strip(lists:last(string:tokens(Hosts, ",")))
             end;
         {ok, {Addr, _Port}} ->
-            inet_parse:ntoa(Addr)
+            inet_parse:ntoa(Addr);
+        {error, enotconn} ->
+            exit(normal)
     end;
 get(path) ->
     case erlang:get(?SAVE_PATH) of
