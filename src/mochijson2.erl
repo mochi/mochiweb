@@ -95,11 +95,8 @@ json_encode(false, _State) ->
     <<"false">>;
 json_encode(null, _State) ->
     <<"null">>;
-json_encode(I, _State) when is_integer(I) andalso I >= -2147483648 andalso I =< 2147483647 ->
-    %% Anything outside of 32-bit integers should be encoded as a float
-    integer_to_list(I);
 json_encode(I, _State) when is_integer(I) ->
-    mochinum:digits(float(I));
+    integer_to_list(I);
 json_encode(F, _State) when is_float(F) ->
     mochinum:digits(F);
 json_encode(S, State) when is_binary(S); is_atom(S) ->
@@ -764,9 +761,16 @@ int_test() ->
     ?assertEqual(11, decode("11")),
     ok.
 
-float_fallback_test() ->
-    ?assertEqual(<<"-2147483649.0">>, iolist_to_binary(encode(-2147483649))),
-    ?assertEqual(<<"2147483648.0">>, iolist_to_binary(encode(2147483648))),
+large_int_test() ->
+    ?assertEqual(<<"-2147483649214748364921474836492147483649">>,
+        iolist_to_binary(encode(-2147483649214748364921474836492147483649))),
+    ?assertEqual(<<"2147483649214748364921474836492147483649">>,
+        iolist_to_binary(encode(2147483649214748364921474836492147483649))),
+    ok.
+
+float_test() ->
+    ?assertEqual(<<"-2147483649.0">>, iolist_to_binary(encode(-2147483649.0))),
+    ?assertEqual(<<"2147483648.0">>, iolist_to_binary(encode(2147483648.0))),
     ok.
 
 handler_test() ->
