@@ -27,7 +27,7 @@ write_app(F, Comments, TermL, App) ->
 parse_appsrc(F) ->
     case file:read_file(F) of
         {ok, B} ->
-            case erl_scan:string(binary_to_list(B), 1, [return_comments]) of
+            case erl_scan:string(binary_to_list(B), 1) of
                 {ok, Toks, _} ->
                     Comments = lists:takewhile(
                                  fun({comment,_,_}) -> true;
