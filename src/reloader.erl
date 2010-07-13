@@ -103,8 +103,8 @@ module_vsn({M, Beam, _Fn}) ->
     {ok, {M, Vsn}} = beam_lib:version(Beam),
     Vsn;
 module_vsn(L) when is_list(L) ->
-    {_, Attrs} = lists:keyfind(attributes, 1, L),
-    {_, Vsn} = lists:keyfind(vsn, 1, Attrs),
+    {value, {_, Attrs}} = lists:keysearch(attributes, 1, L),
+    {value, {_, Vsn}} = lists:keysearch(vsn, 1, Attrs),
     Vsn.
 
 doit(From, To) ->

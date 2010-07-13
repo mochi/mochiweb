@@ -64,20 +64,20 @@ write_term(T, L0, TermL, Fd) ->
     io:fwrite(Fd, "~p.~n", [T]).
 
 vsn(Vsn, Attrs) when Vsn =:= '' orelse Vsn =:= "" ->
-    case lists:keyfind(vsn, 1, Attrs) of
+    case lists:keysearch(vsn, 1, Attrs) of
         false ->
             {vsn, "0.00"};
-        V ->
+        {value, V} ->
             V
     end;
 vsn(Vsn, _Attrs) ->
     {vsn, Vsn}.
 
 descr(Attrs) ->
-    case lists:keyfind(description, 1, Attrs) of
+    case lists:keysearch(description, 1, Attrs) of
         false ->
             {description, "auto_generated .app file"};
-        D ->
+        {value, D} ->
             D
     end.
 

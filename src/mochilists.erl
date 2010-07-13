@@ -30,7 +30,7 @@ set_defaults(DefaultProps, Proplist) ->
 %% @doc Returns true if Propist contains at least one entry associated
 %%      with Key, otherwise false is returned.
 is_defined(Key, Proplist) ->
-    lists:keyfind(Key, 1, Proplist) =/= false.
+    lists:keysearch(Key, 1, Proplist) =/= false.
 
 
 %% @spec get_value(Key::term(), Proplist::list()) -> term() | undefined
@@ -45,10 +45,10 @@ get_value(Key, Proplist) ->
 get_value(_Key, [], Default) ->
     Default;
 get_value(Key, Proplist, Default) ->
-    case lists:keyfind(Key, 1, Proplist) of
+    case lists:keysearch(Key, 1, Proplist) of
         false ->
             Default;
-        {Key, Value} ->
+        {value, {Key, Value}} ->
             Value
     end.
 
