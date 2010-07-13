@@ -282,7 +282,10 @@ client_headers(Body, IsLastRequest) ->
 drain_reply(_SockFun, 0, Acc) ->
     Acc;
 drain_reply(SockFun, Length, Acc) ->
-    Sz = erlang:min(Length, 1024),
+    Sz = case (Length < 1024) of
+	true -> Length;
+	_ -> 1024
+    end,
     {ok, B} = SockFun({recv, Sz}),
     drain_reply(SockFun, Length - Sz, <<Acc/bytes, B/bytes>>).
 
