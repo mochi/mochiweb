@@ -131,6 +131,11 @@ to_html([], Acc) ->
     lists:reverse(Acc);
 to_html([{'=', Content} | Rest], Acc) ->
     to_html(Rest, [Content | Acc]);
+to_html([{pi, Bin} | Rest], Acc) ->
+    Open = [<<"<?">>,
+            Bin,
+            <<"?>">>],
+    to_html(Rest, [Open | Acc]);
 to_html([{pi, Tag, Attrs} | Rest], Acc) ->
     Open = [<<"<?">>,
             Tag,
@@ -216,6 +221,9 @@ to_tokens([{Tag0, [T0={'=', _C0} | R1]} | Rest], Acc) ->
 to_tokens([{Tag0, [T0={comment, _C0} | R1]} | Rest], Acc) ->
     %% Allow {comment, iolist()}
     to_tokens([{Tag0, R1} | Rest], [T0 | Acc]);
+to_tokens([{Tag0, [T0={pi, _S0} | R1]} | Rest], Acc) ->
+    %% Allow {pi, binary()}
+    to_tokens([{Tag0, R1} | Rest], [T0 | Acc]);
 to_tokens([{Tag0, [T0={pi, _S0, _A0} | R1]} | Rest], Acc) ->
     %% Allow {pi, binary(), list()}
     to_tokens([{Tag0, R1} | Rest], [T0 | Acc]);
@@ -290,6 +298,9 @@ tokenize(B, S=#decoder{offset=O}) ->
             tokenize_doctype(B, ?ADV_COL(S, 10));
         <<_:O/binary, "<![CDATA[", _/binary>> ->
             tokenize_cdata(B, ?ADV_COL(S, 9));
+        <<_:O/binary, "<?php", _/binary>> ->
+            {Body, S1} = raw_qgt(B, ?ADV_COL(S, 2)),
+            {{pi, Body}, S1};
         <<_:O/binary, "<?", _/binary>> ->
             {Tag, S1} = tokenize_literal(B, ?ADV_COL(S, 2)),
             {Attrs, S2} = tokenize_attributes(B, S1),
@@ -333,6 +344,8 @@ tree([{start_tag, Tag, Attrs, true} | Rest], S) ->
     tree(Rest, append_stack_child(norm({Tag, Attrs}), S));
 tree([{start_tag, Tag, Attrs, false} | Rest], S) ->
     tree(Rest, stack(norm({Tag, Attrs}), S));
+tree([T={pi, _Raw} | Rest], S) ->
+    tree(Rest, append_stack_child(T, S));
 tree([T={pi, _Tag, _Attrs} | Rest], S) ->
     tree(Rest, append_stack_child(T, S));
 tree([T={comment, _Comment} | Rest], S) ->
@@ -367,6 +380,10 @@ stack(T1, Stack) ->
 append_stack_child(StartTag, [{Name, Attrs, Acc} | Stack]) ->
     [{Name, Attrs, [StartTag | Acc]} | Stack].
 
+destack(<<"br">>, Stack) ->
+    %% This is an ugly hack to make dumb_br_test() pass,
+    %% this makes it such that br can never have children.
+    Stack;
 destack(TagName, Stack) when is_list(Stack) ->
     F = fun (X) ->
                 case X of
@@ -487,6 +504,22 @@ tokenize_literal(Bin, S=#decoder{offset=O}, Acc) ->
             tokenize_literal(Bin, ?INC_COL(S), [C | Acc]);
         _ ->
             {iolist_to_binary(lists:reverse(Acc)), S}
+    end.
+
+raw_qgt(Bin, S=#decoder{offset=O}) ->
+    raw_qgt(Bin, S, O).
+
+raw_qgt(Bin, S=#decoder{offset=O}, Start) ->
+    case Bin of
+        <<_:O/binary, "?>", _/binary>> ->
+            Len = O - Start,
+            <<_:Start/binary, Raw:Len/binary, _/binary>> = Bin,
+            {Raw, ?ADV_COL(S, 2)};
+        <<_:O/binary, C, _/binary>> ->
+            raw_qgt(Bin, ?INC_CHAR(S, C), Start);
+        <<_:O/binary>> ->
+            <<_:Start/binary, Raw/binary>> = Bin,
+            {Raw, S}
     end.
 
 find_qgt(Bin, S=#decoder{offset=O}) ->
@@ -1056,6 +1089,31 @@ doctype_test() ->
        mochiweb_html:parse("<html>"
                            "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">"
                            "<head></head></body></html>")),
+    ok.
+
+dumb_br_test() ->
+    %% http://code.google.com/p/mochiweb/issues/detail?id=71
+    ?assertEqual(
+       {<<"div">>,[],[{<<"br">>, [], []}, {<<"br">>, [], []}, <<"z">>]},
+       mochiweb_html:parse("<div><br/><br/>z</br/></br/></div>")),
+    ?assertEqual(
+       {<<"div">>,[],[{<<"br">>, [], []}, {<<"br">>, [], []}, <<"z">>]},
+       mochiweb_html:parse("<div><br><br>z</br/></br/></div>")),
+    ?assertEqual(
+       {<<"div">>,[],[{<<"br">>, [], []}, {<<"br">>, [], []}, <<"z">>]},
+       mochiweb_html:parse("<div><br><br>z</br></br></div>")).
+
+
+php_test() ->
+    %% http://code.google.com/p/mochiweb/issues/detail?id=71
+    ?assertEqual(
+       [{pi, <<"php\n">>}],
+       mochiweb_html:tokens(
+         "<?php\n?>")),
+    ?assertEqual(
+       {<<"div">>, [], [{pi, <<"php\n">>}]},
+       mochiweb_html:parse(
+         "<div><?php\n?></div>")),
     ok.
 
 -endif.
