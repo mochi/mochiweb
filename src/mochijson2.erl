@@ -101,10 +101,14 @@ json_encode(F, _State) when is_float(F) ->
     mochinum:digits(F);
 json_encode(S, State) when is_binary(S); is_atom(S) ->
     json_encode_string(S, State);
-json_encode(Array, State) when is_list(Array) ->
-    json_encode_array(Array, State);
+json_encode([{_,_}|_] = Props, State) ->
+    json_encode_proplist(Props, State);
 json_encode({struct, Props}, State) when is_list(Props) ->
     json_encode_proplist(Props, State);
+json_encode(Array, State) when is_list(Array) ->
+    json_encode_array(Array, State);
+json_encode({array, Array}, State) when is_list(Array) ->
+    json_encode_array(Array, State);
 json_encode({json, IoList}, _State) ->
     IoList;
 json_encode(Bad, #encoder{handler=null}) ->
@@ -716,6 +720,15 @@ key_encode_test() ->
     ?assertEqual(
        <<"{\"foo\":1}">>,
        iolist_to_binary(encode({struct, [{"foo", 1}]}))),
+	?assertEqual(
+       <<"{\"foo\":1}">>,
+       iolist_to_binary(encode([{foo, 1}]))),
+    ?assertEqual(
+       <<"{\"foo\":1}">>,
+       iolist_to_binary(encode([{<<"foo">>, 1}]))),
+    ?assertEqual(
+       <<"{\"foo\":1}">>,
+       iolist_to_binary(encode([{"foo", 1}]))),
     ?assertEqual(
        <<"{\"\\ud834\\udd20\":1}">>,
        iolist_to_binary(
