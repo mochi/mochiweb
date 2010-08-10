@@ -298,12 +298,12 @@ find_boundary(Prefix, Data) ->
 -include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
 
-ssl_cert_opts() ->
-    EbinDir = filename:dirname(code:which(?MODULE)),
-    CertDir = filename:join([EbinDir, "..", "support", "test-materials"]),
-    CertFile = filename:join(CertDir, "test_ssl_cert.pem"),
-    KeyFile = filename:join(CertDir, "test_ssl_key.pem"),
-    [{certfile, CertFile}, {keyfile, KeyFile}].
+ssl_cert_opts(Role) ->
+    CertDir = filename:join([code:lib_dir(ssl), "examples", "certs", "etc", Role]),
+    CaCertFile = filename:join([CertDir, "cacerts.pem"]),
+    CertFile = filename:join(CertDir, "cert.pem"),
+    KeyFile = filename:join(CertDir, "key.pem"),
+    [{cacertfile, CaCertFile}, {certfile, CertFile}, {keyfile, KeyFile}].
 
 with_socket_server(Transport, ServerFun, ClientFun) ->
     ServerOpts0 = [{ip, "127.0.0.1"}, {port, 0}, {loop, ServerFun}],
@@ -311,7 +311,7 @@ with_socket_server(Transport, ServerFun, ClientFun) ->
         plain ->
             ServerOpts0;
         ssl ->
-            ServerOpts0 ++ [{ssl, true}, {ssl_opts, ssl_cert_opts()}]
+            ServerOpts0 ++ [{ssl, true}, {ssl_opts, ssl_cert_opts("server")}]
     end,
     {ok, Server} = mochiweb_socket_server:start(ServerOpts),
     Port = mochiweb_socket_server:get(Server, port),
@@ -320,7 +320,7 @@ with_socket_server(Transport, ServerFun, ClientFun) ->
         plain ->
             gen_tcp:connect("127.0.0.1", Port, ClientOpts);
         ssl ->
-            ClientOpts1 = [{ssl_imp, new} | ClientOpts],
+            ClientOpts1 = [{ssl_imp, new} | ssl_cert_opts("client") ++ ClientOpts],
             {ok, SslSocket} = ssl:connect("127.0.0.1", Port, ClientOpts1),
             {ok, {ssl, SslSocket}}
     end,
