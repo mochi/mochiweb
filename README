@@ -1,1 +1,9 @@
 MochiWeb is an Erlang library for building lightweight HTTP servers.
+
+The latest version of MochiWeb is available at http://github.com/mochi/mochiweb
+
+R12B compatibility:
+The master of MochiWeb is tested with R13B04 and later. A branch compatible
+with R12B is maintained separately at http://github.com/lemenkov/mochiweb
+The R12B branch of that repository is mirrored in the official repository
+occasionally for convenience.
