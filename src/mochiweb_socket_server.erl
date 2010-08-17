@@ -123,7 +123,7 @@ start_server(State=#mochiweb_socket_server{ssl=Ssl, name=Name}) ->
 ensure_int(N) when is_integer(N) ->
     N;
 ensure_int(S) when is_list(S) ->
-    integer_to_list(S).
+    list_to_integer(S).
 
 ipv6_supported() ->
     case (catch inet:getaddr("localhost", inet6)) of
