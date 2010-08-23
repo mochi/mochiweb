@@ -381,8 +381,8 @@ ok({ContentType, ResponseHeaders, Body}) ->
 %% @doc Return true if the connection must be closed. If false, using
 %%      Keep-Alive should be safe.
 should_close() ->
-    ForceClose = erlang:get(mochiweb_request_force_close) =/= undefined,
-    DidNotRecv = erlang:get(mochiweb_request_recv) =:= undefined,
+    ForceClose = erlang:get(?SAVE_FORCE_CLOSE) =/= undefined,
+    DidNotRecv = erlang:get(?SAVE_RECV) =:= undefined,
     ForceClose orelse Version < {1, 0}
         %% Connection: close
         orelse get_header_value("connection") =:= "close"
