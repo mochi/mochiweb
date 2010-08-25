@@ -503,7 +503,7 @@ tokenize_literal(Bin, S=#decoder{offset=O}, Acc) ->
                                               orelse C =:= $=) ->
             tokenize_literal(Bin, ?INC_COL(S), [C | Acc]);
         _ ->
-            {iolist_to_binary(lists:reverse(Acc)), S}
+            {iolist_to_binary(string:to_lower(lists:reverse(Acc))), S}
     end.
 
 raw_qgt(Bin, S=#decoder{offset=O}) ->
@@ -913,6 +913,15 @@ parse_test() ->
                            {<<"br">>, [], []},
                            <<"bar">>]}]},
        parse(<<"<html><link>foo<br>bar</link></html>">>)),
+    %% Case insensitive tags
+    ?assertEqual(
+       {<<"html">>, [],
+        [{<<"head">>, [], [<<"foo">>,
+                           {<<"br">>, [], []},
+                           <<"BAR">>]},
+         {<<"body">>, [{<<"bgcolor">>, <<"#Aa01fF">>}], []}
+        ]},
+       parse(<<"<html><Head>foo<bR>BAR</head><body bgcolor=\"#Aa01fF\"></BODY></html>">>)),
     ok.
 
 exhaustive_is_singleton_test() ->
