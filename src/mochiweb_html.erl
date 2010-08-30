@@ -320,7 +320,7 @@ tokenize(B, S=#decoder{offset=O}) ->
             {Tag, S1} = tokenize_literal(B, ?INC_COL(S)),
             {Attrs, S2} = tokenize_attributes(B, S1),
             {S3, HasSlash} = find_gt(B, S2),
-            Singleton = HasSlash orelse is_singleton(norm(binary_to_list(Tag))),
+            Singleton = HasSlash orelse is_singleton(Tag),
             {{start_tag, Tag, Attrs, Singleton}, S3};
         _ ->
             tokenize_data(B, S)
@@ -919,9 +919,9 @@ parse_test() ->
         [{<<"head">>, [], [<<"foo">>,
                            {<<"br">>, [], []},
                            <<"BAR">>]},
-         {<<"body">>, [{<<"bgcolor">>, <<"#Aa01fF">>}], []}
+         {<<"body">>, [{<<"class">>, <<"">>}, {<<"bgcolor">>, <<"#Aa01fF">>}], []}
         ]},
-       parse(<<"<html><Head>foo<bR>BAR</head><body bgcolor=\"#Aa01fF\"></BODY></html>">>)),
+       parse(<<"<html><Head>foo<bR>BAR</head><body Class=\"\" bgcolor=\"#Aa01fF\"></BODY></html>">>)),
     ok.
 
 exhaustive_is_singleton_test() ->
@@ -1108,6 +1108,9 @@ dumb_br_test() ->
     ?assertEqual(
        {<<"div">>,[],[{<<"br">>, [], []}, {<<"br">>, [], []}, <<"z">>]},
        mochiweb_html:parse("<div><br><br>z</br/></br/></div>")),
+    ?assertEqual(
+       {<<"div">>,[],[{<<"br">>, [], []}, {<<"br">>, [], []}, <<"z">>, {<<"br">>, [], []}, {<<"br">>, [], []}]},
+       mochiweb_html:parse("<div><br><br>z<br/><br/></div>")),
     ?assertEqual(
        {<<"div">>,[],[{<<"br">>, [], []}, {<<"br">>, [], []}, <<"z">>]},
        mochiweb_html:parse("<div><br><br>z</br></br></div>")).
