@@ -320,7 +320,7 @@ tokenize(B, S=#decoder{offset=O}) ->
             {Tag, S1} = tokenize_literal(B, ?INC_COL(S)),
             {Attrs, S2} = tokenize_attributes(B, S1),
             {S3, HasSlash} = find_gt(B, S2),
-            Singleton = HasSlash orelse is_singleton(norm(binary_to_list(Tag))),
+            Singleton = HasSlash orelse is_singleton(Tag),
             {{start_tag, Tag, Attrs, Singleton}, S3};
         _ ->
             tokenize_data(B, S)
@@ -503,7 +503,7 @@ tokenize_literal(Bin, S=#decoder{offset=O}, Acc) ->
                                               orelse C =:= $=) ->
             tokenize_literal(Bin, ?INC_COL(S), [C | Acc]);
         _ ->
-            {iolist_to_binary(lists:reverse(Acc)), S}
+            {iolist_to_binary(string:to_lower(lists:reverse(Acc))), S}
     end.
 
 raw_qgt(Bin, S=#decoder{offset=O}) ->
@@ -913,6 +913,15 @@ parse_test() ->
                            {<<"br">>, [], []},
                            <<"bar">>]}]},
        parse(<<"<html><link>foo<br>bar</link></html>">>)),
+    %% Case insensitive tags
+    ?assertEqual(
+       {<<"html">>, [],
+        [{<<"head">>, [], [<<"foo">>,
+                           {<<"br">>, [], []},
+                           <<"BAR">>]},
+         {<<"body">>, [{<<"class">>, <<"">>}, {<<"bgcolor">>, <<"#Aa01fF">>}], []}
+        ]},
+       parse(<<"<html><Head>foo<bR>BAR</head><body Class=\"\" bgcolor=\"#Aa01fF\"></BODY></html>">>)),
     ok.
 
 exhaustive_is_singleton_test() ->
@@ -1099,6 +1108,9 @@ dumb_br_test() ->
     ?assertEqual(
        {<<"div">>,[],[{<<"br">>, [], []}, {<<"br">>, [], []}, <<"z">>]},
        mochiweb_html:parse("<div><br><br>z</br/></br/></div>")),
+    ?assertEqual(
+       {<<"div">>,[],[{<<"br">>, [], []}, {<<"br">>, [], []}, <<"z">>, {<<"br">>, [], []}, {<<"br">>, [], []}]},
+       mochiweb_html:parse("<div><br><br>z<br/><br/></div>")),
     ?assertEqual(
        {<<"div">>,[],[{<<"br">>, [], []}, {<<"br">>, [], []}, <<"z">>]},
        mochiweb_html:parse("<div><br><br>z</br></br></div>")).
