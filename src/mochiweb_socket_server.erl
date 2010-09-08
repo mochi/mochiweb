@@ -258,6 +258,20 @@ handle_info({'EXIT', Pid, Reason},
             ok
     end,
     {noreply, recycle_acceptor(Pid, State)};
+
+% this is what release_handler needs to get a list of modules,
+% since our supervisor modules list is set to 'dynamic'
+% see sasl-2.1.9.2/src/release_handler_1.erl get_dynamic_mods
+handle_info({From, Tag, get_modules}, State = #mochiweb_socket_server{name={local,Mod}}) ->
+    From ! {element(2,Tag), [Mod]},
+    {noreply, State};
+
+% If for some reason we can't get the module name, send empty list to avoid release_handler timeout:
+handle_info({From, Tag, get_modules}, State) ->
+    error_logger:info_msg("mochiweb_socket_server replying to dynamic modules request as '[]'~n",[]),
+    From ! {element(2,Tag), []},
+    {noreply, State};
+
 handle_info(Info, State) ->
     error_logger:info_report([{'INFO', Info}, {'State', State}]),
     {noreply, State}.
