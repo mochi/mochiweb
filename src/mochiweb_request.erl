@@ -328,7 +328,9 @@ respond({Code, ResponseHeaders, Body}) ->
         _ ->
             send(Body)
     end,
-    Response.
+    Response;
+respond({Code}) ->
+  respond({Code, [], []}).
 
 %% @spec not_found() -> response()
 %% @doc Alias for <code>not_found([])</code>.
