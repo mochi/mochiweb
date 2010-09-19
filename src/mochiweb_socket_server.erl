@@ -157,7 +157,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog, nodelay=No
         {stop, eacces} ->
             case Port < 1024 of
                 true ->
-                    case fdsrv:start() of
+                    case catch fdsrv:start() of
                         {ok, _} ->
                             case fdsrv:bind_socket(tcp, Port) of
                                 {ok, Fd} ->
