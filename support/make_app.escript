@@ -21,7 +21,7 @@ write_app(F, Comments, TermL, App) ->
                     file:close(Fd)
                 end;
         Error ->
-            error(Error)
+            mochi_error(Error)
     end.
 
 parse_appsrc(F) ->
@@ -39,13 +39,13 @@ parse_appsrc(F) ->
                         {ok, {application, _A, _Attrs} = App} ->
                             {Comments, TermL, App};
                         Error ->
-                            error(Error)
+                            mochi_error(Error)
                     end;
                 ScanErr ->
-                    error(ScanErr)
+                    mochi_error(ScanErr)
             end;
         ReadErr ->
-            error(ReadErr)
+            mochi_error(ReadErr)
     end.
 
 write_comments(Comments, Fd) ->
@@ -81,6 +81,6 @@ descr(Attrs) ->
             D
     end.
 
-error(E) ->
+mochi_error(E) ->
     io:fwrite("*** ~p~n", [E]),
     halt(1).
