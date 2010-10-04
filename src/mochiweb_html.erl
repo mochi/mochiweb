@@ -489,8 +489,15 @@ skip_whitespace(B, S=#decoder{offset=O}) ->
             S
     end.
 
-tokenize_literal(Bin, S) ->
-    tokenize_literal(Bin, S, []).
+tokenize_literal(Bin, S=#decoder{offset=O}) ->
+    case Bin of
+        <<_:O/binary, C, _/binary>> when C =:= $>
+                                    orelse C =:= $/
+                                    orelse C =:= $= ->
+            {{data,[C],false}, ?INC_COL(S)};
+        _ ->
+            tokenize_literal(Bin, S, [])
+    end.           
 
 tokenize_literal(Bin, S=#decoder{offset=O}, Acc) ->
     case Bin of
@@ -603,7 +610,7 @@ tokenize_word_or_literal(Bin, S=#decoder{offset=O}) ->
             tokenize_word(Bin, ?INC_COL(S), C);
         <<_:O/binary, C, _/binary>> when not ?IS_WHITESPACE(C) ->
             %% Sanity check for whitespace
-            tokenize_literal(Bin, S, [])
+            tokenize_literal(Bin, S)
     end.
 
 tokenize_word(Bin, S, Quote) ->
