@@ -18,11 +18,13 @@
                    {port, 8888}]).
 
 parse_options(Options) ->
-    {loop, HttpLoop} = proplists:lookup(loop, Options),
+    HttpLoop = proplists:get_value(loop, Options),
+    WsLoop   = proplists:get_value(wsloop, Options),
     Loop = fun (S) ->
-                   ?MODULE:loop(S, HttpLoop)
+                   ?MODULE:loop(S, {HttpLoop, WsLoop})
            end,
-    Options1 = [{loop, Loop} | proplists:delete(loop, Options)],
+    Options1 = [{loop, Loop}, {wsloop, WsLoop} | 
+                    proplists:delete(loop, proplists:delete(wsloop, Options))],
     mochilists:set_defaults(?DEFAULTS, Options1).
 
 stop() ->
@@ -117,14 +119,24 @@ headers(Socket, Request, Headers, _Body, ?MAX_HEADERS) ->
     %% Too many headers sent, bad request.
     mochiweb_socket:setopts(Socket, [{packet, raw}]),
     handle_invalid_request(Socket, Request, Headers);
-headers(Socket, Request, Headers, Body, HeaderCount) ->
+headers(Socket, Request, Headers, {WwwLoop, WsLoop} = Body, HeaderCount) ->
     case mochiweb_socket:recv(Socket, 0, ?HEADERS_RECV_TIMEOUT) of
         {ok, http_eoh} ->
             mochiweb_socket:setopts(Socket, [{packet, raw}]),
-            Req = mochiweb:new_request({Socket, Request,
-                                        lists:reverse(Headers)}),
-            call_body(Body, Req),
-            ?MODULE:after_response(Body, Req);
+            % is this a websocket upgrade request:
+            case {string:to_lower(proplists:get_value('Upgrade', Headers, "")),
+                  string:to_lower(proplists:get_value('Connection', Headers, ""))} of
+                {"websocket", "upgrade"} ->
+                    {_, {abs_path,Path}, _} = Request,
+                    ok = websocket_init(Socket, Path, Headers),
+                    WsReq = mochiweb_wsrequest:new(Socket, Path),
+                    call_body(WsLoop, WsReq);
+                _ -> % not websocket:
+                    Req = mochiweb:new_request({Socket, Request,
+                                                lists:reverse(Headers)}),
+                    call_body(WwwLoop, Req),
+                    ?MODULE:after_response(Body, Req)
+            end;
         {ok, {http_header, _, Name, _, Value}} ->
             headers(Socket, Request, [{Name, Value} | Headers], Body,
                     1 + HeaderCount);
@@ -200,6 +212,74 @@ range_skip_length(Spec, Size) ->
             invalid_range
     end.
 
+websocket_init(Socket, Path, Headers) ->
+    Host    = proplists:get_value('Host', Headers, ""),
+    %Origin  = proplists:get_value("origin", Headers, ""), % TODO
+    SubProto= proplists:get_value("Sec-Websocket-Protocol", Headers, ""),
+    Key1    = proplists:get_value("Sec-Websocket-Key1", Headers, ""),
+    Key2    = proplists:get_value("Sec-Websocket-Key2", Headers, ""),
+    % read the 8 random bytes sent after the client headers for websockets:
+    {ok, Key3} = mochiweb_socket:recv(Socket, 8, ?HEADERS_RECV_TIMEOUT),
+    %io:format("Key1,2,3: ~p ~p ~p~n", [Key1, Key2, Key3]),
+    {N1,S1} = parse_seckey(Key1),
+    {N2,S2} = parse_seckey(Key2),
+    %io:format("{N1,S1} {N2,S2}: ~p ~p~n",[ {N1,S1}, {N2,S2} ] ),
+    case N1 > 4294967295 orelse 
+         N2 > 4294967295 orelse 
+         S1 == 0 orelse
+         S2 == 0 of
+        true ->
+            %  This is a symptom of an attack.
+            exit(websocket_attack);
+        false ->
+            case N1 rem S1 /= 0 orelse
+                 N2 rem S2 /= 0 of
+                true ->
+                    % This can only happen if the client is not a conforming
+                    % WebSocket client.
+                    exit(dodgy_client);
+                false ->
+                    Part1 = erlang:round(N1/S1),
+                    Part2 = erlang:round(N2/S2),
+                    %io:format("Part1 : ~p  Part2: ~p~n", [Part1, Part2]),
+                    Sig = crypto:md5( <<Part1:32/unsigned-integer,
+                                        Part2:32/unsigned-integer,
+                                        Key3/binary>> ),
+                    Proto = case Socket of {ssl, _} -> "wss://"; _ -> "ws://" end,
+                    SubProtoHeader = case SubProto of 
+                                         "" -> ""; 
+                                         P  -> ["Sec-WebSocket-Protocol: ", P, "\r\n"]
+                                     end,
+                    Data = ["HTTP/1.1 101 Web Socket Protocol Handshake\r\n",
+                            "Upgrade: WebSocket\r\n",
+                            "Connection: Upgrade\r\n",
+                            "Sec-WebSocket-Location: ", Proto,Host,Path, "\r\n",
+                            "Sec-WebSocket-Origin: http://", Host, "\r\n",
+                            SubProtoHeader,
+                            "\r\n",
+                            <<Sig/binary>>
+                           ],
+                    mochiweb_socket:send(Socket, Data),
+                    ok                    
+            end
+    end.
+            
+% websocket seckey parser:
+% extract integer by only looking at [0-9]+ in the string
+% count spaces in the string
+% returns: {int, numspaces}
+parse_seckey(Str) ->
+    parse_seckey1(Str, {"",0}).
+
+parse_seckey1("", {NumStr,NumSpaces}) ->
+    {list_to_integer(lists:reverse(NumStr)), NumSpaces};
+parse_seckey1([32|T], {Ret,NumSpaces}) -> % ASCII/dec space
+    parse_seckey1(T, {Ret, 1+NumSpaces});
+parse_seckey1([N|T],  {Ret,NumSpaces}) when N >= 48, N =< 57 -> % ASCII/dec 0-9 
+    parse_seckey1(T, {[N|Ret], NumSpaces});
+parse_seckey1([_|T], Acc) -> 
+    parse_seckey1(T, Acc).
+  
 %%
 %% Tests
 %%

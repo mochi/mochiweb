@@ -1,0 +1,39 @@
+<html>
+<head>
+  <title>Websockets With Mochiweb Demo</title>
+</head>
+<body>
+<h1>Mochiweb websocket demo</h1>
+
+  <div id="connect">
+     <button id="btnConn">Connect</button>
+     &nbsp; State: <span id="connstate" style="font-weight:bold;"></span>
+  </div>
+    <br/><i>Protip: open your javascript error console, just in case..</i><br/>
+  <hr/>
+  <div id="connected">
+    <input id='phrase' type='text'/>
+    <input id='btnSend' class='button' type='submit' name='connect' value='Send'/>
+  </div>
+  <hr/>
+  <div id="msgs"></div>
+
+   <script type="text/javascript">
+    var ws;
+    if (!window.WebSocket) alert("WebSocket not supported by this browser");
+    function $() { return document.getElementById(arguments[0]); }
+    function go()
+    {
+        ws = new WebSocket("ws://localhost:8080");
+        ws.onopen = function(){ $('connstate').innerHTML='CONNECTED'; }
+        ws.onclose = function(){ $('connstate').innerHTML='CLOSED'; }
+        ws.onmessage = function(e){ $('msgs').innerHTML = $('msgs').innerHTML + "<pre>"+e.data+"</pre>"; }
+    }
+
+    $('btnConn').onclick = function(event) { go(); return false; };
+    $('btnSend').onclick = function(event) { ws.send($('phrase').value); $('phrase').value=''; return false; };	
+    
+  </script>
+  </body>
+</html>
+
