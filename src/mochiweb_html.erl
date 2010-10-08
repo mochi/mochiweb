@@ -489,8 +489,17 @@ skip_whitespace(B, S=#decoder{offset=O}) ->
             S
     end.
 
-tokenize_literal(Bin, S) ->
-    tokenize_literal(Bin, S, []).
+tokenize_literal(Bin, S=#decoder{offset=O}) ->
+    case Bin of
+        <<_:O/binary, C, _/binary>> when C =:= $>
+                                    orelse C =:= $/
+                                    orelse C =:= $= ->
+            %% Handle case where tokenize_literal would consume
+            %% 0 chars. http://github.com/mochi/mochiweb/pull/13
+            {{data, [C], false}, ?INC_COL(S)};
+        _ ->
+            tokenize_literal(Bin, S, [])
+    end.
 
 tokenize_literal(Bin, S=#decoder{offset=O}, Acc) ->
     case Bin of
@@ -603,7 +612,7 @@ tokenize_word_or_literal(Bin, S=#decoder{offset=O}) ->
             tokenize_word(Bin, ?INC_COL(S), C);
         <<_:O/binary, C, _/binary>> when not ?IS_WHITESPACE(C) ->
             %% Sanity check for whitespace
-            tokenize_literal(Bin, S, [])
+            tokenize_literal(Bin, S)
     end.
 
 tokenize_word(Bin, S, Quote) ->
@@ -1097,6 +1106,12 @@ doctype_test() ->
        {<<"html">>,[],[{<<"head">>,[],[]}]},
        mochiweb_html:parse("<html>"
                            "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">"
+                           "<head></head></body></html>")),
+    %% http://github.com/mochi/mochiweb/pull/13
+    ?assertEqual(
+       {<<"html">>,[],[{<<"head">>,[],[]}]},
+       mochiweb_html:parse("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\"/>"
+                           "<html>"
                            "<head></head></body></html>")),
     ok.
 
