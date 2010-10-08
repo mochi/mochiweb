@@ -494,10 +494,12 @@ tokenize_literal(Bin, S=#decoder{offset=O}) ->
         <<_:O/binary, C, _/binary>> when C =:= $>
                                     orelse C =:= $/
                                     orelse C =:= $= ->
-            {{data,[C],false}, ?INC_COL(S)};
+            %% Handle case where tokenize_literal would consume
+            %% 0 chars. http://github.com/mochi/mochiweb/pull/13
+            {{data, [C], false}, ?INC_COL(S)};
         _ ->
             tokenize_literal(Bin, S, [])
-    end.           
+    end.
 
 tokenize_literal(Bin, S=#decoder{offset=O}, Acc) ->
     case Bin of
@@ -1104,6 +1106,12 @@ doctype_test() ->
        {<<"html">>,[],[{<<"head">>,[],[]}]},
        mochiweb_html:parse("<html>"
                            "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">"
+                           "<head></head></body></html>")),
+    %% http://github.com/mochi/mochiweb/pull/13
+    ?assertEqual(
+       {<<"html">>,[],[{<<"head">>,[],[]}]},
+       mochiweb_html:parse("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\"/>"
+                           "<html>"
                            "<head></head></body></html>")),
     ok.
 
