@@ -220,66 +220,47 @@ range_skip_length(Spec, Size) ->
             invalid_range
     end.
 
+%% Respond to the websocket upgrade request with valid signature
+%% or exit() if any of the sec- headers look suspicious.
 websocket_init(Socket, Path, Headers) ->
     Host     = mochiweb_headers:get_value("Host", Headers),
     %Origin  = mochiweb_headers:get_value("origin", Headers), % TODO
     SubProto = mochiweb_headers:get_value("Sec-Websocket-Protocol", Headers),
     Key1     = mochiweb_headers:get_value("Sec-Websocket-Key1", Headers),
     Key2     = mochiweb_headers:get_value("Sec-Websocket-Key2", Headers),
-    % read the 8 random bytes sent after the client headers for websockets:
+    %% read the 8 random bytes sent after the client headers for websockets:
     {ok, Key3} = mochiweb_socket:recv(Socket, 8, ?HEADERS_RECV_TIMEOUT),
-    %io:format("Key1,2,3: ~p ~p ~p~n", [Key1, Key2, Key3]),
     {N1,S1} = parse_seckey(Key1),
     {N2,S2} = parse_seckey(Key2),
-    %io:format("{N1,S1} {N2,S2}: ~p ~p~n",[ {N1,S1}, {N2,S2} ] ),
-    case N1 > 4294967295 orelse 
-         N2 > 4294967295 orelse 
-         S1 == 0 orelse
-         S2 == 0 of
-        true ->
-            %  This is a symptom of an attack.
-            exit(websocket_attack);
-        false ->
-            case N1 rem S1 /= 0 orelse
-                 N2 rem S2 /= 0 of
-                true ->
-                    % This can only happen if the client is not a conforming
-                    % WebSocket client.
-                    exit(dodgy_client);
-                false ->
-                    Part1 = erlang:round(N1/S1),
-                    Part2 = erlang:round(N2/S2),
-                    %io:format("Part1 : ~p  Part2: ~p~n", [Part1, Part2]),
-                    Sig = crypto:md5( <<Part1:32/unsigned-integer,
-                                        Part2:32/unsigned-integer,
-                                        Key3/binary>> ),
-                    Proto = case mochiweb_socket:type(Socket) of 
-                                ssl   -> "wss://"; 
-                                plain -> "ws://" 
-                            end,
-                    SubProtoHeader = case SubProto of 
-                                         undefined -> ""; 
-                                         P  -> ["Sec-WebSocket-Protocol: ", 
-                                                P, "\r\n"]
-                                     end,
-                    Data = ["HTTP/1.1 101 Web Socket Protocol Handshake\r\n",
-                            "Upgrade: WebSocket\r\n",
-                            "Connection: Upgrade\r\n",
-                            "Sec-WebSocket-Location: ", Proto,Host,Path, "\r\n",
-                            "Sec-WebSocket-Origin: http://", Host, "\r\n",
-                            SubProtoHeader,
-                            "\r\n",
-                            <<Sig/binary>>
-                           ],
-                    mochiweb_socket:send(Socket, Data),
-                    ok                    
-            end
-    end.
+    ok = websocket_verify_parsed_sec({N1,S1}, {N2,S2}),
+    Part1 = erlang:round(N1/S1),
+    Part2 = erlang:round(N2/S2),
+    Sig = crypto:md5( <<Part1:32/unsigned-integer, Part2:32/unsigned-integer,
+                        Key3/binary>> ),
+    Proto = case mochiweb_socket:type(Socket) of 
+                ssl   -> "wss://"; 
+                plain -> "ws://" 
+            end,
+    SubProtoHeader = case SubProto of 
+                         undefined  -> ""; 
+                         P          -> ["Sec-WebSocket-Protocol: ", P, "\r\n"]
+                     end,
+    Data = ["HTTP/1.1 101 Web Socket Protocol Handshake\r\n",
+            "Upgrade: WebSocket\r\n",
+            "Connection: Upgrade\r\n",
+            "Sec-WebSocket-Location: ", Proto,Host,Path, "\r\n",
+            "Sec-WebSocket-Origin: http://", Host, "\r\n",
+            SubProtoHeader,
+            "\r\n",
+            <<Sig/binary>>
+           ],
+    mochiweb_socket:send(Socket, Data),
+    ok.
             
-% websocket seckey parser:
-% extract integer by only looking at [0-9]+ in the string
-% count spaces in the string
-% returns: {int, numspaces}
+%% websocket seckey parser:
+%% extract integer by only looking at [0-9]+ in the string
+%% count spaces in the string
+%% returns: {int, numspaces}
 parse_seckey(Str) ->
     parse_seckey1(Str, {"",0}).
 
@@ -291,6 +272,27 @@ parse_seckey1([N|T],  {Ret,NumSpaces}) when N >= 48, N =< 57 -> % ASCII/dec 0-9
     parse_seckey1(T, {[N|Ret], NumSpaces});
 parse_seckey1([_|T], Acc) -> 
     parse_seckey1(T, Acc).
+
+%% exit if anything suspicious is detected
+websocket_verify_parsed_sec({N1,S1}, {N2,S2}) ->
+    case N1 > 4294967295 orelse 
+         N2 > 4294967295 orelse 
+         S1 == 0 orelse
+         S2 == 0 of
+        true ->
+            %%  This is a symptom of an attack.
+            exit(websocket_attack);
+        false ->
+            case N1 rem S1 /= 0 orelse
+                 N2 rem S2 /= 0 of
+                true ->
+                    %% This can only happen if the client is not a conforming
+                    %% WebSocket client.
+                    exit(websocket_client_misspoke);
+                false ->
+                    ok
+            end
+    end.
   
 %%
 %% Tests
