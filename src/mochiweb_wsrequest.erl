@@ -6,15 +6,14 @@
 %% an older version of the websocket spec, where messages are framed 0x00...0xFF
 %% so the newer protocol with length headers has not been tested with a browser.
 
--module(mochiweb_wsrequest, [Socket, Path]).
--define(TIMEOUT, 999999).
+-module(mochiweb_wsrequest, [Socket, Path, Headers]).
+-define(TIMEOUT, 999999). % TODO
 -export([get/1, get_data/0, send/1]).
 
 get(path)   -> Path;
 get(socket) -> Socket.
 
 get_data() ->
-    io:format("get_data...~n",[]),
     % read FrameType byte
     case mochiweb_socket:recv(Socket, 1, ?TIMEOUT) of
         {error, closed} -> 

@@ -123,15 +123,23 @@ headers(Socket, Request, Headers, {WwwLoop, WsLoop} = Body, HeaderCount) ->
     case mochiweb_socket:recv(Socket, 0, ?HEADERS_RECV_TIMEOUT) of
         {ok, http_eoh} ->
             mochiweb_socket:setopts(Socket, [{packet, raw}]),
-            % is this a websocket upgrade request:
-            case {string:to_lower(proplists:get_value('Upgrade', Headers, "")),
-                  string:to_lower(proplists:get_value('Connection', Headers, ""))} of
+            %% Examine headers to decide if this a websocket upgrade request:
+            H = mochiweb_headers:make(Headers),
+            HeaderFun = fun(K) -> 
+                            case mochiweb_headers:get_value(K, H) of
+                                undefined -> "";
+                                V         -> string:to_lower(V)
+                            end
+                        end,
+            case {HeaderFun("upgrade"), HeaderFun("connection")} of
                 {"websocket", "upgrade"} ->
+                    io:format("notmal -> ws~n",[]),
                     {_, {abs_path,Path}, _} = Request,
-                    ok = websocket_init(Socket, Path, Headers),
-                    WsReq = mochiweb_wsrequest:new(Socket, Path),
+                    ok = websocket_init(Socket, Path, H),
+                    WsReq = mochiweb_wsrequest:new(Socket, Path, H),
                     call_body(WsLoop, WsReq);
-                _ -> % not websocket:
+                X -> %% not websocket:
+                    io:format("notmal~p~n",[X]),
                     Req = mochiweb:new_request({Socket, Request,
                                                 lists:reverse(Headers)}),
                     call_body(WwwLoop, Req),
@@ -213,11 +221,11 @@ range_skip_length(Spec, Size) ->
     end.
 
 websocket_init(Socket, Path, Headers) ->
-    Host    = proplists:get_value('Host', Headers, ""),
-    %Origin  = proplists:get_value("origin", Headers, ""), % TODO
-    SubProto= proplists:get_value("Sec-Websocket-Protocol", Headers, ""),
-    Key1    = proplists:get_value("Sec-Websocket-Key1", Headers, ""),
-    Key2    = proplists:get_value("Sec-Websocket-Key2", Headers, ""),
+    Host     = mochiweb_headers:get_value("Host", Headers),
+    %Origin  = mochiweb_headers:get_value("origin", Headers), % TODO
+    SubProto = mochiweb_headers:get_value("Sec-Websocket-Protocol", Headers),
+    Key1     = mochiweb_headers:get_value("Sec-Websocket-Key1", Headers),
+    Key2     = mochiweb_headers:get_value("Sec-Websocket-Key2", Headers),
     % read the 8 random bytes sent after the client headers for websockets:
     {ok, Key3} = mochiweb_socket:recv(Socket, 8, ?HEADERS_RECV_TIMEOUT),
     %io:format("Key1,2,3: ~p ~p ~p~n", [Key1, Key2, Key3]),
@@ -245,10 +253,14 @@ websocket_init(Socket, Path, Headers) ->
                     Sig = crypto:md5( <<Part1:32/unsigned-integer,
                                         Part2:32/unsigned-integer,
                                         Key3/binary>> ),
-                    Proto = case Socket of {ssl, _} -> "wss://"; _ -> "ws://" end,
+                    Proto = case mochiweb_socket:type(Socket) of 
+                                ssl   -> "wss://"; 
+                                plain -> "ws://" 
+                            end,
                     SubProtoHeader = case SubProto of 
-                                         "" -> ""; 
-                                         P  -> ["Sec-WebSocket-Protocol: ", P, "\r\n"]
+                                         undefined -> ""; 
+                                         P  -> ["Sec-WebSocket-Protocol: ", 
+                                                P, "\r\n"]
                                      end,
                     Data = ["HTTP/1.1 101 Web Socket Protocol Handshake\r\n",
                             "Upgrade: WebSocket\r\n",
