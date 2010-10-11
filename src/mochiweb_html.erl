@@ -476,10 +476,51 @@ tokenize_attr_value(Attr, B, S) ->
     case B of
         <<_:O/binary, "=", _/binary>> ->
             S2 = skip_whitespace(B, ?INC_COL(S1)),
-            tokenize_word_or_literal(B, S2);
+            tokenize_quoted_or_unquoted_attr_value(B, S2);
         _ ->
             {Attr, S1}
     end.
+    
+tokenize_quoted_or_unquoted_attr_value(B, S=#decoder{offset=O}) ->
+    case B of
+        <<_:O/binary>> ->
+            { [], S };
+        <<_:O/binary, Q, _/binary>> when Q =:= ?QUOTE orelse
+                                         Q =:= ?SQUOTE ->
+            tokenize_quoted_attr_value(B, ?INC_COL(S), [], Q);
+        <<_:O/binary, _/binary>> ->
+            tokenize_unquoted_attr_value(B, S, [])
+    end.
+    
+tokenize_quoted_attr_value(B, S=#decoder{offset=O}, Acc, Q) ->
+    case B of
+        <<_:O/binary>> ->
+            { iolist_to_binary(lists:reverse(Acc)), S };
+        <<_:O/binary, $&, _/binary>> ->
+            {{data, Data, false}, S1} = tokenize_charref(B, ?INC_COL(S)),
+            tokenize_quoted_attr_value(B, S1, [Data|Acc], Q);
+        <<_:O/binary, Q, _/binary>> ->
+            { iolist_to_binary(lists:reverse(Acc)), ?INC_COL(S) };
+        <<_:O/binary, $\n, _/binary>> ->
+            { iolist_to_binary(lists:reverse(Acc)), ?INC_LINE(S) };
+        <<_:O/binary, C, _/binary>> ->
+            tokenize_quoted_attr_value(B, ?INC_COL(S), [C|Acc], Q)
+    end.
+    
+tokenize_unquoted_attr_value(B, S=#decoder{offset=O}, Acc) ->
+    case B of
+        <<_:O/binary>> ->
+            { iolist_to_binary(lists:reverse(Acc)), S };
+        <<_:O/binary, $&, _/binary>> ->
+            {{data, Data, false}, S1} = tokenize_charref(B, ?INC_COL(S)),
+            tokenize_unquoted_attr_value(B, S1, [Data|Acc]);
+        <<_:O/binary, $/, $>, _/binary>> ->
+            { iolist_to_binary(lists:reverse(Acc)), S };
+        <<_:O/binary, C, _/binary>> when ?PROBABLE_CLOSE(C) ->
+            { iolist_to_binary(lists:reverse(Acc)), S };
+        <<_:O/binary, C, _/binary>> ->
+            tokenize_unquoted_attr_value(B, ?INC_COL(S), [C|Acc])
+    end.   
 
 skip_whitespace(B, S=#decoder{offset=O}) ->
     case B of
@@ -1135,4 +1176,50 @@ php_test() ->
          "<div><?php\n?></div>")),
     ok.
 
+parse_unquoted_attr_test() ->
+    D0 = <<"<html><img src=/images/icon.png/></html>">>,
+    ?assertEqual(
+        {<<"html">>,[],[
+            { <<"img">>, [ { <<"src">>, <<"/images/icon.png">> } ], [] }
+        ]},
+        mochiweb_html:parse(D0)),
+    
+    D1 = <<"<html><img src=/images/icon.png></img></html>">>,
+        ?assertEqual(
+            {<<"html">>,[],[
+                { <<"img">>, [ { <<"src">>, <<"/images/icon.png">> } ], [] }
+            ]},
+            mochiweb_html:parse(D1)),
+    
+    D2 = <<"<html><img src=/images/icon&gt;.png width=100></img></html>">>,
+        ?assertEqual(
+            {<<"html">>,[],[
+                { <<"img">>, [ { <<"src">>, <<"/images/icon>.png">> }, { <<"width">>, <<"100">> } ], [] }
+            ]},
+            mochiweb_html:parse(D2)),
+    ok.        
+    
+parse_quoted_attr_test() ->    
+    D0 = <<"<html><img src='/images/icon.png'></html>">>,
+    ?assertEqual(
+        {<<"html">>,[],[
+            { <<"img">>, [ { <<"src">>, <<"/images/icon.png">> } ], [] }
+        ]},
+        mochiweb_html:parse(D0)),     
+        
+    D1 = <<"<html><img src=\"/images/icon.png'></html>">>,
+    ?assertEqual(
+        {<<"html">>,[],[
+            { <<"img">>, [ { <<"src">>, <<"/images/icon.png'></html>">> } ], [] }
+        ]},
+        mochiweb_html:parse(D1)),     
+
+    D2 = <<"<html><img src=\"/images/icon&gt;.png\"></html>">>,
+    ?assertEqual(
+        {<<"html">>,[],[
+            { <<"img">>, [ { <<"src">>, <<"/images/icon>.png">> } ], [] }
+        ]},
+        mochiweb_html:parse(D2)),     
+    ok.
+    
 -endif.
