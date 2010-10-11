@@ -136,8 +136,16 @@ headers(Socket, Request, Headers, {WwwLoop, WsLoop} = Body, HeaderCount) ->
                     io:format("notmal -> ws~n",[]),
                     {_, {abs_path,Path}, _} = Request,
                     ok = websocket_init(Socket, Path, H),
-                    WsReq = mochiweb_wsrequest:new(Socket, Path, H),
-                    call_body(WsLoop, WsReq);
+                    Active = true,
+                    case Active of
+                        true ->
+                            {ok, WSPid} = mochiweb_websocket_delegate:start_link(Path, H, self()),
+                            mochiweb_websocket_delegate:go(WSPid, Socket),
+                            call_body(WsLoop, WSPid);
+                        false ->
+                            WsReq = mochiweb_wsrequest:new(Socket, Path, H),
+                            call_body(WsLoop, WsReq)
+                    end;
                 X -> %% not websocket:
                     io:format("notmal~p~n",[X]),
                     Req = mochiweb:new_request({Socket, Request,
