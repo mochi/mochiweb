@@ -63,7 +63,7 @@ write_term(T, L0, TermL, Fd) ->
     end,
     io:fwrite(Fd, "~p.~n", [T]).
 
-vsn(Vsn, Attrs) when Vsn =:= '' orelse Vsn =:= "" ->
+vsn(Vsn, Attrs) when Vsn =:= '' orelse Vsn =:= "" orelse Vsn =:= "_" ->
     case lists:keyfind(vsn, 1, Attrs) of
         false ->
             {vsn, "0.00"};
