@@ -537,7 +537,7 @@ tokenize_literal(Bin, S=#decoder{offset=O}) ->
                                     orelse C =:= $= ->
             %% Handle case where tokenize_literal would consume
             %% 0 chars. http://github.com/mochi/mochiweb/pull/13
-            {{data, [C], false}, ?INC_COL(S)};
+            {[C], ?INC_COL(S)};
         _ ->
             tokenize_literal(Bin, S, [])
     end.
@@ -1228,6 +1228,13 @@ parse_quoted_attr_test() ->
             { <<"img">>, [ { <<"src">>, <<"/images/icon>.png">> } ], [] }
         ]},
         mochiweb_html:parse(D2)),     
+    ok.
+
+parse_missing_attr_name_test() ->
+    D0 = <<"<html =black></html>">>,
+    ?assertEqual(
+        {<<"html">>, [ { <<"=">>, <<"=">> }, { <<"black">>, <<"black">> } ], [] },
+       mochiweb_html:parse(D0)),
     ok.
     
 -endif.
