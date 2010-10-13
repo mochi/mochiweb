@@ -404,6 +404,7 @@ cleanup() ->
                        ?SAVE_PATH,
                        ?SAVE_RECV,
                        ?SAVE_BODY,
+                       ?SAVE_BODY_LENGTH,
                        ?SAVE_POST,
                        ?SAVE_COOKIE,
                        ?SAVE_FORCE_CLOSE]],
