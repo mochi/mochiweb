@@ -576,6 +576,10 @@ find_qgt(Bin, S=#decoder{offset=O}) ->
     case Bin of
         <<_:O/binary, "?>", _/binary>> ->
             ?ADV_COL(S, 2);
+        <<_:O/binary, ">", _/binary>> ->
+			?ADV_COL(S, 1);
+        <<_:O/binary, "/>", _/binary>> ->
+			?ADV_COL(S, 2);
         %% tokenize_attributes takes care of this state:
         %% <<_:O/binary, C, _/binary>> ->
         %%     find_qgt(Bin, ?INC_CHAR(S, C));
@@ -1236,5 +1240,15 @@ parse_missing_attr_name_test() ->
         {<<"html">>, [ { <<"=">>, <<"=">> }, { <<"black">>, <<"black">> } ], [] },
        mochiweb_html:parse(D0)),
     ok.
+
+parse_broken_pi_test() ->
+	D0 = <<"<html><?xml:namespace prefix = o ns = \"urn:schemas-microsoft-com:office:office\" /></html>">>,
+	?assertEqual(
+		{<<"html">>, [], [
+			{ pi, <<"xml:namespace">>, [ { <<"prefix">>, <<"o">> }, 
+			                             { <<"ns">>, <<"urn:schemas-microsoft-com:office:office">> } ] }
+		] },
+		mochiweb_html:parse(D0)),
+	ok.
     
 -endif.
