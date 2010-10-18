@@ -1,0 +1,21 @@
+%% -*- erlang -*-
+{variables, [{appid, "mochiapp"},
+             {author, "Mochi Media <dev@mochimedia.com>"},
+             {year, "2010"},
+             {version, "0.01"},
+             {port, 8080},
+             {dest, "{{appid}}"}]}.
+{dir, "{{appid}}"}.
+{template, "src/mochiapp.app.src", "{{dest}}/src/{{appid}}.app.src"}.
+{template, "src/mochiapp.erl", "{{dest}}/src/{{appid}}.erl"}.
+{template, "src/mochiapp_app.erl", "{{dest}}/src/{{appid}}_app.erl"}.
+{template, "src/mochiapp_deps.erl", "{{dest}}/src/{{appid}}_deps.erl"}.
+{template, "src/mochiapp_sup.erl", "{{dest}}/src/{{appid}}_sup.erl"}.
+{template, "src/mochiapp_web.erl", "{{dest}}/src/{{appid}}_web.erl"}.
+{template, "start-dev.sh", "{{dest}}/start-dev.sh"}.
+{file, "../../.gitignore", "{{dest}}/.gitignore"}.
+{file, "../../Makefile", "{{dest}}/Makefile"}.
+{file, "rebar.config", "{{dest}}/rebar.config"}.
+{file, "../../rebar", "{{dest}}/rebar"}.
+{chmod, 8#755, "{{dest}}/rebar"}.
+{chmod, 8#755, "{{dest}}/start-dev.sh"}.
