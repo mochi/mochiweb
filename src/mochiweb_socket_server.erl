@@ -210,9 +210,13 @@ handle_call(_Message, _From, State) ->
     Res = error,
     {reply, Res, State}.
 
-handle_cast({accepted, Pid, _Timing},
+handle_cast({accepted, Pid, Timing},
             State=#mochiweb_socket_server{active_sockets=ActiveSockets}) ->
     State1 = State#mochiweb_socket_server{active_sockets=1 + ActiveSockets},
+    udplog:log(mochiweb, [{type, accept}, {time_elapsed, Timing},
+                          {port, State1#mochiweb_socket_server.port},
+                          {active_sockets, State1#mochiweb_socket_server.active_sockets},
+                          {name, State1#mochiweb_socket_server.name}]),
     {noreply, recycle_acceptor(Pid, State1)};
 handle_cast(stop, State) ->
     {stop, normal, State}.
