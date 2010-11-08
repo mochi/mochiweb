@@ -759,8 +759,8 @@ tokenize_textarea(Bin, S=#decoder{offset=O}, Start) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 to_html_test() ->
     ?assertEqual(

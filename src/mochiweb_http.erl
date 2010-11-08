@@ -213,8 +213,8 @@ range_skip_length(Spec, Size) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 range_test() ->
     %% valid, single ranges

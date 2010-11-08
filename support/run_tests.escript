@@ -31,7 +31,8 @@ start_cover(Modules) ->
     io:format("Cover compiling...~n"),
     Compiled = [ M || {ok, M} <- [ cover:compile(
                                      M,
-                                     [{i, "include"}
+                                     [{i, "include"},
+                                      {d, 'TEST'}
                                      ])
                                    || M <- Modules ] ],
     case length(Modules) == length(Compiled) of
