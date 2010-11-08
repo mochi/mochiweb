@@ -846,11 +846,20 @@ parse_qvalues_test() ->
     ),
     [{"gzip", 0.5}, {"deflate", 1.0}, {"identity", 1.0}, {"identity", 1.0}] =
         parse_qvalues("gzip; q=0.5,deflate,identity, identity "),
+    [{"text/html;level=1", 1.0}, {"text/plain", 0.5}] =
+        parse_qvalues("text/html;level=1, text/plain;q=0.5"),
+    [{"text/html;level=1", 0.3}, {"text/plain", 1.0}] =
+        parse_qvalues("text/html;level=1;q=0.3, text/plain"),
+    [{"text/html;level=1", 0.3}, {"text/plain", 1.0}] =
+        parse_qvalues("text/html; level = 1; q = 0.3, text/plain"),
+    [{"text/html;level=1", 0.3}, {"text/plain", 1.0}] =
+        parse_qvalues("text/html;q=0.3;level=1, text/plain"),
     invalid_qvalue_string = parse_qvalues("gzip; q=1.1, deflate"),
     invalid_qvalue_string = parse_qvalues("gzip; q=0.5, deflate;q=2"),
     invalid_qvalue_string = parse_qvalues("gzip, deflate;q=AB"),
     invalid_qvalue_string = parse_qvalues("gzip; q=2.1, deflate"),
     invalid_qvalue_string = parse_qvalues("gzip; q=0.1234, deflate"),
+    invalid_qvalue_string = parse_qvalues("text/html;level=1;q=0.3, text/html;level"),
     ok.
 
 pick_accepted_encodings_test() ->
