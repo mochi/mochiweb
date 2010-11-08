@@ -712,7 +712,7 @@ accepted_encodings(SupportedEncodings) ->
 %% @spec accepts_content_type(string() | binary()) -> boolean() | bad_accept_header
 %%
 %% @doc Determines whether a request accepts a given media type by analyzing its
-%%      its "Accept" header.
+%%      "Accept" header.
 %%
 %%      Examples
 %%
