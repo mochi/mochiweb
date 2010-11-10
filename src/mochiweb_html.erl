@@ -404,8 +404,8 @@ destack(TagName, Stack) when is_list(Stack) ->
                         {_, []} ->
                             %% Actually was a singleton
                             Stack;
-                        {Pre, [{T1, A1, []} | Post1]} ->
-                            [{T0, A0, [{T1, A1, lists:reverse(Pre)} | Post1]}
+                        {Pre, [{T1, A1, Acc1} | Post1]} ->
+                            [{T0, A0, [{T1, A1, Acc1 ++ lists:reverse(Pre)} | Post1]}
                              | Post0]
                     end;
                 _ ->
@@ -1247,6 +1247,16 @@ parse_broken_pi_test() ->
 		{<<"html">>, [], [
 			{ pi, <<"xml:namespace">>, [ { <<"prefix">>, <<"o">> }, 
 			                             { <<"ns">>, <<"urn:schemas-microsoft-com:office:office">> } ] }
+		] },
+		mochiweb_html:parse(D0)),
+	ok.
+
+parse_funny_singletons_test() ->
+	D0 = <<"<html><input><input>x</input></input></html>">>,
+	?assertEqual(
+		{<<"html">>, [], [
+			{ <<"input">>, [], [] },
+			{ <<"input">>, [], [ <<"x">> ] }
 		] },
 		mochiweb_html:parse(D0)),
 	ok.
