@@ -37,9 +37,9 @@ start() ->
 
 %% @spec start(Options) -> ServerRet
 %%     Options = [option()]
-%%     Option = {name, atom()} | {ip, string() | tuple()} | {backlog, integer()} 
-%%              | {nodelay, boolean()} | {acceptor_pool_size, integer()} 
-%%              | {ssl, boolean()} | {profile_fun, undefined | fun/1}
+%%     Option = {name, atom()} | {ip, string() | tuple()} | {backlog, integer()}
+%%              | {nodelay, boolean()} | {acceptor_pool_size, integer()}
+%%              | {ssl, boolean()} | {profile_fun, undefined | (Props) -> ok}
 %% @doc Start a mochiweb server.
 %%      profile_fun is used to profile accept timing.
 %%      After each accept, if defined, profile_fun is called with a proplist of a subset of the mochiweb_socket_server state and timing information.

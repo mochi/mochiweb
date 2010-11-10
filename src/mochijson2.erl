@@ -4,6 +4,38 @@
 %% @doc Yet another JSON (RFC 4627) library for Erlang. mochijson2 works
 %%      with binaries as strings, arrays as lists (without an {array, _})
 %%      wrapper and it only knows how to decode UTF-8 (and ASCII).
+%%
+%%      JSON terms are decoded as follows (javascript -> erlang):
+%%      <ul>
+%%          <li>{"key": "value"} ->
+%%              {struct, [{&lt;&lt;"key">>, &lt;&lt;"value">>}]}</li>
+%%          <li>["array", 123, 12.34, true, false, null] ->
+%%              [&lt;&lt;"array">>, 123, 12.34, true, false, null]
+%%          </li>
+%%      </ul>
+%%      <ul>
+%%          <li>Strings in JSON decode to UTF-8 binaries in Erlang</li>
+%%          <li>Objects decode to {struct, PropList}</li>
+%%          <li>Numbers decode to integer or float</li>
+%%          <li>true, false, null decode to their respective terms.</li>
+%%      </ul>
+%%      The encoder will accept the same format that the decoder will produce,
+%%      but will also allow additional cases for leniency:
+%%      <ul>
+%%          <li>atoms other than true, false, null will be considered UTF-8
+%%              strings (even as a proplist key)
+%%          </li>
+%%          <li>{json, IoList} will insert IoList directly into the output
+%%              with no validation
+%%          </li>
+%%          <li>{array, Array} will be encoded as Array
+%%              (legacy mochijson style)
+%%          </li>
+%%          <li>A non-empty raw proplist will be encoded as an object as long
+%%              as the first pair does not have an atom key of json, struct,
+%%              or array
+%%          </li>
+%%      </ul>
 
 -module(mochijson2).
 -author('bob@mochimedia.com').
