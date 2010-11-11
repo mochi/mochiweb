@@ -1,9 +1,15 @@
 MochiWeb is an Erlang library for building lightweight HTTP servers.
 
-MochiWeb uses rebar templates to make getting started easy.
+The latest version of MochiWeb is available at http://github.com/mochi/mochiweb
 
-To create a new app use:
+R12B compatibility:
+The master of MochiWeb is tested with R13B04 and later. A branch compatible
+with R12B is maintained separately at http://github.com/lemenkov/mochiweb
+The R12B branch of that repository is mirrored in the official repository
+occasionally for convenience.
+
+To create a new mochiweb using project:
    make app APPID=project_name
 
-To create a new app in a specific directory:
+To create a new mochiweb using project in a specific directory:
    make app APPID=project_name PREFIX=$HOME/projects/

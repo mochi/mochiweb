@@ -4,6 +4,38 @@
 %% @doc Yet another JSON (RFC 4627) library for Erlang. mochijson2 works
 %%      with binaries as strings, arrays as lists (without an {array, _})
 %%      wrapper and it only knows how to decode UTF-8 (and ASCII).
+%%
+%%      JSON terms are decoded as follows (javascript -> erlang):
+%%      <ul>
+%%          <li>{"key": "value"} ->
+%%              {struct, [{&lt;&lt;"key">>, &lt;&lt;"value">>}]}</li>
+%%          <li>["array", 123, 12.34, true, false, null] ->
+%%              [&lt;&lt;"array">>, 123, 12.34, true, false, null]
+%%          </li>
+%%      </ul>
+%%      <ul>
+%%          <li>Strings in JSON decode to UTF-8 binaries in Erlang</li>
+%%          <li>Objects decode to {struct, PropList}</li>
+%%          <li>Numbers decode to integer or float</li>
+%%          <li>true, false, null decode to their respective terms.</li>
+%%      </ul>
+%%      The encoder will accept the same format that the decoder will produce,
+%%      but will also allow additional cases for leniency:
+%%      <ul>
+%%          <li>atoms other than true, false, null will be considered UTF-8
+%%              strings (even as a proplist key)
+%%          </li>
+%%          <li>{json, IoList} will insert IoList directly into the output
+%%              with no validation
+%%          </li>
+%%          <li>{array, Array} will be encoded as Array
+%%              (legacy mochijson style)
+%%          </li>
+%%          <li>A non-empty raw proplist will be encoded as an object as long
+%%              as the first pair does not have an atom key of json, struct,
+%%              or array
+%%          </li>
+%%      </ul>
 
 -module(mochijson2).
 -author('bob@mochimedia.com').
@@ -101,10 +133,16 @@ json_encode(F, _State) when is_float(F) ->
     mochinum:digits(F);
 json_encode(S, State) when is_binary(S); is_atom(S) ->
     json_encode_string(S, State);
-json_encode(Array, State) when is_list(Array) ->
-    json_encode_array(Array, State);
+json_encode([{K, _}|_] = Props, State) when (K =/= struct andalso
+                                             K =/= array andalso
+                                             K =/= json) ->
+    json_encode_proplist(Props, State);
 json_encode({struct, Props}, State) when is_list(Props) ->
     json_encode_proplist(Props, State);
+json_encode(Array, State) when is_list(Array) ->
+    json_encode_array(Array, State);
+json_encode({array, Array}, State) when is_list(Array) ->
+    json_encode_array(Array, State);
 json_encode({json, IoList}, _State) ->
     IoList;
 json_encode(Bad, #encoder{handler=null}) ->
@@ -402,8 +440,22 @@ tokenize_string(B, S=#decoder{offset=O}, Acc) ->
                 Acc1 = lists:reverse(xmerl_ucs:to_utf8(C), Acc),
                 tokenize_string(B, ?ADV_COL(S, 6), Acc1)
             end;
-        <<_:O/binary, C, _/binary>> ->
-            tokenize_string(B, ?INC_CHAR(S, C), [C | Acc])
+        <<_:O/binary, C1, _/binary>> when C1 < 128 ->
+            tokenize_string(B, ?INC_CHAR(S, C1), [C1 | Acc]);
+        <<_:O/binary, C1, C2, _/binary>> when C1 >= 194, C1 =< 223,
+                C2 >= 128, C2 =< 191 ->
+            tokenize_string(B, ?ADV_COL(S, 2), [C2, C1 | Acc]);
+        <<_:O/binary, C1, C2, C3, _/binary>> when C1 >= 224, C1 =< 239,
+                C2 >= 128, C2 =< 191,
+                C3 >= 128, C3 =< 191 ->
+            tokenize_string(B, ?ADV_COL(S, 3), [C3, C2, C1 | Acc]);
+        <<_:O/binary, C1, C2, C3, C4, _/binary>> when C1 >= 240, C1 =< 244,
+                C2 >= 128, C2 =< 191,
+                C3 >= 128, C3 =< 191,
+                C4 >= 128, C4 =< 191 ->
+            tokenize_string(B, ?ADV_COL(S, 4), [C4, C3, C2, C1 | Acc]);
+        _ ->
+            throw(invalid_utf8)
     end.
 
 tokenize_number(B, S) ->
@@ -648,7 +700,9 @@ input_validation_test() ->
         <<?Q, 16#E0, 16#80,16#7F, ?Q>>,
         <<?Q, 16#F0, 16#80, 16#80, 16#7F, ?Q>>,
         %% we don't support code points > 10FFFF per RFC 3629
-        <<?Q, 16#F5, 16#80, 16#80, 16#80, ?Q>>
+        <<?Q, 16#F5, 16#80, 16#80, 16#80, ?Q>>,
+        %% escape characters trigger a different code path
+        <<?Q, $\\, $\n, 16#80, ?Q>>
     ],
     lists:foreach(
       fun(X) ->
@@ -716,6 +770,15 @@ key_encode_test() ->
     ?assertEqual(
        <<"{\"foo\":1}">>,
        iolist_to_binary(encode({struct, [{"foo", 1}]}))),
+	?assertEqual(
+       <<"{\"foo\":1}">>,
+       iolist_to_binary(encode([{foo, 1}]))),
+    ?assertEqual(
+       <<"{\"foo\":1}">>,
+       iolist_to_binary(encode([{<<"foo">>, 1}]))),
+    ?assertEqual(
+       <<"{\"foo\":1}">>,
+       iolist_to_binary(encode([{"foo", 1}]))),
     ?assertEqual(
        <<"{\"\\ud834\\udd20\":1}">>,
        iolist_to_binary(
