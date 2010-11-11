@@ -1,1 +1,9 @@
 MochiWeb is an Erlang library for building lightweight HTTP servers.
+
+MochiWeb uses rebar templates to make getting started easy.
+
+To create a new app use:
+   make app APPID=project_name
+
+To create a new app in a specific directory:
+   make app APPID=project_name PREFIX=$HOME/projects/

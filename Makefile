@@ -1,3 +1,7 @@
+
+PREFIX:=../
+DEST:=$(PREFIX)$(APPID)
+
 REBAR=./rebar
 
 all: 
@@ -17,3 +21,7 @@ build_plt:
 
 dialyzer:
 	@$(REBAR) analyze
+
+app:
+	@$(REBAR) create template=mochiwebapp dest=$(DEST) appid=$(APPID)
+
