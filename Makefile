@@ -1,6 +1,6 @@
 
 PREFIX:=../
-DEST:=$(PREFIX)$(APPID)
+DEST:=$(PREFIX)$(PROJECT)
 
 REBAR=./rebar
 
@@ -23,5 +23,5 @@ dialyzer:
 	@$(REBAR) analyze
 
 app:
-	@$(REBAR) create template=mochiwebapp dest=$(DEST) appid=$(APPID)
+	@$(REBAR) create template=mochiwebapp dest=$(DEST) appid=$(PROJECT)
 

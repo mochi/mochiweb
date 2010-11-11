@@ -9,7 +9,7 @@ The R12B branch of that repository is mirrored in the official repository
 occasionally for convenience.
 
 To create a new mochiweb using project:
-   make app APPID=project_name
+   make app PROJECT=project_name
 
 To create a new mochiweb using project in a specific directory:
-   make app APPID=project_name PREFIX=$HOME/projects/
+   make app PROJECT=project_name PREFIX=$HOME/projects/
