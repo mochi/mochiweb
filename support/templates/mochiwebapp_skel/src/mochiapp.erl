@@ -1,5 +1,5 @@
 %% @author {{author}}
-%% @copyright {{year}} Mochi Media, Inc.
+%% @copyright {{year}} {{author}}
 
 %% @doc {{appid}}.
 
@@ -20,7 +20,7 @@ ensure_started(App) ->
 %% @doc Start the {{appid}} server.
 start() ->
     {{appid}}_deps:ensure(),
-    application:start(crypto),
+    ensure_started(crypto),
     application:start({{appid}}).
 
 

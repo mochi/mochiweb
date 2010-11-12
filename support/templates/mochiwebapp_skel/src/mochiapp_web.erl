@@ -1,5 +1,5 @@
 %% @author {{author}}
-%% @copyright {{year}} Mochi Media, Inc.
+%% @copyright {{year}} {{author}}
 
 %% @doc Web server for {{appid}}.
 

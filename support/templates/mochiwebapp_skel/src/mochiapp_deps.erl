@@ -1,5 +1,5 @@
 %% @author {{author}}
-%% @copyright {{year}} Mochi Media, Inc.
+%% @copyright {{year}} {{author}}
 
 %% @doc Ensure that the relatively-installed dependencies are on the code
 %%      loading path, and locate resources relative

@@ -1,5 +1,5 @@
 %% @author {{author}}
-%% @copyright {{appid}} Mochi Media, Inc.
+%% @copyright {{appid}} {{author}}
 
 %% @doc Callbacks for the {{appid}} application.
 

@@ -1,5 +1,5 @@
 %% @author {{author}}
-%% @copyright {{year}} Mochi Media, Inc.
+%% @copyright {{year}} {{author}}
 
 %% @doc Supervisor for the {{appid}} application.
 
@@ -41,21 +41,11 @@ upgrade() ->
 %% @spec init([]) -> SupervisorTree
 %% @doc supervisor callback.
 init([]) ->
-    Discover3 = mochidiscover3:maybe_child_spec(),
-    Loggers = logger_specs(),
-    Profiler = mochiprofiler:child_spec(),
     Web = web_specs({{appid}}_web, {{port}}),
-    Processes = [Discover3, Loggers, Profiler, Web],
+    Processes = [Web],
     Strategy = {one_for_one, 10, 10},
     {ok,
      {Strategy, lists:flatten(Processes)}}.
-
-logger_specs() ->
-    [logger_spec({{appid}}_log, "{{appid}}.log")].
-
-logger_spec(Name, File) ->
-    LogFile = {{appid}}_deps:local_path(["priv", "log", File]),
-    mochilogger_file:child_spec(Name, LogFile).
 
 web_specs(Mod, Port) ->
     WebConfig = [{ip, {0,0,0,0}},
