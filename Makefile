@@ -4,13 +4,13 @@ DEST:=$(PREFIX)$(PROJECT)
 
 REBAR=./rebar
 
-all: 
-	@$(REBAR) get-deps compile	
+all:
+	@$(REBAR) get-deps compile
 
 edoc:
 	@$(REBAR) doc
 
-test: 
+test:
 	@rm -rf .eunit
 	@mkdir -p .eunit
 	@$(REBAR) skip_deps=true eunit
