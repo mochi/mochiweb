@@ -1,10 +1,10 @@
-%% @author author <author@example.com>
-%% @copyright YYYY author.
+%% @author {{author}}
+%% @copyright {{year}} {{author}}
 
-%% @doc Supervisor for the skel application.
+%% @doc Supervisor for the {{appid}} application.
 
--module(skel_sup).
--author('author <author@example.com>').
+-module({{appid}}_sup).
+-author("{{author}}").
 
 -behaviour(supervisor).
 
@@ -41,22 +41,16 @@ upgrade() ->
 %% @spec init([]) -> SupervisorTree
 %% @doc supervisor callback.
 init([]) ->
-    Ip = case os:getenv("MOCHIWEB_IP") of false -> "0.0.0.0"; Any -> Any end,
-    WebConfig = [
-         {ip, Ip},
-                 {port, 8000},
-                 {docroot, skel_deps:local_path(["priv", "www"])}],
-    Web = {skel_web,
-           {skel_web, start, [WebConfig]},
-           permanent, 5000, worker, dynamic},
-
+    Web = web_specs({{appid}}_web, {{port}}),
     Processes = [Web],
-    {ok, {{one_for_one, 10, 10}, Processes}}.
+    Strategy = {one_for_one, 10, 10},
+    {ok,
+     {Strategy, lists:flatten(Processes)}}.
 
-
-%%
-%% Tests
-%%
--include_lib("eunit/include/eunit.hrl").
--ifdef(TEST).
--endif.
+web_specs(Mod, Port) ->
+    WebConfig = [{ip, {0,0,0,0}},
+                 {port, Port},
+                 {docroot, {{appid}}_deps:local_path(["priv", "www"])}],
+    {Mod,
+     {Mod, start, [WebConfig]},
+     permanent, 5000, worker, dynamic}.

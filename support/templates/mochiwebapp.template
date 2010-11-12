@@ -1,0 +1,22 @@
+%% -*- erlang -*-
+{variables, [{appid, "mochiwebapp"},
+             {author, "Mochi Media <dev@mochimedia.com>"},
+             {year, "2010"},
+             {version, "0.1"},
+             {port, 8080},
+             {dest, "{{appid}}"}]}.
+{dir, "{{dest}}"}.
+{template, "mochiwebapp_skel/src/mochiapp.app.src", "{{dest}}/src/{{appid}}.app.src"}.
+{template, "mochiwebapp_skel/src/mochiapp.erl", "{{dest}}/src/{{appid}}.erl"}.
+{template, "mochiwebapp_skel/src/mochiapp_app.erl", "{{dest}}/src/{{appid}}_app.erl"}.
+{template, "mochiwebapp_skel/src/mochiapp_deps.erl", "{{dest}}/src/{{appid}}_deps.erl"}.
+{template, "mochiwebapp_skel/src/mochiapp_sup.erl", "{{dest}}/src/{{appid}}_sup.erl"}.
+{template, "mochiwebapp_skel/src/mochiapp_web.erl", "{{dest}}/src/{{appid}}_web.erl"}.
+{template, "mochiwebapp_skel/start-dev.sh", "{{dest}}/start-dev.sh"}.
+{template, "mochiwebapp_skel/priv/www/index.html", "{{dest}}/priv/www/index.html"}.
+{file, "../../.gitignore", "{{dest}}/.gitignore"}.
+{file, "../../Makefile", "{{dest}}/Makefile"}.
+{file, "mochiwebapp_skel/rebar.config", "{{dest}}/rebar.config"}.
+{file, "../../rebar", "{{dest}}/rebar"}.
+{chmod, 8#755, "{{dest}}/rebar"}.
+{chmod, 8#755, "{{dest}}/start-dev.sh"}.
