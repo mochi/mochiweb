@@ -40,8 +40,8 @@
 %% @type response(). A mochiweb_response parameterized module instance.
 %% @type ioheaders() = headers() | [{key(), value()}].
 
-% 10 second default idle timeout
--define(IDLE_TIMEOUT, 10000).
+% 5 minute default idle timeout
+-define(IDLE_TIMEOUT, 300000).
 
 % Maximum recv_body() length of 1MB
 -define(MAX_RECV_BODY, (1024*1024)).
