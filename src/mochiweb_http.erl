@@ -17,22 +17,32 @@
 -define(DEFAULTS, [{name, ?MODULE},
                    {port, 8888}]).
 
-% client loop holds fun/info on how to hand off request to client code
--record(body, {http_loop, websocket_loop, websocket_active}). 
+%% unless specified, we accept any origin:
+-define(DEFAULT_ORIGIN_VALIDATOR, fun(_Origin) -> true end).
+
+-record(body, {http_loop,                   % normal http handler fun
+               websocket_loop,              % websocket handler fun
+               websocket_active,            % boolean: active or passive api
+               websocket_origin_validator   % fun(Origin) -> true/false
+              }). 
 
 parse_options(Options) ->
     HttpLoop = proplists:get_value(loop, Options),
     case proplists:get_value(websocket_opts, Options) of
         WsProps when is_list(WsProps) ->
             WsLoop   = proplists:get_value(loop, WsProps),
+            WsOrigin = proplists:get_value(origin_validator, WsProps, 
+                                           ?DEFAULT_ORIGIN_VALIDATOR),
             WsActive = proplists:get_value(active, WsProps, false);
         _ ->
             WsLoop   = undefined,
+            WsOrigin = undefined,
             WsActive = undefined
     end,
-    Body = #body{http_loop        = HttpLoop,
-                 websocket_loop   = WsLoop,
-                 websocket_active = WsActive},
+    Body = #body{http_loop                  = HttpLoop,
+                 websocket_loop             = WsLoop,
+                 websocket_origin_validator = WsOrigin,
+                 websocket_active           = WsActive},
     Loop = fun (S) -> ?MODULE:loop(S, Body) end,
     Options1 = [{loop, Loop} | 
                     proplists:delete(loop, 
@@ -135,35 +145,11 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
     case mochiweb_socket:recv(Socket, 0, ?HEADERS_RECV_TIMEOUT) of
         {ok, http_eoh} ->
             mochiweb_socket:setopts(Socket, [{packet, raw}]),
-            %% Examine headers to decide if this a websocket upgrade request:
             H = mochiweb_headers:make(Headers),
-            HeaderFun = fun(K) -> 
-                            case mochiweb_headers:get_value(K, H) of
-                                undefined -> "";
-                                V         -> string:to_lower(V)
-                            end
-                        end,
-            case {HeaderFun("upgrade"), HeaderFun("connection")} of
-                {"websocket", "upgrade"} ->
-                    io:format("notmal -> ws~n",[]),
-                    {_, {abs_path,Path}, _} = Request,
-                    ok = websocket_init(Socket, Path, H),
-                    case Body#body.websocket_active of
-                        true ->
-                            {ok, WSPid} = mochiweb_websocket_delegate:start_link(Path, H, self()),
-                            mochiweb_websocket_delegate:go(WSPid, Socket),
-                            call_body(Body#body.websocket_loop, WSPid);
-                        false ->
-                            WsReq = mochiweb_wsrequest:new(Socket, Path, H),
-                            call_body(Body#body.websocket_loop, WsReq);
-                        undefined ->
-                            Req = mochiweb:new_request({Socket, Request,
-                                                lists:reverse(Headers)}),
-                            io:format("Websocket upgrade requested, but no websocket handler provided: ~s~n",[Req:get(path)]),
-                            Req:not_found()
-                    end;
-                X -> %% not websocket:
-                    io:format("notmal~p~n",[X]),
+            case is_websocket_upgrade_requested(H) of
+                true ->
+                    headers_ws_upgrade(Socket, Request, Headers, Body, H);
+                false ->
                     Req = mochiweb:new_request({Socket, Request,
                                                 lists:reverse(Headers)}),
                     call_body(Body#body.http_loop, Req),
@@ -176,6 +162,36 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
             mochiweb_socket:close(Socket),
             exit(normal);
         _Other ->
+            handle_invalid_request(Socket, Request, Headers)
+    end.
+
+% checks if these headers are a valid websocket upgrade request
+is_websocket_upgrade_requested(H) ->
+    Hdr = fun(K) -> case mochiweb_headers:get_value(K, H) of
+                        undefined         -> undefined;
+                        V when is_list(V) -> string:to_lower(V)
+                    end
+          end,
+    Hdr("upgrade") == "websocket" andalso Hdr("connection") == "upgrade".
+
+% entered once we've seen valid websocket upgrade headers
+headers_ws_upgrade(Socket, Request, Headers, Body, H) ->
+    {_, {abs_path,Path}, _} = Request,
+    OriginValidator = Body#body.websocket_origin_validator,
+    % websocket_init will exit() if anything looks fishy
+    websocket_init(Socket, Path, H, OriginValidator),
+    case Body#body.websocket_active of
+        true ->
+            {ok, WSPid} = mochiweb_websocket_delegate:start_link(Path,H,self()),
+            mochiweb_websocket_delegate:go(WSPid, Socket),
+            call_body(Body#body.websocket_loop, WSPid);
+        false ->
+            WsReq = mochiweb_wsrequest:new(Socket, Path, H),
+            call_body(Body#body.websocket_loop, WsReq);
+        undefined ->
+            % what is the correct way to respond when a server doesn't
+            % support websockets, but the client requests the upgrade?
+            % use a 400 for now:
             handle_invalid_request(Socket, Request, Headers)
     end.
 
@@ -246,9 +262,19 @@ range_skip_length(Spec, Size) ->
 
 %% Respond to the websocket upgrade request with valid signature
 %% or exit() if any of the sec- headers look suspicious.
-websocket_init(Socket, Path, Headers) ->
+websocket_init(Socket, Path, Headers, OriginValidator) ->
+    Origin   = mochiweb_headers:get_value("origin", Headers),
+    %% If origin is invalid, just uncerimoniously close the socket
+    case Origin /= undefiend andalso OriginValidator(Origin) == true of
+        true ->
+            websocket_init_with_origin_validated(Socket, Path, Headers, Origin);
+        false ->
+            mochiweb_socket:close(Socket),
+            exit(websocket_origin_check_failed)
+    end.
+
+websocket_init_with_origin_validated(Socket, Path, Headers, _Origin) ->    
     Host     = mochiweb_headers:get_value("Host", Headers),
-    %Origin  = mochiweb_headers:get_value("origin", Headers), % TODO
     SubProto = mochiweb_headers:get_value("Sec-Websocket-Protocol", Headers),
     Key1     = mochiweb_headers:get_value("Sec-Websocket-Key1", Headers),
     Key2     = mochiweb_headers:get_value("Sec-Websocket-Key2", Headers),

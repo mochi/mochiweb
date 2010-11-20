@@ -8,8 +8,14 @@ start() -> start([{port, 8080}, {docroot, "."}]).
 start(Options) ->
     {DocRoot, Options1} = get_option(docroot, Options),
     Loop = fun (Req) -> ?MODULE:loop(Req, DocRoot) end,
+    % How we validate origin for cross-domain checks:
+    OriginValidator = fun(Origin) ->
+                           io:format("Origin '~s' -> OK~n", [Origin]),
+                           true
+                      end,
     % websockets options:
     WsOpts = [ {active, false},
+               {origin_validator, OriginValidator},
                {loop,   {?MODULE, wsloop}} ],
     mochiweb_http:start([{name, ?MODULE}, 
                          {loop, Loop},
@@ -19,23 +25,18 @@ stop() ->
     mochiweb_http:stop(?MODULE).
 
 wsloop(Ws) ->
-    io:format("Websocket request, path: ~p~n", [Ws:get(path)]),
+    Ws:send("WELCOME MSG FROM THE SERVER part 1/2"),
+    Ws:send("WELCOME MSG FROM THE SERVER part 2/2"),
+    wsloop0(Ws).
+
+wsloop0(Ws) ->
     case Ws:get_data() of
-        closed ->  ok;
+        closed  ->  ok;
         closing -> ok;
         timeout -> timeout;
-        
-        % older websockets spec which is in the wild, messages are framed with
-        % 0x00...0xFF
-        {legacy_frame, Body} ->
-            Ws:send(["YOU SENT US LEGACY FRAME: ", Body]),
-            wsloop(Ws);
-    
-        % current spec, each message has a 0xFF/<64bit length> header
-        % and must contain utf8 bytestream
-        {utf8_frame, Body} ->
-            Ws:send(["YOU SENT US MODERN FRAME: ", Body]),
-            wsloop(Ws)
+        {frame, Body} ->
+            Ws:send(["Dear client, thanks for sending this message: ", Body]),
+            wsloop0(Ws)
     end.
 
 loop(Req, DocRoot) ->

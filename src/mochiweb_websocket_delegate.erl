@@ -10,7 +10,9 @@
 %% an older version of the websocket spec, where messages are framed 0x00...0xFF
 %% so the newer protocol with length headers has not been tested with a browser.
 %%
-%% Guarantees that 'closed' will be sent to the client pid once the socket dies
+%% Guarantees that 'closed' will be sent to the client pid once the socket dies,
+%% Messages are:
+%%  closed, {error, Reason}, {frame, Data}
 
 -module(mochiweb_websocket_delegate).
 -behaviour(gen_server).
@@ -40,7 +42,6 @@ go(Pid, Socket) ->
     gen_server:cast(Pid, {go, Socket}).
 
 send(Pid, Msg) ->
-    io:format("send:~s~n",[Msg]),
     gen_server:call(Pid, {send, Msg}).
 
 close(Pid) ->
@@ -87,20 +88,16 @@ handle_cast({go, Socket}, State) ->
     {noreply, State#state{socket=Socket}}.
 
 handle_info({'EXIT', _, _}, State) ->
-    io:format("TRAP EXIT~n",[]),
     State#state.dest ! closed,
     {stop, normal, State};    
 handle_info({tcp_closed, Sock}, State = #state{socket=Sock}) ->
-    io:format("TCP CLOSED~n",[]),
     State#state.dest ! closed,
     {stop, normal, State};
 handle_info({tcp_error, Sock, Reason}, State = #state{socket=Sock}) ->
-    io:format("TCP ERROR~n",[]),
     State#state.dest ! {error, Reason},
     State#state.dest ! closed,
     {stop, normal, State};
 handle_info({tcp, Sock, Data}, State = #state{socket=Sock, buffer=Buffer}) ->
-    %mochiweb_socket:setopts(Sock, [{active, once}]),
     NewState = process_data(State#state{buffer= <<Buffer/binary,Data/binary>>}),
     {noreply, NewState}.
 
@@ -113,38 +110,33 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 
 process_data(State = #state{buffer= <<>>}) -> 
-    %io:format("A 0~n", []),
     State;
 
 process_data(State = #state{buffer= <<FrameType:8,Buffer/binary>>, ft=undefined}) ->
-    %io:format("A 1~n", []),
     process_data(State#state{buffer=Buffer, ft=FrameType, partial= <<>>});
 
 % "Legacy" frames, 0x00...0xFF
 % or modern closing handshake 0x00{8}
 process_data(State = #state{buffer= <<0,0,0,0,0,0,0,0, Buffer/binary>>, ft=0}) ->
-    %io:format("A 2~n", []),
     State#state.dest ! closing_handshake,
     process_data(State#state{buffer=Buffer, ft=undefined});
 
 process_data(State = #state{buffer= <<255, Rest/binary>>, ft=0}) ->
-    %io:format("A 3~n", []),
-    State#state.dest ! {legacy_frame, State#state.partial},
+    % message received in full
+    State#state.dest ! {frame, State#state.partial},
     process_data(State#state{partial= <<>>, ft=undefined, buffer=Rest});
 
 process_data(State = #state{buffer= <<Byte:8, Rest/binary>>, ft=0, partial=Partial}) ->
-    %io:format("A 4, byte=~p state:~p~n", [Byte,State]),
     NewPartial = case Partial of <<>> -> <<Byte>> ; _ -> <<Partial/binary, <<Byte>>/binary>> end,
     NewState = State#state{buffer=Rest, partial=NewPartial},
    process_data(NewState);
 
 % "Modern" frames, starting with 0xFF, followed by 64 bit length
 process_data(State = #state{buffer= <<Len:64/unsigned-integer,Buffer/binary>>, ft=255, flen=undefined}) ->
-    %io:format("A 5~n", []),
     BitsLen = Len*8,
     case Buffer of
         <<Frame:BitsLen/binary, Rest/binary>> ->            
-            State#state.dest ! {utf8_frame, Frame},
+            State#state.dest ! {frame, Frame},
             process_data(State#state{ft=undefined, flen=undefined, buffer=Rest});
 
         _ ->
@@ -152,11 +144,10 @@ process_data(State = #state{buffer= <<Len:64/unsigned-integer,Buffer/binary>>, f
     end;
 
 process_data(State = #state{buffer=Buffer, ft=255, flen=Len}) when is_integer(Len) ->
-    %io:format("A 6~n", []),
     BitsLen = Len*8,
     case Buffer of
         <<Frame:BitsLen/binary, Rest/binary>> ->            
-            State#state.dest ! {utf8_frame, Frame},
+            State#state.dest ! {frame, Frame},
             process_data(State#state{ft=undefined, flen=undefined, buffer=Rest});
 
         _ ->

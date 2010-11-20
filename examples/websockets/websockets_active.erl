@@ -8,9 +8,16 @@ start() -> start([{port, 8080}, {docroot, "."}]).
 start(Options) ->
     {DocRoot, Options1} = get_option(docroot, Options),
     Loop = fun (Req) -> ?MODULE:loop(Req, DocRoot) end,
-    % websockets options:
+    % How we validate origin for cross-domain checks:
+    OriginValidator = fun(Origin) ->
+                           io:format("Origin '~s' -> OK~n", [Origin]),
+                           true
+                      end,
+    % websocket options
     WsOpts = [ {active, true},
+               {origin_validator, OriginValidator},
                {loop,   {?MODULE, wsloop_active}} ],
+    
     mochiweb_http:start([{name, ?MODULE}, 
                          {loop, Loop},
                          {websocket_opts, WsOpts} | Options1]).
@@ -19,7 +26,7 @@ stop() ->
     mochiweb_http:stop(?MODULE).
 
 wsloop_active(Pid) ->
-    mochiweb_websocket_delegate:send(Pid, "WELCOME MSG!"),
+    mochiweb_websocket_delegate:send(Pid, "WELCOME MSG FROM THE SERVER!"),
     wsloop_active0(Pid).
 
 wsloop_active0(Pid) ->
@@ -30,9 +37,8 @@ wsloop_active0(Pid) ->
         {error, Reason} ->
             io:format("client api got error ~p~n", [Reason]),
             ok;
-        % {legacy_frame, M} or {utf8_frame, M}
-        {_, X} ->
-            Msg = io_lib:format("SRVER_GOT: ~p", [X]),
+        {frame, Frame} ->
+            Msg = ["Dear client, thanks for sending us this msg: ", Frame],
             mochiweb_websocket_delegate:send(Pid, Msg),
             wsloop_active0(Pid)
     after 10000 ->

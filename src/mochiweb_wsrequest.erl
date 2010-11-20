@@ -27,7 +27,7 @@ get_data() ->
                     {ok, <<Len:64/unsigned-integer>>}  = 
                         mochiweb_socket:recv(Socket, 8, ?TIMEOUT),
                     {ok, Frame} = mochiweb_socket:recv(Socket, Len, ?TIMEOUT),
-                    {utf8_frame, Frame};
+                    {frame, Frame};
                 <<0>> ->   % modern close request, or older no-length-frame msg
                     case mochiweb_socket:recv(Socket, 1, ?TIMEOUT) of
                         {ok, <<0>>} ->
@@ -37,12 +37,12 @@ get_data() ->
                         {ok, <<255>>} ->
                             % empty legacy frame.
                             erlang:put(legacy, true), 
-                            {legacy_frame, <<>>};
+                            {frame, <<>>};
                         {ok, Byte2} ->
                             % Read up to the first 0xFF for the body
                             erlang:put(legacy, true),
                             Body = read_until_FF(Socket, Byte2),
-                            {legacy_frame, Body}
+                            {frame, Body}
                     end
             end
     end.
