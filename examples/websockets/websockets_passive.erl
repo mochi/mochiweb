@@ -13,7 +13,7 @@ start(Options) ->
                {loop,   {?MODULE, wsloop}} ],
     mochiweb_http:start([{name, ?MODULE}, 
                          {loop, Loop},
-                         {websockets_opts, WsOpts} | Options1]). 
+                         {websocket_opts, WsOpts} | Options1]). 
 
 stop() ->
     mochiweb_http:stop(?MODULE).

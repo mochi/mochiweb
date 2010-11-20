@@ -1,7 +1,7 @@
 -module(websockets_active).
 -author('author <rj@metabrew.com>').
 
--export([start/0, start/1, stop/0, loop/2, wsloop_active/1, wsloop/1]).
+-export([start/0, start/1, stop/0, loop/2, wsloop_active/1]).
 
 start() -> start([{port, 8080}, {docroot, "."}]).
 
@@ -13,7 +13,7 @@ start(Options) ->
                {loop,   {?MODULE, wsloop_active}} ],
     mochiweb_http:start([{name, ?MODULE}, 
                          {loop, Loop},
-                         {websockets_opts, WsOpts} | Options1]).
+                         {websocket_opts, WsOpts} | Options1]).
 
 stop() ->
     mochiweb_http:stop(?MODULE).
@@ -27,16 +27,18 @@ wsloop_active0(Pid) ->
         closed ->
             io:format("client api got closed~n",[]),
             ok;
-        {error, _Reason} ->
+        {error, Reason} ->
+            io:format("client api got error ~p~n", [Reason]),
             ok;
         % {legacy_frame, M} or {utf8_frame, M}
         {_, X} ->
             Msg = io_lib:format("SRVER_GOT: ~p", [X]),
-            mochiweb_websocket_delegate:send(Pid, Msg)
+            mochiweb_websocket_delegate:send(Pid, Msg),
+            wsloop_active0(Pid)
     after 10000 ->
-            mochiweb_websocket_delegate:send(Pid, "IDLE!")
-    end,
-    wsloop_active0(Pid).
+            mochiweb_websocket_delegate:send(Pid, "IDLE!"),
+            wsloop_active0(Pid)
+    end.
 
 loop(Req, DocRoot) ->
     "/" ++ Path = Req:get(path),

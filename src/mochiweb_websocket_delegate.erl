@@ -9,6 +9,8 @@
 %% However, at time of writing (Oct 8, 2010) Chrome 6 and Firefox 4 implement
 %% an older version of the websocket spec, where messages are framed 0x00...0xFF
 %% so the newer protocol with length headers has not been tested with a browser.
+%%
+%% Guarantees that 'closed' will be sent to the client pid once the socket dies
 
 -module(mochiweb_websocket_delegate).
 -behaviour(gen_server).
@@ -89,10 +91,13 @@ handle_info({'EXIT', _, _}, State) ->
     State#state.dest ! closed,
     {stop, normal, State};    
 handle_info({tcp_closed, Sock}, State = #state{socket=Sock}) ->
+    io:format("TCP CLOSED~n",[]),
     State#state.dest ! closed,
     {stop, normal, State};
 handle_info({tcp_error, Sock, Reason}, State = #state{socket=Sock}) ->
+    io:format("TCP ERROR~n",[]),
     State#state.dest ! {error, Reason},
+    State#state.dest ! closed,
     {stop, normal, State};
 handle_info({tcp, Sock, Data}, State = #state{socket=Sock, buffer=Buffer}) ->
     %mochiweb_socket:setopts(Sock, [{active, once}]),

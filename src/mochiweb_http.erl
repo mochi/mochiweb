@@ -18,7 +18,7 @@
                    {port, 8888}]).
 
 % client loop holds fun/info on how to hand off request to client code
--record(clientloop, {http_loop, websocket_loop, websocket_active}). 
+-record(body, {http_loop, websocket_loop, websocket_active}). 
 
 parse_options(Options) ->
     HttpLoop = proplists:get_value(loop, Options),
@@ -30,16 +30,13 @@ parse_options(Options) ->
             WsLoop   = undefined,
             WsActive = undefined
     end,
-    ClientLoop = #clientloop{http_loop        = HttpLoop,
-                             websocket_loop   = WsLoop,
-                             websocket_active = WsActive},
-                
-    WsLoop   = proplists:get_value(wsloop, Options),
-    Loop = fun (S) ->
-                   ?MODULE:loop(S, {HttpLoop, WsLoop})
-           end,
-    Options1 = [{loop, Loop}, {wsloop, WsLoop} | 
-                    proplists:delete(loop, proplists:delete(wsloop, Options))],
+    Body = #body{http_loop        = HttpLoop,
+                 websocket_loop   = WsLoop,
+                 websocket_active = WsActive},
+    Loop = fun (S) -> ?MODULE:loop(S, Body) end,
+    Options1 = [{loop, Loop} | 
+                    proplists:delete(loop, 
+                        proplists:delete(websocket_opts, Options))],
     mochilists:set_defaults(?DEFAULTS, Options1).
 
 stop() ->
@@ -134,7 +131,7 @@ headers(Socket, Request, Headers, _Body, ?MAX_HEADERS) ->
     %% Too many headers sent, bad request.
     mochiweb_socket:setopts(Socket, [{packet, raw}]),
     handle_invalid_request(Socket, Request, Headers);
-headers(Socket, Request, Headers, {WwwLoop, WsLoop} = Body, HeaderCount) ->
+headers(Socket, Request, Headers, Body, HeaderCount) ->
     case mochiweb_socket:recv(Socket, 0, ?HEADERS_RECV_TIMEOUT) of
         {ok, http_eoh} ->
             mochiweb_socket:setopts(Socket, [{packet, raw}]),
@@ -151,21 +148,25 @@ headers(Socket, Request, Headers, {WwwLoop, WsLoop} = Body, HeaderCount) ->
                     io:format("notmal -> ws~n",[]),
                     {_, {abs_path,Path}, _} = Request,
                     ok = websocket_init(Socket, Path, H),
-                    Active = false,
-                    case Active of
+                    case Body#body.websocket_active of
                         true ->
                             {ok, WSPid} = mochiweb_websocket_delegate:start_link(Path, H, self()),
                             mochiweb_websocket_delegate:go(WSPid, Socket),
-                            call_body(WsLoop, WSPid);
+                            call_body(Body#body.websocket_loop, WSPid);
                         false ->
                             WsReq = mochiweb_wsrequest:new(Socket, Path, H),
-                            call_body(WsLoop, WsReq)
+                            call_body(Body#body.websocket_loop, WsReq);
+                        undefined ->
+                            Req = mochiweb:new_request({Socket, Request,
+                                                lists:reverse(Headers)}),
+                            io:format("Websocket upgrade requested, but no websocket handler provided: ~s~n",[Req:get(path)]),
+                            Req:not_found()
                     end;
                 X -> %% not websocket:
                     io:format("notmal~p~n",[X]),
                     Req = mochiweb:new_request({Socket, Request,
                                                 lists:reverse(Headers)}),
-                    call_body(WwwLoop, Req),
+                    call_body(Body#body.http_loop, Req),
                     ?MODULE:after_response(Body, Req)
             end;
         {ok, {http_header, _, Name, _, Value}} ->

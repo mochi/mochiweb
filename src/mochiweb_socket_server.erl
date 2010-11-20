@@ -17,7 +17,6 @@
 -record(mochiweb_socket_server,
         {port,
          loop,
-         wsloop,
          name=undefined,
          %% NOTE: This is currently ignored.
          max=2048,
@@ -86,8 +85,6 @@ parse_options([{ip, Ip} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{ip=ParsedIp});
 parse_options([{loop, Loop} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{loop=Loop});
-parse_options([{wsloop, Loop} | Rest], State) ->
-    parse_options(Rest, State#mochiweb_socket_server{wsloop=Loop});
 parse_options([{backlog, Backlog} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{backlog=Backlog});
 parse_options([{nodelay, NoDelay} | Rest], State) ->
