@@ -17,8 +17,23 @@
 -define(DEFAULTS, [{name, ?MODULE},
                    {port, 8888}]).
 
+% client loop holds fun/info on how to hand off request to client code
+-record(clientloop, {http_loop, websocket_loop, websocket_active}). 
+
 parse_options(Options) ->
     HttpLoop = proplists:get_value(loop, Options),
+    case proplists:get_value(websocket_opts, Options) of
+        WsProps when is_list(WsProps) ->
+            WsLoop   = proplists:get_value(loop, WsProps),
+            WsActive = proplists:get_value(active, WsProps, false);
+        _ ->
+            WsLoop   = undefined,
+            WsActive = undefined
+    end,
+    ClientLoop = #clientloop{http_loop        = HttpLoop,
+                             websocket_loop   = WsLoop,
+                             websocket_active = WsActive},
+                
     WsLoop   = proplists:get_value(wsloop, Options),
     Loop = fun (S) ->
                    ?MODULE:loop(S, {HttpLoop, WsLoop})
@@ -136,7 +151,7 @@ headers(Socket, Request, Headers, {WwwLoop, WsLoop} = Body, HeaderCount) ->
                     io:format("notmal -> ws~n",[]),
                     {_, {abs_path,Path}, _} = Request,
                     ok = websocket_init(Socket, Path, H),
-                    Active = true,
+                    Active = false,
                     case Active of
                         true ->
                             {ok, WSPid} = mochiweb_websocket_delegate:start_link(Path, H, self()),
