@@ -5,7 +5,7 @@
 -module(mochiweb_socket).
 
 -export([listen/4, accept/1, recv/3, send/2, close/1, port/1, peername/1,
-         setopts/2, type/1]).
+         setopts/2, type/1, controlling_process/2]).
 
 -define(ACCEPT_TIMEOUT, 2000).
 
@@ -76,6 +76,11 @@ setopts({ssl, Socket}, Opts) ->
     ssl:setopts(Socket, Opts);
 setopts(Socket, Opts) ->
     inet:setopts(Socket, Opts).
+
+controlling_process({ssl, Socket}, NewOwner) ->
+    ssl:controlling_process(Socket, NewOwner);
+controlling_process(Socket, NewOwner) ->
+    gen_tcp:controlling_process(Socket, NewOwner).
 
 type({ssl, _}) ->
     ssl;

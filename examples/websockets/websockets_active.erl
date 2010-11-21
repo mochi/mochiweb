@@ -14,19 +14,24 @@ start(Options) ->
                            true
                       end,
     % websocket options
-    WsOpts = [ {active, true},
-               {origin_validator, OriginValidator},
-               {loop,   {?MODULE, wsloop_active}} ],
-    
+    WsOpts  = [ {active, true},
+                {origin_validator, OriginValidator},
+                {loop,   {?MODULE, wsloop_active}} ],
+    %
+    Ssl = [ {ssl, true}, {ssl_opts, [ {certfile, "../https/server_cert.pem"},
+                                      {keyfile, "../https/server_key.pem"}]} ],
+    %
     mochiweb_http:start([{name, ?MODULE}, 
                          {loop, Loop},
-                         {websocket_opts, WsOpts} | Options1]).
+                         {websocket_opts, WsOpts} | Options1] ++ Ssl).
 
 stop() ->
     mochiweb_http:stop(?MODULE).
 
 wsloop_active(Pid) ->
-    mochiweb_websocket_delegate:send(Pid, "WELCOME MSG FROM THE SERVER!"),
+    
+    Ret = mochiweb_websocket_delegate:send(Pid, "WELCOME MSG FROM THE SERVER!"),
+    io:format("Sent welcome msg: ~p~n",[Ret]),
     wsloop_active0(Pid).
 
 wsloop_active0(Pid) ->

@@ -17,9 +17,11 @@ start(Options) ->
     WsOpts = [ {active, false},
                {origin_validator, OriginValidator},
                {loop,   {?MODULE, wsloop}} ],
+    Ssl = [ {ssl, true}, {ssl_opts, [ {certfile, "../https/server_cert.pem"},
+                                      {keyfile, "../https/server_key.pem"}]} ],
     mochiweb_http:start([{name, ?MODULE}, 
                          {loop, Loop},
-                         {websocket_opts, WsOpts} | Options1]). 
+                         {websocket_opts, WsOpts} | Options1] ++ Ssl). 
 
 stop() ->
     mochiweb_http:stop(?MODULE).
@@ -30,7 +32,9 @@ wsloop(Ws) ->
     wsloop0(Ws).
 
 wsloop0(Ws) ->
-    case Ws:get_data() of
+    Got = Ws:get_data(),
+    io:format("GOT:~p~n",[Got]),
+    case Got of
         closed  ->  ok;
         closing -> ok;
         timeout -> timeout;

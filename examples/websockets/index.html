@@ -24,7 +24,7 @@
     function $() { return document.getElementById(arguments[0]); }
     function go()
     {
-        ws = new WebSocket("ws://localhost:8080");
+        ws = new WebSocket("wss://localhost:8080/");
         ws.onopen = function(){ $('connstate').innerHTML='CONNECTED'; }
         ws.onclose = function(){ $('connstate').innerHTML='CLOSED'; }
         ws.onmessage = function(e){ $('msgs').innerHTML = $('msgs').innerHTML + "<pre>"+e.data+"</pre>"; }

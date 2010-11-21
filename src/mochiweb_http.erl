@@ -295,11 +295,15 @@ websocket_init_with_origin_validated(Socket, Path, Headers, _Origin) ->
                          undefined  -> ""; 
                          P          -> ["Sec-WebSocket-Protocol: ", P, "\r\n"]
                      end,
+    HttpScheme = case mochiweb_socket:type(Socket) of 
+                     plain -> "http"; 
+                     ssl   -> "https" 
+                 end,
     Data = ["HTTP/1.1 101 Web Socket Protocol Handshake\r\n",
             "Upgrade: WebSocket\r\n",
             "Connection: Upgrade\r\n",
             "Sec-WebSocket-Location: ", Proto,Host,Path, "\r\n",
-            "Sec-WebSocket-Origin: http://", Host, "\r\n",
+            "Sec-WebSocket-Origin: ", HttpScheme, "://", Host, "\r\n",
             SubProtoHeader,
             "\r\n",
             <<Sig/binary>>

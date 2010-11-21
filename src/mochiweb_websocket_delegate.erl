@@ -38,7 +38,7 @@ start_link(Path, Headers, Destination) ->
     gen_server:start_link(?MODULE, [Path, Headers, Destination], []).
 
 go(Pid, Socket) ->
-    ok = gen_tcp:controlling_process(Socket, Pid),
+    ok = mochiweb_socket:controlling_process(Socket, Pid),
     gen_server:cast(Pid, {go, Socket}).
 
 send(Pid, Msg) ->
@@ -89,15 +89,25 @@ handle_cast({go, Socket}, State) ->
 
 handle_info({'EXIT', _, _}, State) ->
     State#state.dest ! closed,
-    {stop, normal, State};    
-handle_info({tcp_closed, Sock}, State = #state{socket=Sock}) ->
+    {stop, normal, State};
+handle_info({ssl_closed, _Sock}, State) ->
     State#state.dest ! closed,
     {stop, normal, State};
-handle_info({tcp_error, Sock, Reason}, State = #state{socket=Sock}) ->
+handle_info({tcp_closed, _Sock}, State) ->
+    State#state.dest ! closed,
+    {stop, normal, State};
+handle_info({tcp_error, _Sock, Reason}, State) ->
+    State#state.dest ! {error, Reason},
+    State#state.dest ! closed,
+    {stop, normal, State};
+handle_info({ssl_error, _Sock, Reason}, State) ->
     State#state.dest ! {error, Reason},
     State#state.dest ! closed,
     {stop, normal, State};
 handle_info({tcp, Sock, Data}, State = #state{socket=Sock, buffer=Buffer}) ->
+    NewState = process_data(State#state{buffer= <<Buffer/binary,Data/binary>>}),
+    {noreply, NewState};
+handle_info({ssl, _Sock, Data}, State = #state{buffer=Buffer}) ->
     NewState = process_data(State#state{buffer= <<Buffer/binary,Data/binary>>}),
     {noreply, NewState}.
 
