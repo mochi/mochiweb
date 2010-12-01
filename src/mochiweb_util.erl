@@ -572,8 +572,8 @@ make_io(Io) when is_list(Io); is_binary(Io) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 make_io_test() ->
     ?assertEqual(

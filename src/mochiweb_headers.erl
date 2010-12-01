@@ -195,8 +195,8 @@ any_to_list(V) when is_integer(V) ->
 %%
 %% Tests.
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 make_test() ->
     Identity = make([{hdr, foo}]),

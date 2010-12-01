@@ -203,8 +203,8 @@ any_to_list(V) when is_integer(V) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 quote_test() ->
     %% ?assertError eunit macro is not compatible with coverage module
