@@ -75,8 +75,8 @@ from_extension(_) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 exhaustive_from_extension_test() ->
     T = mochiweb_cover:clause_lookup_table(?MODULE, from_extension),

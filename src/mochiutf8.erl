@@ -192,8 +192,8 @@ invalid_utf8_indexes(<<>>, _N, Acc) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 binary_skip_bytes_test() ->
     ?assertEqual(<<"foo">>,

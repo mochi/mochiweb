@@ -406,8 +406,8 @@ tokenize(L=[C | _], S) when C >= $0, C =< $9; C == $- ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 %% testing constructs borrowed from the Yaws JSON implementation.
 

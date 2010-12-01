@@ -337,8 +337,8 @@ handle_info(Info, State) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 upgrade_state_test() ->
     OldState = {mochiweb_socket_server,

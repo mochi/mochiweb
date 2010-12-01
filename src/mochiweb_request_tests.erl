@@ -1,7 +1,7 @@
 -module(mochiweb_request_tests).
 
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 accepts_content_type_test() ->
     Req1 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},

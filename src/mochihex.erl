@@ -68,8 +68,8 @@ to_bin([C1, C2 | Rest], Acc) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 to_hex_test() ->
     "ff000ff1" = to_hex([255, 0, 15, 241]),

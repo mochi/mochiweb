@@ -287,8 +287,8 @@ entity(_) -> undefined.
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 exhaustive_entity_test() ->
     T = mochiweb_cover:clause_lookup_table(?MODULE, entity),
