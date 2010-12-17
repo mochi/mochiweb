@@ -295,8 +295,8 @@ find_boundary(Prefix, Data) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 
 ssl_cert_opts() ->
     EbinDir = filename:dirname(code:which(?MODULE)),

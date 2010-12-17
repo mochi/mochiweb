@@ -4,34 +4,20 @@
 
 %% External API
 
-main([Name]) ->
-    main([Name, "."]);
-main([Name, Dest]) ->
-    ensure(),
-    DestDir = filename:absname(Dest),
-    case code:which(mochiweb_skel) of
-        non_existing ->
-            io:format("mochiweb not compiled, running make~n"),
-            os:cmd("(cd \"" ++ filename:dirname(escript:script_name())
-                   ++ "/..\"; make)"),
-            ensure(),
-            code:rehash();
-        _ ->
-            ok
-    end,
-    ok = mochiweb_skel:skelcopy(DestDir, Name);
 main(_) ->
     usage().
 
 %% Internal API
 
-ensure() ->
-    code:add_patha(filename:join(filename:dirname(escript:script_name()),
-                                 "../ebin")).
-
 usage() ->
-    io:format("usage: ~s name [destdir]~n",
-              [filename:basename(escript:script_name())]),
+    io:format(
+        "new_mochiweb.erl has been replaced by a rebar template!\n"
+        "\n"
+        "To create a new mochiweb using project:\n"
+        "   make app PROJECT=project_name\n"
+        "\n"
+        "To create a new mochiweb using project in a specific directory:\n"
+        "   make app PROJECT=project_name PREFIX=$HOME/projects/\n"
+        "\n"
+    ),
     halt(1).
-
-

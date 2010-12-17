@@ -7,3 +7,9 @@ The master of MochiWeb is tested with R13B04 and later. A branch compatible
 with R12B is maintained separately at http://github.com/lemenkov/mochiweb
 The R12B branch of that repository is mirrored in the official repository
 occasionally for convenience.
+
+To create a new mochiweb using project:
+   make app PROJECT=project_name
+
+To create a new mochiweb using project in a specific directory:
+   make app PROJECT=project_name PREFIX=$HOME/projects/
