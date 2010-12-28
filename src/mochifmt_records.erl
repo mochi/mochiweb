@@ -33,6 +33,6 @@ get_rec_index(Atom, [_ | Rest], Index) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 -endif.

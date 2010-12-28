@@ -40,7 +40,4 @@ iodevice_size(IoDevice) ->
 %%
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
-
-
-
 -endif.
