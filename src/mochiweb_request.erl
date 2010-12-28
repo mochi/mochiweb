@@ -245,9 +245,7 @@ stream_body(MaxChunkSize, ChunkFun, FunState, MaxBodyLength) ->
                 exit({body_too_large, content_length});
             _ ->
                 stream_unchunked_body(Length, ChunkFun, FunState)
-            end;
-        Length ->
-            exit({length_not_integer, Length})
+            end
     end.
 
 

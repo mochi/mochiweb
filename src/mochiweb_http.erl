@@ -154,7 +154,8 @@ call_body(Body, Req) ->
     Body(Req).
 
 handle_invalid_request(Socket) ->
-    handle_invalid_request(Socket, {'GET', {abs_path, "/"}, {0,9}}, []).
+    handle_invalid_request(Socket, {'GET', {abs_path, "/"}, {0,9}}, []),
+    exit(normal).
 
 handle_invalid_request(Socket, Request, RevHeaders) ->
     Req = new_request(Socket, Request, RevHeaders),
