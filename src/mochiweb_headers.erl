@@ -24,8 +24,8 @@ empty() ->
 %% @doc Construct a headers() from the given list.
 make(L) when is_list(L) ->
     from_list(L);
-%% assume a tuple is already mochiweb_headers.
-make(T) when is_tuple(T) ->
+%% assume a non-list is already mochiweb_headers.
+make(T) ->
     T.
 
 %% @spec from_binary(iolist()) -> headers()
