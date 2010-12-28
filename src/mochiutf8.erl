@@ -5,8 +5,9 @@
 %%      invalid bytes.
 
 -module(mochiutf8).
--export([valid_utf8_bytes/1, codepoint_to_bytes/1, bytes_to_codepoints/1]).
--export([bytes_foldl/3, codepoint_foldl/3, read_codepoint/1, len/1]).
+-export([valid_utf8_bytes/1, codepoint_to_bytes/1, codepoints_to_bytes/1]).
+-export([bytes_to_codepoints/1, bytes_foldl/3, codepoint_foldl/3]).
+-export([read_codepoint/1, len/1]).
 
 %% External API
 
