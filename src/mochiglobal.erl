@@ -77,8 +77,8 @@ term_to_abstract(Module, Getter, T) ->
 %%
 %% Tests
 %%
--include_lib("eunit/include/eunit.hrl").
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
 get_put_delete_test() ->
     K = '$$test$$mochiglobal',
     delete(K),
