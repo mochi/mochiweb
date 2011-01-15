@@ -148,6 +148,8 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
         exit(normal)
     end.
 
+call_body({M, F, A}, Req) ->
+    erlang:apply(M, F, [Req | A]);
 call_body({M, F}, Req) ->
     M:F(Req);
 call_body(Body, Req) ->
