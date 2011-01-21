@@ -20,7 +20,6 @@ ensure_started(App) ->
 %% @doc Start the {{appid}} server.
 start() ->
     {{appid}}_deps:ensure(),
-    ensure_started(crypto),
     application:start({{appid}}).
 
 

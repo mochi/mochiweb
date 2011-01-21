@@ -13,14 +13,12 @@
 %% @spec start() -> ok
 %% @doc Start the MochiWeb server.
 start() ->
-    ensure_started(crypto),
     application:start(mochiweb).
 
 %% @spec stop() -> ok
 %% @doc Stop the MochiWeb server.
 stop() ->
     Res = application:stop(mochiweb),
-    application:stop(crypto),
     Res.
 
 reload() ->
@@ -77,16 +75,6 @@ new_response({Request, Code, Headers}) ->
     mochiweb_response:new(Request,
                           Code,
                           mochiweb_headers:make(Headers)).
-
-%% Internal API
-
-ensure_started(App) ->
-    case application:start(App) of
-        ok ->
-            ok;
-        {error, {already_started, App}} ->
-            ok
-    end.
 
 
 %%
@@ -195,7 +183,7 @@ do_POST(Transport, Size, Times) ->
                 end,
     TestReqs = [begin
                     Path = "/stuff/" ++ integer_to_list(N),
-                    Body = crypto:rand_bytes(Size),
+                    Body = mochiweb_util:rand_bytes(Size),
                     #treq{path=Path, body=Body, xreply=Body}
                 end || N <- lists:seq(1, Times)],
     ClientFun = new_client_fun('POST', TestReqs),

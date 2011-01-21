@@ -13,7 +13,7 @@
 -export([record_to_proplist/2, record_to_proplist/3]).
 -export([safe_relative_path/1, partition/2]).
 -export([parse_qvalues/1, pick_accepted_encodings/3]).
--export([make_io/1]).
+-export([make_io/1, rand_bytes/1, rand_uniform/2]).
 
 -define(PERCENT, 37).  % $\%
 -define(FULLSTOP, 46). % $\.
@@ -574,6 +574,16 @@ make_io(Integer) when is_integer(Integer) ->
     integer_to_list(Integer);
 make_io(Io) when is_list(Io); is_binary(Io) ->
     Io.
+
+rand_bytes(Count) ->
+    list_to_binary([rand_uniform(0, 16#FF + 1) || _ <- lists:seq(1, Count)]).
+
+rand_uniform(Lo, Hi) ->
+    %% This stuff is not called anywhere performance critical,
+    %% it won't hurt to just initialize it every time.
+    {A, B, C} = now(),
+    random:seed(A, B, C),
+    random:uniform(Hi - Lo) + Lo - 1.
 
 %%
 %% Tests

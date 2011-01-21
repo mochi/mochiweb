@@ -6,4 +6,4 @@
   {registered, []},
   {mod, {'{{appid}}_app', []}},
   {env, []},
-  {applications, [kernel, stdlib, crypto]}]}.
+  {applications, [kernel, stdlib]}]}.

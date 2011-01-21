@@ -6,4 +6,4 @@
   {registered, []},
   {mod, {mochiweb_app, []}},
   {env, []},
-  {applications, [kernel, stdlib, crypto, inets]}]}.
+  {applications, [kernel, stdlib, inets]}]}.

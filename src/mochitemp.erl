@@ -1,7 +1,7 @@
 %% @author Bob Ippolito <bob@mochimedia.com>
 %% @copyright 2010 Mochi Media, Inc.
 
-%% @doc Create temporary files and directories. Requires crypto to be started.
+%% @doc Create temporary files and directories.
 
 -module(mochitemp).
 -export([gettempdir/0]).
@@ -87,7 +87,7 @@ rngchars(N) ->
     [rngchar() | rngchars(N - 1)].
 
 rngchar() ->
-    rngchar(crypto:rand_uniform(0, tuple_size(?SAFE_CHARS))).
+    rngchar(mochiweb_util:rand_uniform(0, tuple_size(?SAFE_CHARS))).
 
 rngchar(C) ->
     element(1 + C, ?SAFE_CHARS).
@@ -177,7 +177,6 @@ gettempdir_cwd_test() ->
     ok.
 
 rngchars_test() ->
-    crypto:start(),
     ?assertEqual(
        "",
        rngchars(0)),
@@ -199,7 +198,6 @@ rngchar_test() ->
     ok.
 
 mkdtemp_n_failonce_test() ->
-    crypto:start(),
     D = mkdtemp(),
     Path = filename:join([D, "testdir"]),
     %% Toggle the existence of a dir so that it fails
@@ -246,7 +244,6 @@ make_dir_fail_test() ->
     ok.
 
 mkdtemp_test() ->
-    crypto:start(),
     D = mkdtemp(),
     ?assertEqual(
        true,
@@ -257,7 +254,6 @@ mkdtemp_test() ->
     ok.
 
 rmtempdir_test() ->
-    crypto:start(),
     D1 = mkdtemp(),
     ?assertEqual(
        true,
