@@ -23,6 +23,7 @@
 
 %% @type proplist() = [{Key::string(), Value::string()}].
 %% @type header() = {Name::string(), Value::string()}.
+%% @type int_seconds() = integer().
 
 %% @spec cookie(Key::string(), Value::string()) -> header()
 %% @doc Short-hand for <code>cookie(Key, Value, [])</code>.
@@ -30,7 +31,7 @@ cookie(Key, Value) ->
     cookie(Key, Value, []).
 
 %% @spec cookie(Key::string(), Value::string(), Options::[Option]) -> header()
-%% where Option = {max_age, integer()} | {local_time, {date(), time()}}
+%% where Option = {max_age, int_seconds()} | {local_time, {date(), time()}}
 %%                | {domain, string()} | {path, string()}
 %%                | {secure, true | false} | {http_only, true | false}
 %%
