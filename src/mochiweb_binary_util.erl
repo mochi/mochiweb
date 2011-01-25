@@ -80,7 +80,7 @@ splitwith(Pred, <<C, Rest/binary>> =Binary, Acc) ->
         false -> {Acc, Binary}
     end;
 splitwith(_Pred, <<"">>, Acc) ->
-    {<<"">>, Acc}.
+    {Acc, <<"">>}.
 
 
 %% @spec partition(String, Sep) -> {String, [], []} | {Prefix, Sep, Postfix}
