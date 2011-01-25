@@ -82,7 +82,6 @@ cookie(Key, Value, Options) ->
                 DomainBinary = quote(Domain),
                 <<"; Domain=", DomainBinary/binary>>
         end,
-    io:format("domain part: ~p~n", [DomainPart]),
     PathPart =
         case proplists:get_value(path, Options) of
             undefined ->
