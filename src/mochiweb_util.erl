@@ -29,7 +29,6 @@
 hexdigit(C) when C < 10 -> $0 + C;
 hexdigit(C) when C < 16 -> $A + (C - 10).
 
-
 unhexdigit(C) when C >= $0, C =< $9 -> C - $0;
 unhexdigit(C) when C >= $a, C =< $f -> C - $a + 10;
 unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
@@ -197,7 +196,7 @@ urlencode(Props) ->
 %% @spec parse_qs(string() | binary()) -> [{Key, Value}]
 %% @doc Parse a query string or application/x-www-form-urlencoded.
 parse_qs(Binary) when is_binary(Binary) ->
-    parse_binary_qs(Binary, []);
+    parse_qs(binary_to_list(Binary));
 parse_qs(String) ->
     parse_qs(String, []).
 
@@ -234,45 +233,10 @@ parse_qs_value([$& | Rest], Acc) ->
 parse_qs_value([C | Rest], Acc) ->
     parse_qs_value(Rest, [C | Acc]).
 
-
-
-parse_binary_qs(<<"">>, Acc) ->
-    Acc;
-parse_binary_qs(Binary, Acc) ->
-    {Key, Rest} = parse_binary_qs_key(Binary),
-    {Value, Rest1} = parse_binary_qs_value(Rest),
-    parse_binary_qs(Rest1, [{Key, Value} | Acc]).
-
-parse_binary_qs_key(Binary) ->
-    parse_binary_qs_key(Binary, <<"">>).
-
-parse_binary_qs_key(<<"">>, Acc) ->
-    {qs_binary_decode(Acc), <<"">>};
-parse_binary_qs_key(<<"=", Rest/binary>>, Acc) ->
-    {qs_binary_decode(Acc), Rest};
-parse_binary_qs_key(Rest= <<";", _R/binary>>, Acc) ->
-    {qs_binary_decode(Acc), Rest};
-parse_binary_qs_key(Rest= <<"&",  _R/binary>>, Acc) ->
-    {qs_binary_decode(Acc), Rest};
-parse_binary_qs_key(<<B:1/binary, Rest/binary>>, Acc) ->
-    parse_binary_qs_key(Rest, <<Acc/binary, B/binary>>).
-
-parse_binary_qs_value(Binary) ->
-    parse_binary_qs_value(Binary, <<"">>).
-
-parse_binary_qs_value(<<"">>, Acc) ->
-    {qs_binary_decode(Acc), <<"">>};
-parse_binary_qs_value(<<";", Rest/binary>>, Acc) ->
-    {qs_binary_decode(Acc), Rest};
-parse_binary_qs_value(<<"&", Rest/binary>>, Acc) ->
-    {qs_binary_decode(Acc), Rest};
-parse_binary_qs_value(<<B:1/binary, Rest/binary>>, Acc) ->
-    parse_binary_qs_value(Rest, <<Acc/binary, B/binary>>).
-
 %% @spec unquote(string() | binary()) -> string()
 %% @doc Unquote a URL encoded string.
 unquote(Binary) when is_binary(Binary) ->
-    qs_binary_decode(Binary);
+    unquote(binary_to_list(Binary));
 unquote(String) ->
     qs_revdecode(lists:reverse(String)).
 
@@ -287,21 +251,6 @@ qs_revdecode([Lo, Hi, ?PERCENT | Rest], Acc) when ?IS_HEX(Lo), ?IS_HEX(Hi) ->
     qs_revdecode(Rest, [(unhexdigit(Lo) bor (unhexdigit(Hi) bsl 4)) | Acc]);
 qs_revdecode([C | Rest], Acc) ->
     qs_revdecode(Rest, [C | Acc]).
-
-
-qs_binary_decode(B) ->
-    qs_binary_decode(B, <<"">>).
-
-qs_binary_decode(<<"">>, Acc) ->
-    Acc;
-qs_binary_decode(<<"+", Rest>>, Acc) ->
-    qs_binary_decode(Rest, <<Acc/binary, $\s>>);
-qs_binary_decode(<<"%", Hi, Lo, Rest/binary>>, Acc) when ?IS_HEX(Lo), ?IS_HEX(Hi) ->
-    qs_binary_decode(Rest, <<Acc/binary, (unhexdigit(Lo) bor (unhexdigit(Hi) bsl 4))>>);
-qs_binary_decode(<<B:1/binary, Rest/binary>>, Acc) ->
-    qs_binary_decode(Rest, <<Acc/binary, B/binary>>).
-
-
 
 %% @spec urlsplit(Url) -> {Scheme, Netloc, Path, Query, Fragment}
 %% @doc Return a 5-tuple, does not expand % escapes. Only supports HTTP style
@@ -376,8 +325,6 @@ urlunsplit_path({Path, Query, Fragment}) ->
 %% @spec urlsplit_path(Url) -> {Path, Query, Fragment}
 %% @doc Return a 3-tuple, does not expand % escapes. Only supports HTTP style
 %%      paths.
-urlsplit_path(Path) when is_binary(Path) ->
-    urlsplit_binary_path(Path, <<"">>);
 urlsplit_path(Path) ->
     urlsplit_path(Path, []).
 
@@ -400,30 +347,6 @@ urlsplit_query("#" ++ Rest, Acc) ->
     {lists:reverse(Acc), Rest};
 urlsplit_query([C | Rest], Acc) ->
     urlsplit_query(Rest, [C | Acc]).
-
-
-urlsplit_binary_path(<<"">>, Acc) ->
-    {Acc, <<"">>, <<"">>};
-urlsplit_binary_path(<<"?", Rest/binary>>, Acc) ->
-    {Query, Fragment} = urlsplit_binary_query(Rest),
-    {Acc, Query, Fragment};
-urlsplit_binary_path(<<"#", Rest/binary>>, Acc) ->
-    {Acc, <<"">>, Rest};
-urlsplit_binary_path(<<C:1/binary, Rest/binary>>, Acc) ->
-    urlsplit_binary_path(Rest, <<Acc/binary, C/binary>>).
-
-urlsplit_binary_query(Query) ->
-    urlsplit_binary_query(Query, <<"">>).
-
-urlsplit_binary_query(<<"">>, Acc) ->
-    {Acc, <<"">>};
-urlsplit_binary_query(<<"#", Rest/binary>>, Acc) ->
-    {Acc, Rest};
-urlsplit_binary_query(<<C:1/binary, Rest/binary>>, Acc) ->
-    urlsplit_binary_query(Rest, <<Acc/binary, C/binary>>).
-
-
-
 
 %% @spec guess_mime(string()) -> string()
 %% @doc  Guess the mime type of a file by the extension of its filename.

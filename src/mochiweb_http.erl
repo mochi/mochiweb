@@ -6,7 +6,7 @@
 -module(mochiweb_http).
 -author('bob@mochimedia.com').
 -export([start/0, start/1, stop/0, stop/1]).
--export([loop/3, default_body/1]).
+-export([loop/2, default_body/1]).
 -export([after_response/2, reentry/1]).
 -export([parse_range_request/1, range_skip_length/2]).
 
@@ -19,13 +19,11 @@
 
 parse_options(Options) ->
     {loop, HttpLoop} = proplists:lookup(loop, Options),
-    Binary = proplists:get_value(binary_body, Options, false),
     Loop = fun (S) ->
-                   ?MODULE:loop(S, HttpLoop, Binary)
+                   ?MODULE:loop(S, HttpLoop)
            end,
-    Options1 = proplists:delete(binary_body, Options),
-    Options2 = [{loop, Loop} | proplists:delete(loop, Options1)],
-    mochilists:set_defaults(?DEFAULTS, Options2).
+    Options1 = [{loop, Loop} | proplists:delete(loop, Options)],
+    mochilists:set_defaults(?DEFAULTS, Options1).
 
 stop() ->
     mochiweb_socket_server:stop(?MODULE).
@@ -97,11 +95,8 @@ default_body(Req, _Method, _Path) ->
 default_body(Req) ->
     default_body(Req, Req:get(method), Req:get(path)).
 
-loop(Socket, Body, false=_Binary) ->
+loop(Socket, Body) ->
     mochiweb_socket:setopts(Socket, [{packet, http}]),
-    request(Socket, Body);
-loop(Socket, Body, true=_Binary) ->
-    mochiweb_socket:setopts(Socket, [{packet, http_bin}]),
     request(Socket, Body).
 
 request(Socket, Body) ->
