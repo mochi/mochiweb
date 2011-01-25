@@ -20,9 +20,6 @@
 -define(IS_HEX(C), ((C >= $0 andalso C =< $9) orelse
                     (C >= $a andalso C =< $f) orelse
                     (C >= $A andalso C =< $F))).
--define(IS_BINARY_HEX(B), ((B >= <<"0">> andalso B =< <<"9">>) orelse
-                    (B >= <<"a">> andalso B =< <<"f">>) orelse
-                    (B >= <<"A">> andalso B =< <<"F">>))).
 -define(QS_SAFE(C), ((C >= $a andalso C =< $z) orelse
                      (C >= $A andalso C =< $Z) orelse
                      (C >= $0 andalso C =< $9) orelse
@@ -299,10 +296,12 @@ qs_binary_decode(<<"">>, Acc) ->
     Acc;
 qs_binary_decode(<<"+", Rest>>, Acc) ->
     qs_binary_decode(Rest, <<Acc/binary, $\s>>);
-qs_binary_decode(<<"%", Hi:1/binary, Lo:1/binary, Rest/binary>>, Acc) when ?IS_BINARY_HEX(Lo), ?IS_BINARY_HEX(Hi) ->
-    [Lo1] = binary_to_list(Lo),
-    [Hi1] = binary_to_list(Hi),
-    qs_binary_decode(Rest, <<Acc/binary, (unhexdigit(Lo1) bor (unhexdigit(Hi1) bsl 4))>>);
+%qs_binary_decode(<<"%", Hi:1/binary, Lo:1/binary, Rest/binary>>, Acc) when ?IS_BINARY_HEX(Lo), ?IS_BINARY_HEX(Hi) ->
+%    [Lo1] = binary_to_list(Lo),
+%    [Hi1] = binary_to_list(Hi),
+%    qs_binary_decode(Rest, <<Acc/binary, (unhexdigit(Lo1) bor (unhexdigit(Hi1) bsl 4))>>);
+qs_binary_decode(<<"%", Hi, Lo, Rest/binary>>, Acc) when ?IS_HEX(Lo), ?IS_HEX(Hi) ->
+    qs_binary_decode(Rest, <<Acc/binary, (unhexdigit(Lo) bor (unhexdigit(Hi) bsl 4))>>);
 qs_binary_decode(<<B:1/binary, Rest/binary>>, Acc) ->
     qs_binary_decode(Rest, <<Acc/binary, B/binary>>).
 
