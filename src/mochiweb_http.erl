@@ -6,8 +6,8 @@
 -module(mochiweb_http).
 -author('bob@mochimedia.com').
 -export([start/0, start/1, stop/0, stop/1]).
--export([loop/2, default_body/1]).
--export([after_response/2, reentry/1]).
+-export([loop/3, default_body/1]).
+-export([after_response/2, after_response/3, reentry/1, reentry/2]).
 -export([parse_range_request/1, range_skip_length/2]).
 
 -define(REQUEST_RECV_TIMEOUT, 300000).   % timeout waiting for request line
@@ -18,12 +18,16 @@
                    {port, 8888}]).
 
 parse_options(Options) ->
-    {loop, HttpLoop} = proplists:lookup(loop, Options),
+    {value, {loop, HttpLoop}, Options1} = lists:keytake(loop, 1, Options),
+    {Binary, Options2} = case lists:keytake(binary_body, 1, Options1) of
+        {value, {binary_body, B}, Opt} -> {B, Opt};
+        false -> {false, Options1}
+    end,
     Loop = fun (S) ->
-                   ?MODULE:loop(S, HttpLoop)
+                   ?MODULE:loop(S, HttpLoop, Binary)
            end,
-    Options1 = [{loop, Loop} | proplists:delete(loop, Options)],
-    mochilists:set_defaults(?DEFAULTS, Options1).
+    Options3 = [{loop, Loop} | Options2],
+    mochilists:set_defaults(?DEFAULTS, Options3).
 
 stop() ->
     mochiweb_socket_server:stop(?MODULE).
@@ -95,54 +99,78 @@ default_body(Req, _Method, _Path) ->
 default_body(Req) ->
     default_body(Req, Req:get(method), Req:get(path)).
 
-loop(Socket, Body) ->
+loop(Socket, Body, false=Binary) ->
     mochiweb_socket:setopts(Socket, [{packet, http}]),
-    request(Socket, Body).
+    request(Socket, Body, Binary);
+loop(Socket, Body, true=Binary) ->
+    mochiweb_socket:setopts(Socket, [{packet, http_bin}]),
+    request(Socket, Body, Binary).
 
-request(Socket, Body) ->
+request(Socket, Body, false=Binary) ->
     mochiweb_socket:setopts(Socket, [{active, once}]),
     receive
         {Protocol, _, {http_request, Method, Path, Version}} when Protocol == http orelse Protocol == ssl ->
             mochiweb_socket:setopts(Socket, [{packet, httph}]),
-            headers(Socket, {Method, Path, Version}, [], Body, 0);
+            headers(Socket, {Method, Path, Version}, [], Body, Binary, 0);
         {Protocol, _, {http_error, "\r\n"}} when Protocol == http orelse Protocol == ssl ->
-            request(Socket, Body);
+            request(Socket, Body, Binary);
         {Protocol, _, {http_error, "\n"}} when Protocol == http orelse Protocol == ssl ->
-            request(Socket, Body);
+            request(Socket, Body, Binary);
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
         _Other ->
-            handle_invalid_request(Socket)
+            handle_invalid_request(Socket, Binary)
+    after ?REQUEST_RECV_TIMEOUT ->
+        mochiweb_socket:close(Socket),
+        exit(normal)
+    end;
+request(Socket, Body, true=Binary) ->
+    mochiweb_socket:setopts(Socket, [{active, once}]),
+    receive
+        {Protocol, _, {http_request, Method, Path, Version}} when Protocol == http orelse Protocol == ssl ->
+            mochiweb_socket:setopts(Socket, [{packet, httph_bin}]),
+            headers(Socket, {Method, Path, Version}, [], Body, Binary, 0);
+        {Protocol, _, {http_error, <<"\r\n">>}} when Protocol == http orelse Protocol == ssl ->
+            request(Socket, Body, Binary);
+        {Protocol, _, {http_error, <<"\n">>}} when Protocol == http orelse Protocol == ssl ->
+            request(Socket, Body, Binary);
+        {tcp_closed, _} ->
+            mochiweb_socket:close(Socket),
+            exit(normal);
+        _Other ->
+            handle_invalid_request(Socket, Binary)
     after ?REQUEST_RECV_TIMEOUT ->
         mochiweb_socket:close(Socket),
         exit(normal)
     end.
 
 reentry(Body) ->
+    reentry(Body, false).
+reentry(Body, Binary) ->
     fun (Req) ->
-            ?MODULE:after_response(Body, Req)
-    end.
+            ?MODULE:after_response(Body, Binary, Req)
+    end.    
 
-headers(Socket, Request, Headers, _Body, ?MAX_HEADERS) ->
+headers(Socket, Request, Headers, _Body, Binary, ?MAX_HEADERS) ->
     %% Too many headers sent, bad request.
     mochiweb_socket:setopts(Socket, [{packet, raw}]),
-    handle_invalid_request(Socket, Request, Headers);
-headers(Socket, Request, Headers, Body, HeaderCount) ->
+    handle_invalid_request(Socket, Request, Headers, Binary);
+headers(Socket, Request, Headers, Body, Binary, HeaderCount) ->
     mochiweb_socket:setopts(Socket, [{active, once}]),
     receive
         {Protocol, _, http_eoh} when Protocol == http orelse Protocol == ssl ->
-            Req = new_request(Socket, Request, Headers),
+            Req = new_request(Socket, Request, Headers, Binary),
             call_body(Body, Req),
-            ?MODULE:after_response(Body, Req);
+            ?MODULE:after_response(Body, Binary, Req);
         {Protocol, _, {http_header, _, Name, _, Value}} when Protocol == http orelse Protocol == ssl ->
-            headers(Socket, Request, [{Name, Value} | Headers], Body,
+            headers(Socket, Request, [{Name, Value} | Headers], Body, Binary,
                     1 + HeaderCount);
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
         _Other ->
-            handle_invalid_request(Socket, Request, Headers)
+            handle_invalid_request(Socket, Request, Headers, Binary)
     after ?HEADERS_RECV_TIMEOUT ->
         mochiweb_socket:close(Socket),
         exit(normal)
@@ -155,21 +183,27 @@ call_body({M, F}, Req) ->
 call_body(Body, Req) ->
     Body(Req).
 
-handle_invalid_request(Socket) ->
-    handle_invalid_request(Socket, {'GET', {abs_path, "/"}, {0,9}}, []),
+handle_invalid_request(Socket, Binary) ->
+    handle_invalid_request(Socket, {'GET', {abs_path, "/"}, {0,9}}, [], Binary),
     exit(normal).
 
-handle_invalid_request(Socket, Request, RevHeaders) ->
-    Req = new_request(Socket, Request, RevHeaders),
+handle_invalid_request(Socket, Request, RevHeaders, Binary) ->
+    Req = new_request(Socket, Request, RevHeaders, Binary),
     Req:respond({400, [], []}),
     mochiweb_socket:close(Socket),
     exit(normal).
 
-new_request(Socket, Request, RevHeaders) ->
+new_request(Socket, Request, RevHeaders, false=_Binary) ->
     mochiweb_socket:setopts(Socket, [{packet, raw}]),
-    mochiweb:new_request({Socket, Request, lists:reverse(RevHeaders)}).
+    mochiweb:new_request({Socket, Request, lists:reverse(RevHeaders)});
+new_request(Socket, Request, RevHeaders, true=_Binary) ->
+    mochiweb_socket:setopts(Socket, [{packet, raw}]),
+    mochiweb:new_binary_request({Socket, Request, lists:reverse(RevHeaders)}).
+
 
 after_response(Body, Req) ->
+    after_response(Body, false, Req).
+after_response(Body, Binary, Req) ->
     Socket = Req:get(socket),
     case Req:should_close() of
         true ->
@@ -177,7 +211,7 @@ after_response(Body, Req) ->
             exit(normal);
         false ->
             Req:cleanup(),
-            ?MODULE:loop(Socket, Body)
+            ?MODULE:loop(Socket, Body, Binary)
     end.
 
 parse_range_request("bytes=0-") ->
