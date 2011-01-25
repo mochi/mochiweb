@@ -296,10 +296,6 @@ qs_binary_decode(<<"">>, Acc) ->
     Acc;
 qs_binary_decode(<<"+", Rest>>, Acc) ->
     qs_binary_decode(Rest, <<Acc/binary, $\s>>);
-%qs_binary_decode(<<"%", Hi:1/binary, Lo:1/binary, Rest/binary>>, Acc) when ?IS_BINARY_HEX(Lo), ?IS_BINARY_HEX(Hi) ->
-%    [Lo1] = binary_to_list(Lo),
-%    [Hi1] = binary_to_list(Hi),
-%    qs_binary_decode(Rest, <<Acc/binary, (unhexdigit(Lo1) bor (unhexdigit(Hi1) bsl 4))>>);
 qs_binary_decode(<<"%", Hi, Lo, Rest/binary>>, Acc) when ?IS_HEX(Lo), ?IS_HEX(Hi) ->
     qs_binary_decode(Rest, <<Acc/binary, (unhexdigit(Lo) bor (unhexdigit(Hi) bsl 4))>>);
 qs_binary_decode(<<B:1/binary, Rest/binary>>, Acc) ->
