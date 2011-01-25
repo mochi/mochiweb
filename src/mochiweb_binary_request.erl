@@ -36,7 +36,7 @@
 %% @type iodata() = binary() | iolist().
 %% @type key() = atom() | string() | binary()
 %% @type value() = atom() | string() | binary() | integer()
-%% @type headers(). A mochiweb_headers structure.
+%% @type headers(). A mochiweb_binary_headers structure.
 %% @type response(). A mochiweb_response parameterized module instance.
 %% @type ioheaders() = headers() | [{key(), value()}].
 
@@ -49,10 +49,10 @@
 %% @spec get_header_value(K) -> undefined | Value
 %% @doc Get the value of a given request header.
 get_header_value(K) ->
-    mochiweb_headers:get_value(K, Headers).
+    mochiweb_binary_headers:get_value(K, Headers).
 
 get_primary_header_value(K) ->
-    mochiweb_headers:get_primary_value(K, Headers).
+    mochiweb_binary_headers:get_primary_value(K, Headers).
 
 %% @type field() = socket | scheme | method | raw_path | version | headers | peer | path | body_length | range
 
@@ -82,16 +82,16 @@ get(headers) ->
 get(peer) ->
     case mochiweb_socket:peername(Socket) of
         {ok, {Addr={10, _, _, _}, _Port}} ->
-            case get_header_value("x-forwarded-for") of
+            case get_header_value(<<"x-forwarded-for">>) of
                 undefined ->
                     inet_parse:ntoa(Addr);
                 Hosts ->
                     string:strip(lists:last(string:tokens(Hosts, ",")))
             end;
         {ok, {{127, 0, 0, 1}, _Port}} ->
-            case get_header_value("x-forwarded-for") of
+            case get_header_value(<<"x-forwarded-for">>) of
                 undefined ->
-                    "127.0.0.1";
+                    <<"127.0.0.1">>;
                 Hosts ->
                     string:strip(lists:last(string:tokens(Hosts, ",")))
             end;
@@ -134,7 +134,7 @@ dump() ->
     {?MODULE, [{method, Method},
                {version, Version},
                {raw_path, RawPath},
-               {headers, mochiweb_headers:to_list(Headers)}]}.
+               {headers, mochiweb_binary_headers:to_list(Headers)}]}.
 
 %% @spec send(iodata()) -> ok
 %% @doc Send data over the socket.
@@ -167,15 +167,15 @@ recv(Length, Timeout) ->
 %% @spec body_length() -> undefined | chunked | unknown_transfer_encoding | integer()
 %% @doc  Infer body length from transfer-encoding and content-length headers.
 body_length() ->
-    case get_header_value("transfer-encoding") of
+    case get_header_value(<<"transfer-encoding">>) of
         undefined ->
-            case get_header_value("content-length") of
+            case get_header_value(<<"content-length">>) of
                 undefined ->
                     undefined;
                 Length ->
-                    list_to_integer(Length)
+                    list_to_integer(binary_to_list(Length))
             end;
-        "chunked" ->
+        <<"chunked">> ->
             chunked;
         Unknown ->
             {unknown_transfer_encoding, Unknown}
@@ -215,14 +215,14 @@ stream_body(MaxChunkSize, ChunkFun, FunState) ->
     stream_body(MaxChunkSize, ChunkFun, FunState, undefined).
 
 stream_body(MaxChunkSize, ChunkFun, FunState, MaxBodyLength) ->
-    Expect = case get_header_value("expect") of
+    Expect = case get_header_value(<<"expect">>) of
                  undefined ->
                      undefined;
                  Value when is_list(Value) ->
                      string:to_lower(Value)
              end,
     case Expect of
-        "100-continue" ->
+        <<"100-continue">> ->
             start_raw_response({100, gb_trees:empty()});
         _Else ->
             ok
@@ -254,8 +254,8 @@ stream_body(MaxChunkSize, ChunkFun, FunState, MaxBodyLength) ->
 %%      ResponseHeaders. The server will set header defaults such as Server
 %%      and Date if not present in ResponseHeaders.
 start_response({Code, ResponseHeaders}) ->
-    HResponse = mochiweb_headers:make(ResponseHeaders),
-    HResponse1 = mochiweb_headers:default_from_list(server_headers(),
+    HResponse = mochiweb_binary_headers:make(ResponseHeaders),
+    HResponse1 = mochiweb_binary_headers:default_from_list(server_headers(),
                                                     HResponse),
     start_raw_response({Code, HResponse1}).
 
@@ -267,7 +267,7 @@ start_raw_response({Code, ResponseHeaders}) ->
                 [mochiweb_binary_util:make_io(K), <<": ">>, V, <<"\r\n">> | Acc]
         end,
     End = lists:foldl(F, [<<"\r\n">>],
-                      mochiweb_headers:to_list(ResponseHeaders)),
+                      mochiweb_binary_headers:to_list(ResponseHeaders)),
     send([make_version(Version), make_code(Code), <<"\r\n">> | End]),
     mochiweb:new_response({THIS, Code, ResponseHeaders}).
 
@@ -278,8 +278,8 @@ start_raw_response({Code, ResponseHeaders}) ->
 %%      will set header defaults such as Server
 %%      and Date if not present in ResponseHeaders.
 start_response_length({Code, ResponseHeaders, Length}) ->
-    HResponse = mochiweb_headers:make(ResponseHeaders),
-    HResponse1 = mochiweb_headers:enter("Content-Length", Length, HResponse),
+    HResponse = mochiweb_binary_headers:make(ResponseHeaders),
+    HResponse1 = mochiweb_binary_headers:enter(<<"Content-Length">>, Length, HResponse),
     start_response({Code, HResponse1}).
 
 %% @spec respond({integer(), ioheaders(), iodata() | chunked | {file, IoDevice}}) -> response()
@@ -298,17 +298,17 @@ respond({Code, ResponseHeaders, {file, IoDevice}}) ->
     end,
     Response;
 respond({Code, ResponseHeaders, chunked}) ->
-    HResponse = mochiweb_headers:make(ResponseHeaders),
+    HResponse = mochiweb_binary_headers:make(ResponseHeaders),
     HResponse1 = case Method of
                      'HEAD' ->
                          %% This is what Google does, http://www.google.com/
                          %% is chunked but HEAD gets Content-Length: 0.
                          %% The RFC is ambiguous so emulating Google is smart.
-                         mochiweb_headers:enter("Content-Length", "0",
+                         mochiweb_binary_headers:enter(<<"Content-Length">>, <<"0">>,
                                                 HResponse);
                      _ when Version >= {1, 1} ->
                          %% Only use chunked encoding for HTTP/1.1
-                         mochiweb_headers:enter("Transfer-Encoding", "chunked",
+                         mochiweb_binary_headers:enter(<<"Transfer-Encoding">>, <<"chunked">>,
                                                 HResponse);
                      _ ->
                          %% For pre-1.1 clients we send the data as-is
@@ -347,20 +347,20 @@ not_found(ExtraHeaders) ->
 ok({ContentType, Body}) ->
     ok({ContentType, [], Body});
 ok({ContentType, ResponseHeaders, Body}) ->
-    HResponse = mochiweb_headers:make(ResponseHeaders),
+    HResponse = mochiweb_binary_headers:make(ResponseHeaders),
     case THIS:get(range) of
         X when (X =:= undefined orelse X =:= fail) orelse Body =:= chunked ->
             %% http://code.google.com/p/mochiweb/issues/detail?id=54
             %% Range header not supported when chunked, return 200 and provide
             %% full response.
-            HResponse1 = mochiweb_headers:enter("Content-Type", ContentType,
+            HResponse1 = mochiweb_binary_headers:enter(<<"Content-Type">>, ContentType,
                                                 HResponse),
             respond({200, HResponse1, Body});
         Ranges ->
             {PartList, Size} = range_parts(Body, Ranges),
             case PartList of
                 [] -> %% no valid ranges
-                    HResponse1 = mochiweb_headers:enter("Content-Type",
+                    HResponse1 = mochiweb_binary_headers:enter(<<"Content-Type">>,
                                                         ContentType,
                                                         HResponse),
                     %% could be 416, for now we'll just return 200
@@ -368,8 +368,8 @@ ok({ContentType, ResponseHeaders, Body}) ->
                 PartList ->
                     {RangeHeaders, RangeBody} =
                         mochiweb_multipart:parts_to_body(PartList, ContentType, Size),
-                    HResponse1 = mochiweb_headers:enter_from_list(
-                                   [{"Accept-Ranges", "bytes"} |
+                    HResponse1 = mochiweb_binary_headers:enter_from_list(
+                                   [{<<"Accept-Ranges">>, <<"bytes">>} |
                                     RangeHeaders],
                                    HResponse),
                     respond({206, HResponse1, RangeBody})
@@ -384,16 +384,16 @@ should_close() ->
     DidNotRecv = erlang:get(?SAVE_RECV) =:= undefined,
     ForceClose orelse Version < {1, 0}
         %% Connection: close
-        orelse get_header_value("connection") =:= "close"
+        orelse get_header_value(<<"connection">>) =:= <<"close">>
         %% HTTP 1.0 requires Connection: Keep-Alive
         orelse (Version =:= {1, 0}
-                andalso get_header_value("connection") =/= "Keep-Alive")
+                andalso get_header_value(<<"connection">>) =/= <<"Keep-Alive">>)
         %% unread data left on the socket, can't safely continue
         orelse (DidNotRecv
-                andalso get_header_value("content-length") =/= undefined
-                andalso list_to_integer(get_header_value("content-length")) > 0)
+                andalso get_header_value(<<"content-length">>) =/= undefined
+                andalso list_to_integer(get_header_value(<<"content-length">>)) > 0)
         orelse (DidNotRecv
-                andalso get_header_value("transfer-encoding") =:= "chunked").
+                andalso get_header_value(<<"transfer-encoding">>) =:= <<"chunked">>).
 
 %% @spec cleanup() -> ok
 %% @doc Clean up any junk in the process dictionary, required before continuing
@@ -432,11 +432,11 @@ get_cookie_value(Key) ->
 parse_cookie() ->
     case erlang:get(?SAVE_COOKIE) of
         undefined ->
-            Cookies = case get_header_value("cookie") of
+            Cookies = case get_header_value(<<"cookie">>) of
                           undefined ->
                               [];
                           Value ->
-                              mochiweb_cookies:parse_cookie(Value)
+                              mochiweb_binary_cookies:parse_cookie(Value)
                       end,
             put(?SAVE_COOKIE, Cookies),
             Cookies;
@@ -454,8 +454,8 @@ parse_post() ->
                          undefined ->
                              [];
                          Binary ->
-                             case get_primary_header_value("content-type") of
-                                 "application/x-www-form-urlencoded" ++ _ ->
+                             case get_primary_header_value(<<"content-type">>) of
+                                 <<"application/x-www-form-urlencoded", _R/binary>> ->
                                      mochiweb_binary_util:parse_qs(Binary);
                                  _ ->
                                      []
@@ -581,11 +581,10 @@ maybe_redirect(RelPath, FullPath, ExtraHeaders) ->
         "/" ->
             maybe_serve_file(directory_index(FullPath), ExtraHeaders);
         _   ->
-            Host = mochiweb_headers:get_value("host", Headers),
-            Location = "http://" ++ Host  ++ "/" ++ RelPath ++ "/",
-            LocationBin = list_to_binary(Location),
-            MoreHeaders = [{"Location", Location},
-                           {"Content-Type", "text/html"} | ExtraHeaders],
+            Host = mochiweb_binary_headers:get_value(<<"host">>, Headers),
+            Location = <<"http://", Host/binary, "/", RelPath/binary, "/">>,
+            MoreHeaders = [{<<"Location">>, Location},
+                           {<<"Content-Type", "text/html">>} | ExtraHeaders],
             Top = <<"<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">"
             "<html><head>"
             "<title>301 Moved Permanently</title>"
@@ -593,7 +592,7 @@ maybe_redirect(RelPath, FullPath, ExtraHeaders) ->
             "<h1>Moved Permanently</h1>"
             "<p>The document has moved <a href=\"">>,
             Bottom = <<">here</a>.</p></body></html>\n">>,
-            Body = <<Top/binary, LocationBin/binary, Bottom/binary>>,
+            Body = <<Top/binary, Location/binary, Bottom/binary>>,
             respond({301, MoreHeaders, Body})
     end.
 
@@ -601,15 +600,15 @@ maybe_serve_file(File, ExtraHeaders) ->
     case file:read_file_info(File) of
         {ok, FileInfo} ->
             LastModified = httpd_util:rfc1123_date(FileInfo#file_info.mtime),
-            case get_header_value("if-modified-since") of
+            case get_header_value(<<"if-modified-since">>) of
                 LastModified ->
-                    respond({304, ExtraHeaders, ""});
+                    respond({304, ExtraHeaders, <<"">>});
                 _ ->
                     case file:open(File, [raw, binary]) of
                         {ok, IoDevice} ->
                             ContentType = mochiweb_binary_util:guess_mime(File),
                             Res = ok({ContentType,
-                                      [{"last-modified", LastModified}
+                                      [{<<"last-modified">>, LastModified}
                                        | ExtraHeaders],
                                       {file, IoDevice}}),
                             file:close(IoDevice),
@@ -692,9 +691,9 @@ range_parts(Body0, Ranges) ->
 %%            ["deflate", "gzip", "identity"]
 %%
 accepted_encodings(SupportedEncodings) ->
-    AcceptEncodingHeader = case get_header_value("Accept-Encoding") of
+    AcceptEncodingHeader = case get_header_value(<<"Accept-Encoding">>) of
         undefined ->
-            "";
+            <<"">>;
         Value ->
             Value
     end,

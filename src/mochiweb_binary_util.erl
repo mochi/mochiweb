@@ -15,7 +15,7 @@
 -export([parse_qvalues/1, pick_accepted_encodings/3]).
 -export([make_io/1]).
 -export([to_lower/1]).
--export([takewhile/2]).
+-export([takewhile/2, dropwhile/2, splitwith/2]).
 
 -define(PERCENT, 37).  % $\%
 -define(FULLSTOP, 46). % $\.
@@ -54,14 +54,33 @@ takewhile(Pred, Binary) ->
     takewhile(Pred, Binary, <<"">>).
 takewhile(_Pred, <<"">>, Acc) ->
     Acc;
-takewhile(Pred, <<B:1/binary, Rest/binary>>, Acc) ->
+takewhile(Pred, <<B, Rest/binary>>, Acc) ->
     case Pred(B) of
-        true ->
-            takewhile(Pred, Rest, <<Acc/binary, B/binary>>);
-        false ->
-            Acc
+        true -> takewhile(Pred, Rest, <<Acc/binary, B>>);
+        false -> Acc
     end.
 
+%% @spec dropwhile(Pred, Binary) -> Binary
+%% @doc The binary version of lists:dropwhile/2
+dropwhile(Pred, <<C, Rest/binary>> =Binary) ->
+    case Pred(C) of
+        true -> dropwhile(Pred, Rest);
+        false -> Binary
+    end;
+dropwhile(_Pred, <<"">>) ->
+    <<"">>.
+
+%% @spec splitwhile(Pred, Binary) -> Binary
+%% @doc The binary version of lists:splitwhile/2
+splitwith(Pred, Binary) ->
+    splitwith(Pred, Binary, <<"">>).
+splitwith(Pred, <<C, Rest/binary>> =Binary, Acc) ->
+    case Pred(C) of
+        true -> splitwith(Pred, Rest, <<Acc/binary, C>>);
+        false -> {Acc, Binary}
+    end;
+splitwith(_Pred, <<"">>, Acc) ->
+    {<<"">>, Acc}.
 
 
 %% @spec partition(String, Sep) -> {String, [], []} | {Prefix, Sep, Postfix}

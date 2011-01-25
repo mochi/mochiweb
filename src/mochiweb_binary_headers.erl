@@ -109,7 +109,7 @@ get_primary_value(K, T) ->
         undefined ->
             undefined;
         V ->
-            mochiweb_binary_util:takewhile(fun (C) -> C =/= <<";">> end, V)
+            mochiweb_binary_util:takewhile(fun (C) -> C =/= $; end, V)
     end.
 
 %% @spec lookup(key(), headers()) -> {value, {key(), string()}} | none
