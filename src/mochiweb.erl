@@ -71,8 +71,8 @@ new_request({Socket, {Method, '*'=Uri, Version}, Headers}) ->
                          Version,
                          mochiweb_headers:make(Headers)).
 
-%% @spec new__binary_request({Socket, Request, Headers}) -> MochiWebRequest
-%% @doc Return a mochiweb__binary_request data structure.
+%% @spec new_binary_request({Socket, Request, Headers}) -> MochiWebRequest
+%% @doc Return a mochiweb_request data structure.
 new_binary_request({Socket, {Method, {abs_path, Uri}, Version}, Headers}) ->
     mochiweb_binary_request:new(Socket,
                          Method,
@@ -131,6 +131,20 @@ ssl_cert_opts() ->
 
 with_server(Transport, ServerFun, ClientFun) ->
     ServerOpts0 = [{ip, "127.0.0.1"}, {port, 0}, {loop, ServerFun}],
+    ServerOpts = case Transport of
+        plain ->
+            ServerOpts0;
+        ssl ->
+            ServerOpts0 ++ [{ssl, true}, {ssl_opts, ssl_cert_opts()}]
+    end,
+    {ok, Server} = mochiweb_http:start(ServerOpts),
+    Port = mochiweb_socket_server:get(Server, port),
+    Res = (catch ClientFun(Transport, Port)),
+    mochiweb_http:stop(Server),
+    Res.
+
+with_binary_server(Transport, ServerFun, ClientFun) ->
+    ServerOpts0 = [{ip, "127.0.0.1"}, {port, 0}, {loop, ServerFun}, {binary_body, true}],
     ServerOpts = case Transport of
         plain ->
             ServerOpts0;
@@ -225,6 +239,85 @@ do_POST(Transport, Size, Times) ->
                 end || N <- lists:seq(1, Times)],
     ClientFun = new_client_fun('POST', TestReqs),
     ok = with_server(Transport, ServerFun, ClientFun),
+    ok.
+
+single_binary_http_GET_test() ->
+    do_binary_GET(plain, 1).
+
+single_binary_https_GET_test() ->
+    do_binary_GET(ssl, 1).
+
+multiple_binary_http_GET_test() ->
+    do_binary_GET(plain, 3).
+
+multiple_binary_https_GET_test() ->
+    do_binary_GET(ssl, 3).
+
+hundred_binary_http_GET_test() ->
+    do_binary_GET(plain, 100).
+
+hundred_binary_https_GET_test() ->
+    do_binary_GET(ssl, 100).
+
+single_binary_128_http_POST_test() ->
+    do_binary_POST(plain, 128, 1).
+
+single_binary_128_https_POST_test() ->
+    do_binary_POST(ssl, 128, 1).
+
+single_binary_2k_http_POST_test() ->
+    do_binary_POST(plain, 2048, 1).
+
+single_binary_2k_https_POST_test() ->
+    do_binary_POST(ssl, 2048, 1).
+
+single_binary_100k_http_POST_test() ->
+    do_binary_POST(plain, 102400, 1).
+
+single_binary_100k_https_POST_test() ->
+    do_binary_POST(ssl, 102400, 1).
+
+multiple_binary_100k_http_POST_test() ->
+    do_binary_POST(plain, 102400, 3).
+
+multiple_binary_100K_https_POST_test() ->
+    do_binary_POST(ssl, 102400, 3).
+
+hundred_binary_128_http_POST_test() ->
+    do_binary_POST(plain, 128, 100).
+
+hundred_binary_128_https_POST_test() ->
+    do_binary_POST(ssl, 128, 100).
+
+do_binary_GET(Transport, Times) ->
+    PathPrefix = "/whatever/",
+    ReplyPrefix = "You requested: ",
+    ServerFun = fun (Req) ->
+                        Reply = ReplyPrefix ++ Req:get(path),
+                        Req:ok({"text/plain", Reply})
+                end,
+    TestReqs = [begin
+                    Path = PathPrefix ++ integer_to_list(N),
+                    ExpectedReply = list_to_binary(ReplyPrefix ++ Path),
+                    #treq{path=Path, xreply=ExpectedReply}
+                end || N <- lists:seq(1, Times)],
+    ClientFun = new_client_fun('GET', TestReqs),
+    ok = with_binary_server(Transport, ServerFun, ClientFun),
+    ok.
+
+do_binary_POST(Transport, Size, Times) ->
+    ServerFun = fun (Req) ->
+                        Body = Req:recv_body(),
+                        Headers = [{"Content-Type", "application/octet-stream"}],
+                        Req:respond({201, Headers, Body})
+                end,
+    TestReqs = [begin
+                    Path = "/stuff/" ++ integer_to_list(N),
+                    Body = crypto:rand_bytes(Size),
+                    #treq{path=Path, body=Body, xreply=Body}
+                end || N <- lists:seq(1, Times)],
+    ClientFun = new_client_fun('POST', TestReqs),
+    ok = with_binary_server(Transport, ServerFun, ClientFun),
     ok.
 
 new_client_fun(Method, TestReqs) ->

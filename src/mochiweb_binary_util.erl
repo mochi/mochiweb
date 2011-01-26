@@ -70,8 +70,8 @@ dropwhile(Pred, <<C, Rest/binary>> =Binary) ->
 dropwhile(_Pred, <<"">>) ->
     <<"">>.
 
-%% @spec splitwhile(Pred, Binary) -> Binary
-%% @doc The binary version of lists:splitwhile/2
+%% @spec splitwith(Pred, Binary) -> Binary
+%% @doc The binary version of lists:splitwith/2
 splitwith(Pred, Binary) ->
     splitwith(Pred, Binary, <<"">>).
 splitwith(Pred, <<C, Rest/binary>> =Binary, Acc) ->
