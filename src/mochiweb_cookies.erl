@@ -116,12 +116,26 @@ quote(V0) ->
         orelse erlang:error({cookie_quoting_required, V}),
     V.
 
+
+%% Return a date in the form of: Wdy, DD-Mon-YYYY HH:MM:SS GMT
+%% See also: rfc2109: 10.1.2
+rfc2109_cookie_expires_date(LocalTime) ->
+    {{YYYY,MM,DD},{Hour,Min,Sec}} =
+        case calendar:local_time_to_universal_time_dst(LocalTime) of
+            [Gmt]   -> Gmt;
+            [_,Gmt] -> Gmt
+        end,
+    DayNumber = calendar:day_of_the_week({YYYY,MM,DD}),
+    lists:flatten(
+      io_lib:format("~s, ~2.2.0w-~3.s-~4.4.0w ~2.2.0w:~2.2.0w:~2.2.0w GMT",
+                    [httpd_util:day(DayNumber),DD,httpd_util:month(MM),YYYY,Hour,Min,Sec])).
+
 add_seconds(Secs, LocalTime) ->
     Greg = calendar:datetime_to_gregorian_seconds(LocalTime),
     calendar:gregorian_seconds_to_datetime(Greg + Secs).
 
 age_to_cookie_date(Age, LocalTime) ->
-    httpd_util:rfc1123_date(add_seconds(Age, LocalTime)).
+    rfc2109_cookie_expires_date(add_seconds(Age, LocalTime)).
 
 %% @spec parse_cookie(string()) -> [{K::string(), V::string()}]
 %% @doc Parse the contents of a Cookie header field, ignoring cookie
@@ -294,14 +308,14 @@ cookie_test() ->
     C2 = {"Set-Cookie",
           "Customer=WILE_E_COYOTE; "
           "Version=1; "
-          "Expires=Tue, 15 May 2007 13:45:33 GMT; "
+          "Expires=Tue, 15-May-2007 13:45:33 GMT; "
           "Max-Age=0"},
     C2 = cookie("Customer", "WILE_E_COYOTE",
                 [{max_age, -111}, {local_time, LocalTime}]),
     C3 = {"Set-Cookie",
           "Customer=WILE_E_COYOTE; "
           "Version=1; "
-          "Expires=Wed, 16 May 2007 13:45:50 GMT; "
+          "Expires=Wed, 16-May-2007 13:45:50 GMT; "
           "Max-Age=86417"},
     C3 = cookie("Customer", "WILE_E_COYOTE",
                 [{max_age, 86417}, {local_time, LocalTime}]),
