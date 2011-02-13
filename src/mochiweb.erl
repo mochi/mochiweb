@@ -123,6 +123,8 @@ request_test() ->
     "/foo/bar/baz wibble quux" = R:get(path),
     ok.
 
+-define(LARGE_TIMEOUT, 60).
+
 single_http_GET_test() ->
     do_GET(plain, 1).
 
@@ -135,11 +137,13 @@ multiple_http_GET_test() ->
 multiple_https_GET_test() ->
     do_GET(ssl, 3).
 
-hundred_http_GET_test() ->
-    do_GET(plain, 100).
+hundred_http_GET_test_() -> % note the underscore
+    {timeout, ?LARGE_TIMEOUT, 
+     fun() -> ?assertEqual(ok, do_GET(plain,100)) end}.
 
-hundred_https_GET_test() ->
-    do_GET(ssl, 100).
+hundred_https_GET_test_() -> % note the underscore
+    {timeout, ?LARGE_TIMEOUT, 
+     fun() -> ?assertEqual(ok, do_GET(ssl,100)) end}.
 
 single_128_http_POST_test() ->
     do_POST(plain, 128, 1).
@@ -165,11 +169,13 @@ multiple_100k_http_POST_test() ->
 multiple_100K_https_POST_test() ->
     do_POST(ssl, 102400, 3).
 
-hundred_128_http_POST_test() ->
-    do_POST(plain, 128, 100).
+hundred_128_http_POST_test_() -> % note the underscore
+    {timeout, ?LARGE_TIMEOUT, 
+     fun() -> ?assertEqual(ok, do_POST(plain, 128, 100)) end}.
 
-hundred_128_https_POST_test() ->
-    do_POST(ssl, 128, 100).
+hundred_128_https_POST_test_() -> % note the underscore
+    {timeout, ?LARGE_TIMEOUT, 
+     fun() -> ?assertEqual(ok, do_POST(ssl, 128, 100)) end}.
 
 do_GET(Transport, Times) ->
     PathPrefix = "/whatever/",
