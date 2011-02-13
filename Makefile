@@ -19,10 +19,10 @@ clean:
 	@$(REBAR) clean
 
 build_plt:
-	@$(REBAR) build_plt
+	@$(REBAR) build-plt
 
 dialyzer:
-	@$(REBAR) analyze
+	@$(REBAR) dialyze
 
 app:
 	@$(REBAR) create template=mochiwebapp dest=$(DEST) appid=$(PROJECT)
