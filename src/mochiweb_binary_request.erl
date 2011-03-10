@@ -23,6 +23,8 @@
 -export([accepted_encodings/1]).
 -export([accepts_content_type/1]).
 
+-define(SAVE_URL, mochiweb_request_url).
+-define(SAVE_RAW_QS, mochiweb_request_raw_qs).
 -define(SAVE_QS, mochiweb_request_qs).
 -define(SAVE_PATH, mochiweb_request_path).
 -define(SAVE_RECV, mochiweb_request_recv).
@@ -103,10 +105,33 @@ get(peer) ->
 get(path) ->
     case erlang:get(?SAVE_PATH) of
         undefined ->
-            {Path0, _, _} = mochiweb_binary_util:urlsplit_path(RawPath),
+            {Path0, _, _} = case erlang:get(?SAVE_URL) of
+                undefined ->
+                    URL = mochiweb_binary_util:urlsplit_path(RawPath),
+                    put(?SAVE_URL, URL),
+                    URL;
+                URL ->
+                    URL
+            end,
             Path = mochiweb_binary_util:unquote(Path0),
             put(?SAVE_PATH, Path),
             Path;
+        Cached ->
+            Cached
+    end;
+get(raw_qs) ->
+    case erlang:get(?SAVE_RAW_QS) of
+        undefined ->
+            {_, QS, _} = case erlang:get(?SAVE_URL) of
+                undefined ->
+                    URL = mochiweb_binary_util:urlsplit_path(RawPath),
+                    put(?SAVE_URL, URL),
+                    URL;
+                URL ->
+                    URL
+            end,
+            put(?SAVE_RAW_QS, QS),
+            QS;
         Cached ->
             Cached
     end;
@@ -399,7 +424,9 @@ should_close() ->
 %% @doc Clean up any junk in the process dictionary, required before continuing
 %%      a Keep-Alive request.
 cleanup() ->
-    [erase(K) || K <- [?SAVE_QS,
+    [erase(K) || K <- [?SAVE_URL,
+                       ?SAVE_RAW_QS,
+                       ?SAVE_QS,
                        ?SAVE_PATH,
                        ?SAVE_RECV,
                        ?SAVE_BODY,
@@ -414,7 +441,14 @@ cleanup() ->
 parse_qs() ->
     case erlang:get(?SAVE_QS) of
         undefined ->
-            {_, QueryString, _} = mochiweb_binary_util:urlsplit_path(RawPath),
+            {_, QueryString, _} = case erlang:get(?SAVE_URL) of
+                undefined ->
+                    URL = mochiweb_binary_util:urlsplit_path(RawPath),
+                    put(?SAVE_URL, URL),
+                    URL;
+                URL ->
+                    URL
+            end,
             Parsed = mochiweb_binary_util:parse_qs(QueryString),
             put(?SAVE_QS, Parsed),
             Parsed;
