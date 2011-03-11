@@ -3,3 +3,5 @@
 /_test
 /.eunit
 /docs
+.DS_Store
+/TEST-*.xml
