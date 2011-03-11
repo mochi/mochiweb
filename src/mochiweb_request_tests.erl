@@ -60,4 +60,45 @@ accepts_content_type_test() ->
         mochiweb_headers:make([{"Accept", "text/html;level=1;q=0.1, text/html"}])),
     ?assertEqual(true, Req14:accepts_content_type("text/html; level=1")).
 
+accepted_encodings_test() ->
+    Req1 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+                                mochiweb_headers:make([])),
+    ?assertEqual(["identity"],
+                 Req1:accepted_encodings(["gzip", "identity"])),
+
+    Req2 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept-Encoding", "gzip, deflate"}])),
+    ?assertEqual(["gzip", "identity"],
+                 Req2:accepted_encodings(["gzip", "identity"])),
+
+    Req3 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept-Encoding", "gzip;q=0.5, deflate"}])),
+    ?assertEqual(["deflate", "gzip", "identity"],
+                 Req3:accepted_encodings(["gzip", "deflate", "identity"])),
+
+    Req4 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept-Encoding", "identity, *;q=0"}])),
+    ?assertEqual(["identity"],
+                 Req4:accepted_encodings(["gzip", "deflate", "identity"])),
+
+    Req5 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept-Encoding", "gzip; q=0.1, *;q=0"}])),
+    ?assertEqual(["gzip"],
+                 Req5:accepted_encodings(["gzip", "deflate", "identity"])),
+
+    Req6 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept-Encoding", "gzip; q=, *;q=0"}])),
+    ?assertEqual(bad_accept_encoding_value,
+                 Req6:accepted_encodings(["gzip", "deflate", "identity"])),
+
+    Req7 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept-Encoding", "gzip;q=2.0, *;q=0"}])),
+    ?assertEqual(bad_accept_encoding_value,
+                 Req7:accepted_encodings(["gzip", "identity"])),
+
+    Req8 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept-Encoding", "deflate, *;q=0.0"}])),
+    ?assertEqual([],
+                 Req8:accepted_encodings(["gzip", "identity"])).
+
 -endif.
