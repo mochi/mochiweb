@@ -13,6 +13,10 @@
 -author("Bob Ippolito <bob@mochimedia.com>").
 -export([digits/1, frexp/1, int_pow/2, int_ceil/1]).
 
+-ifdef(PROPER).
+-include_lib("proper/include/proper.hrl").
+-endif.
+
 %% IEEE 754 Float exponent bias
 -define(FLOAT_BIAS, 1022).
 -define(MIN_EXP, -1074).
@@ -24,6 +28,7 @@
 %% @doc  Returns a string that accurately represents the given integer or float
 %%       using a conservative amount of digits. Great for generating
 %%       human-readable output, or compact ASCII serializations for floats.
+-spec digits(number()) -> string().
 digits(N) when is_integer(N) ->
     integer_to_list(N);
 digits(0.0) ->
@@ -40,16 +45,18 @@ digits(Float) ->
             R
     end.
 
-%% @spec frexp(F::float()) -> {Frac::float(), Exp::float()}
+%% @spec frexp(F::float()) -> {Frac::float(), Exp::integer()}
 %% @doc  Return the fractional and exponent part of an IEEE 754 double,
 %%       equivalent to the libc function of the same name.
 %%       F = Frac * pow(2, Exp).
+-spec frexp(float()) -> {float(), integer()}.
 frexp(F) ->
     frexp1(unpack(F)).
 
 %% @spec int_pow(X::integer(), N::integer()) -> Y::integer()
 %% @doc  Moderately efficient way to exponentiate integers.
 %%       int_pow(10, 2) = 100.
+-spec int_pow(integer(), non_neg_integer()) -> integer().
 int_pow(_X, 0) ->
     1;
 int_pow(X, N) when N > 0 ->
@@ -60,6 +67,7 @@ int_pow(X, N) when N > 0 ->
 %%       F when F == trunc(F);
 %%       trunc(F) when F &lt; 0;
 %%       trunc(F) + 1 when F &gt; 0.
+-spec int_ceil(float()) -> integer().
 int_ceil(X) ->
     T = trunc(X),
     case (X - T) of
@@ -243,8 +251,23 @@ frexp_int(F) ->
 %%
 %% Tests
 %%
+-ifdef(PROPER).
+prop_frexp_accuracy() ->
+    ?FORALL(F, float(),
+            begin
+                {Frac, Exp} = frexp(F),
+                F =:= Frac * math:pow(2, Exp)
+            end).
+-endif.
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+
+-ifdef(PROPER).
+proper_specs_test() ->
+    ?assertEqual([], proper:check_specs(?MODULE)).
+proper_module_test() ->
+    ?assertEqual([], proper:module(?MODULE)).
+-endif.
 
 int_ceil_test() ->
     ?assertEqual(1, int_ceil(0.0001)),
