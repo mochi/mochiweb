@@ -282,6 +282,8 @@ prop_len_verify() ->
                 len(B) =:= length(bytes_to_codepoints(B))
             end).
 -endif.
+%% Can't use the spec tests because of utf8_binary(), nonempty_utf8_binary()
+%% and accfun(T,Acc).
 -define(PROPER_NO_SPECS, true).
 -include("proper_tests.hrl").
 

@@ -7,12 +7,21 @@
 -author('bob@mochimedia.com').
 
 -export([to_hex/1, to_bin/1, to_int/1, dehex/1, hexdigit/1]).
+-ifdef(PROPER).
+-include_lib("proper/include/proper.hrl").
+-endif.
 
-%% @type iolist() = [char() | binary() | iolist()]
-%% @type iodata() = iolist() | binary()
+-type hex_int() :: 0..16#f.
+-type lower_hex_char() :: 48..57 | 97..102. %% $0..$9 | $a..$f
+-type lower_hex_string() :: [lower_hex_char(), ...].
+-type hex_char() :: 65..70 | lower_hex_char(). %% $A..$F | lower_hex_char()
+-type hex_string() :: [hex_char(), ...].
+-type hex_iodata() :: binary() | hex_iolist().
+-type hex_iolist() :: maybe_improper_list(byte() | hex_iodata(), binary()).
+-type even_length_hex_string() :: hex_string().
 
-%% @spec to_hex(integer | iolist()) -> string()
 %% @doc Convert an iolist to a hexadecimal string.
+-spec to_hex(non_neg_integer() | hex_iodata()) -> [] | lower_hex_string().
 to_hex(0) ->
     "0";
 to_hex(I) when is_integer(I), I > 0 ->
@@ -20,18 +29,18 @@ to_hex(I) when is_integer(I), I > 0 ->
 to_hex(B) ->
     to_hex(iolist_to_binary(B), []).
 
-%% @spec to_bin(string()) -> binary()
 %% @doc Convert a hexadecimal string to a binary.
+-spec to_bin(even_length_hex_string()) -> binary().
 to_bin(L) ->
     to_bin(L, []).
 
-%% @spec to_int(string()) -> integer()
 %% @doc Convert a hexadecimal string to an integer.
+-spec to_int(hex_string()) -> integer().
 to_int(L) ->
     erlang:list_to_integer(L, 16).
 
-%% @spec dehex(char()) -> integer()
 %% @doc Convert a hex digit to its integer value.
+-spec dehex(hex_char()) -> hex_int().
 dehex(C) when C >= $0, C =< $9 ->
     C - $0;
 dehex(C) when C >= $a, C =< $f ->
@@ -39,8 +48,8 @@ dehex(C) when C >= $a, C =< $f ->
 dehex(C) when C >= $A, C =< $F ->
     C - $A + 10.
 
-%% @spec hexdigit(integer()) -> char()
 %% @doc Convert an integer less than 16 to a hex digit.
+-spec hexdigit(hex_int()) -> lower_hex_char().
 hexdigit(C) when C >= 0, C =< 9 ->
     C + $0;
 hexdigit(C) when C =< 15 ->
@@ -64,12 +73,77 @@ to_bin([C1, C2 | Rest], Acc) ->
     to_bin(Rest, [(dehex(C1) bsl 4) bor dehex(C2) | Acc]).
 
 
-
 %%
 %% Tests
 %%
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+
+-ifdef(PROPER).
+hexchar() ->
+    union([integer($0, $9),
+           integer($a, $f),
+           integer($A, $F)]).
+
+proper_iodata() ->
+    union([binary(),
+           proper_iolist()]).
+
+proper_iolist() ->
+    %% Does not cover actual iolist type!
+    list([binary(), byte(), []]).
+
+even_length_hex_string() ->
+    ?LET({H,T}, {hexchar(), list(hexchar())},
+         begin
+             case length(T) rem 2 of
+                 0 ->
+                     T;
+                 1 ->
+                     [H|T]
+             end
+         end).
+
+prop_to_hex_int() ->
+    ?FORALL(N, non_neg_integer(),
+            begin
+                list_to_integer(to_hex(N), 16) =:= N
+            end).
+
+prop_to_hex_iodata() ->
+    %% Current proper is missing iodata
+    ?FORALL(B, proper_iodata(),
+            begin
+                to_bin(to_hex(B)) =:= iolist_to_binary(B)
+            end).
+
+prop_to_bin_verify_bits() ->
+    %% Guarantee that L is non-empty
+    ?FORALL({H1, H2, L0}, {hexchar(), hexchar(), even_length_hex_string()},
+            begin
+                L = [H1, H2 | L0],
+                Bits = length(L) * 4,
+                <<Int:Bits>> = to_bin(L),
+                list_to_integer(L, 16) =:= Int
+            end).
+
+prop_dehex_verify() ->
+    ?FORALL(C, hexchar(),
+            begin
+                dehex(C) =:= list_to_integer([C], 16)
+            end).
+
+prop_hexdigit_verify() ->
+    ?FORALL(N, hex_int(),
+            begin
+                [hexdigit(N)] =:= string:to_lower(integer_to_list(N, 16))
+            end).
+-endif.
+
+%% Can't use the spec tests because of even_length_hex_string() and iodata().
+-define(PROPER_NO_SPECS, true).
+
+-include("proper_tests.hrl").
 
 to_hex_test() ->
     "ff000ff1" = to_hex([255, 0, 15, 241]),
