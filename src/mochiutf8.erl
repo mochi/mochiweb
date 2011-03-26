@@ -14,8 +14,9 @@
 -type unichar_low() :: 0..16#d7ff.
 -type unichar_high() :: 16#e000..16#10ffff.
 -type unichar() :: unichar_low() | unichar_high().
+-type nonempty_binary() :: <<_:8, _:_*8>>.
 
--spec codepoint_to_bytes(unichar()) -> binary().
+-spec codepoint_to_bytes(unichar()) -> nonempty_binary().
 %% @doc Convert a unicode codepoint to UTF-8 bytes.
 codepoint_to_bytes(C) when (C >= 16#00 andalso C =< 16#7f) ->
     %% U+0000 - U+007F - 7 bits
@@ -45,7 +46,8 @@ codepoint_to_bytes(C) when (C >= 16#010000 andalso C =< 16#10FFFF) ->
 codepoints_to_bytes(L) ->
     <<<<(codepoint_to_bytes(C))/binary>> || C <- L>>.
 
--spec read_codepoint(binary()) -> {unichar(), binary(), binary()}.
+-spec read_codepoint(nonempty_binary()) ->
+                            {unichar(), nonempty_binary(), binary()}.
 read_codepoint(Bin = <<2#0:1, C:7, Rest/binary>>) ->
     %% U+0000 - U+007F - 7 bits
     <<B:1/binary, _/binary>> = Bin,
@@ -126,7 +128,6 @@ binary_skip_bytes(B, L) ->
     binary_skip_bytes(B, L, 0, []).
 
 %% @private
--spec binary_skip_bytes(binary(), [non_neg_integer()], non_neg_integer(), iolist()) -> binary().
 binary_skip_bytes(B, [], _N, Acc) ->
     iolist_to_binary(lists:reverse([B | Acc]));
 binary_skip_bytes(<<_, RestB/binary>>, [N | RestL], N, Acc) ->
