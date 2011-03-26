@@ -6,12 +6,15 @@
 -author("Bob Ippolito <bob@mochimedia.com>").
 -export([get/1, get/2, put/2, delete/1]).
 
--spec get(atom()) -> any() | undefined.
+-type literal_term() :: atom() | binary() | number() | tuple()
+                      | maybe_improper_list(literal_term(), literal_term()).
+
+-spec get(atom()) -> literal_term() | undefined.
 %% @equiv get(K, undefined)
 get(K) ->
     get(K, undefined).
 
--spec get(atom(), T) -> any() | T.
+-spec get(atom(), T) -> literal_term() | T.
 %% @doc Get the term for K or return Default.
 get(K, Default) ->
     get(K, Default, key_to_module(K)).
@@ -22,7 +25,7 @@ get(_K, Default, Mod) ->
             Default
     end.
 
--spec put(atom(), any()) -> ok.
+-spec put(atom(), literal_term()) -> ok.
 %% @doc Store term V at K, replaces an existing term if present.
 put(K, V) ->
     put(K, V, key_to_module(K)).
@@ -52,11 +55,10 @@ compile(Module, T) ->
                                       [verbose, report_errors]),
     Bin.
 
--spec forms(atom(), any()) -> [erl_syntax:syntaxTree()].
+-spec forms(atom(), literal_term()) -> [erl_syntax:syntaxTree()].
 forms(Module, T) ->
     [erl_syntax:revert(X) || X <- term_to_abstract(Module, term, T)].
 
--spec term_to_abstract(atom(), atom(), any()) -> [erl_syntax:syntaxTree()].
 term_to_abstract(Module, Getter, T) ->
     [%% -module(Module).
      erl_syntax:attribute(
