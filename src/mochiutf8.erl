@@ -9,15 +9,22 @@
 -export([bytes_to_codepoints/1, bytes_foldl/3, codepoint_foldl/3]).
 -export([read_codepoint/1, len/1]).
 
+-ifdef(PROPER).
+-include_lib("proper/include/proper.hrl").
+-endif.
+
 %% External API
 
 -type unichar_low() :: 0..16#d7ff.
 -type unichar_high() :: 16#e000..16#10ffff.
 -type unichar() :: unichar_low() | unichar_high().
--type nonempty_binary() :: <<_:8, _:_*8>>.
+-type utf8_binary() :: binary().
+-type nonempty_utf8_binary() :: <<_:8, _:_*8>>.
+-type accfun(T, Acc) :: fun((T, Acc) -> Acc).
 
--spec codepoint_to_bytes(unichar()) -> nonempty_binary().
+
 %% @doc Convert a unicode codepoint to UTF-8 bytes.
+-spec codepoint_to_bytes(unichar()) -> nonempty_utf8_binary().
 codepoint_to_bytes(C) when (C >= 16#00 andalso C =< 16#7f) ->
     %% U+0000 - U+007F - 7 bits
     <<C>>;
@@ -41,13 +48,13 @@ codepoint_to_bytes(C) when (C >= 16#010000 andalso C =< 16#10FFFF) ->
       2#10:2, B1:6,
       2#10:2, B0:6>>.
 
--spec codepoints_to_bytes([unichar()]) -> binary().
 %% @doc Convert a list of codepoints to a UTF-8 binary.
+-spec codepoints_to_bytes([unichar()]) -> utf8_binary().
 codepoints_to_bytes(L) ->
     <<<<(codepoint_to_bytes(C))/binary>> || C <- L>>.
 
--spec read_codepoint(nonempty_binary()) ->
-                            {unichar(), nonempty_binary(), binary()}.
+-spec read_codepoint(nonempty_utf8_binary()) ->
+                            {unichar(), nonempty_utf8_binary(), utf8_binary()}.
 read_codepoint(Bin = <<2#0:1, C:7, Rest/binary>>) ->
     %% U+0000 - U+007F - 7 bits
     <<B:1/binary, _/binary>> = Bin,
@@ -84,43 +91,42 @@ read_codepoint(Bin = <<2#11110:5, B3:3,
             {C, B, Rest}
     end.
 
--spec codepoint_foldl(fun((unichar(), _) -> _), _, binary()) -> _.
+-spec codepoint_foldl(accfun(unichar(), Acc), Acc, utf8_binary()) -> Acc.
 codepoint_foldl(F, Acc, <<>>) when is_function(F, 2) ->
     Acc;
 codepoint_foldl(F, Acc, Bin) ->
     {C, _, Rest} = read_codepoint(Bin),
     codepoint_foldl(F, F(C, Acc), Rest).
 
--spec bytes_foldl(fun((binary(), _) -> _), _, binary()) -> _.
+-spec bytes_foldl(accfun(utf8_binary(), Acc), Acc, utf8_binary()) -> Acc.
 bytes_foldl(F, Acc, <<>>) when is_function(F, 2) ->
     Acc;
 bytes_foldl(F, Acc, Bin) ->
     {_, B, Rest} = read_codepoint(Bin),
     bytes_foldl(F, F(B, Acc), Rest).
 
--spec bytes_to_codepoints(binary()) -> [unichar()].
+-spec bytes_to_codepoints(utf8_binary()) -> [unichar()].
 bytes_to_codepoints(B) ->
     lists:reverse(codepoint_foldl(fun (C, Acc) -> [C | Acc] end, [], B)).
 
--spec len(binary()) -> non_neg_integer().
+-spec len(utf8_binary()) -> non_neg_integer().
 len(<<>>) ->
     0;
 len(B) ->
     {_, _, Rest} = read_codepoint(B),
     1 + len(Rest).
 
--spec valid_utf8_bytes(B::binary()) -> binary().
 %% @doc Return only the bytes in B that represent valid UTF-8. Uses
 %%      the following recursive algorithm: skip one byte if B does not
 %%      follow UTF-8 syntax (a 1-4 byte encoding of some number),
 %%      skip sequence of 2-4 bytes if it represents an overlong encoding
 %%      or bad code point (surrogate U+D800 - U+DFFF or > U+10FFFF).
+-spec valid_utf8_bytes(binary()) -> utf8_binary().
 valid_utf8_bytes(B) when is_binary(B) ->
     binary_skip_bytes(B, invalid_utf8_indexes(B)).
 
 %% Internal API
 
--spec binary_skip_bytes(binary(), [non_neg_integer()]) -> binary().
 %% @doc Return B, but skipping the 0-based indexes in L.
 binary_skip_bytes(B, []) ->
     B;
@@ -135,13 +141,11 @@ binary_skip_bytes(<<_, RestB/binary>>, [N | RestL], N, Acc) ->
 binary_skip_bytes(<<C, RestB/binary>>, L, N, Acc) ->
     binary_skip_bytes(RestB, L, 1 + N, [C | Acc]).
 
--spec invalid_utf8_indexes(binary()) -> [non_neg_integer()].
 %% @doc Return the 0-based indexes in B that are not valid UTF-8.
 invalid_utf8_indexes(B) ->
     invalid_utf8_indexes(B, 0, []).
 
 %% @private.
--spec invalid_utf8_indexes(binary(), non_neg_integer(), [non_neg_integer()]) -> [non_neg_integer()].
 invalid_utf8_indexes(<<C, Rest/binary>>, N, Acc) when C < 16#80 ->
     %% U+0000 - U+007F - 7 bits
     invalid_utf8_indexes(Rest, 1 + N, Acc);
@@ -196,6 +200,90 @@ invalid_utf8_indexes(<<>>, _N, Acc) ->
 %%
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+
+-ifdef(PROPER).
+unichar() ->
+    union([integer(0, 16#d7ff), integer(16#e000, 16#10ffff)]).
+
+utf8_binary() ->
+    ?LET(L, list(unichar()),
+         unicode:characters_to_binary(L, utf8)).
+
+nonempty_utf8_binary() ->
+    ?LET(L, [unichar() | list(unichar())],
+         unicode:characters_to_binary(L, utf8)).
+
+prop_valid_utf8_bytes_valid() ->
+    ?FORALL(B, utf8_binary(),
+            begin
+                B =:= valid_utf8_bytes(B)
+            end).
+
+prop_valid_utf8_bytes_garbage() ->
+    ?FORALL(B, binary(),
+            begin
+                ValidB = valid_utf8_bytes(B),
+                (byte_size(ValidB) =< byte_size(B) andalso
+                 ValidB =:= valid_utf8_bytes(ValidB) andalso
+                 ValidB =:= unicode:characters_to_binary(
+                              unicode:characters_to_list(ValidB, utf8),
+                              utf8))
+            end).
+
+prop_codepoint_to_bytes_verify() ->
+    ?FORALL(C, unichar(),
+            begin
+                codepoint_to_bytes(C) =:=
+                    unicode:characters_to_binary([C], utf8)
+            end).
+
+prop_codepoints_to_bytes_verify() ->
+    ?FORALL(L, [unichar()],
+            begin
+                codepoints_to_bytes(L) =:=
+                    unicode:characters_to_binary(L, utf8)
+            end).
+
+prop_bytes_to_codepoints_verify() ->
+    ?FORALL(B, utf8_binary(),
+            begin
+                bytes_to_codepoints(B) =:= unicode:characters_to_list(B, utf8)
+            end).
+
+prop_bytes_foldl_verify() ->
+    ?FORALL(B, utf8_binary(),
+            begin
+                F = fun (C, Acc) -> [C | Acc] end,
+                lists:reverse(bytes_foldl(F, [], B)) =:=
+                    [codepoint_to_bytes(C) || C <- bytes_to_codepoints(B)]
+            end).
+
+prop_codepoint_foldl_verify() ->
+    ?FORALL(B, utf8_binary(),
+            begin
+                F = fun (C, Acc) -> [C | Acc] end,
+                lists:reverse(codepoint_foldl(F, [], B)) =:=
+                    bytes_to_codepoints(B)
+            end).
+
+prop_read_codepoint_verify() ->
+    ?FORALL(B, nonempty_utf8_binary(),
+            begin
+                {Codepoint, Char, Rest} = read_codepoint(B),
+                L = unicode:characters_to_list(B, utf8),
+                (Codepoint =:= hd(L) andalso
+                 Char =:= codepoint_to_bytes(Codepoint) andalso
+                 Rest =:= codepoints_to_bytes(tl(L)))
+            end).
+
+prop_len_verify() ->
+    ?FORALL(B, utf8_binary(),
+            begin
+                len(B) =:= length(bytes_to_codepoints(B))
+            end).
+-endif.
+-define(PROPER_NO_SPECS, true).
+-include("proper_tests.hrl").
 
 binary_skip_bytes_test() ->
     ?assertEqual(<<"foo">>,
