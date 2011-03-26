@@ -3,6 +3,7 @@ PREFIX:=../
 DEST:=$(PREFIX)$(PROJECT)
 
 REBAR=./rebar
+DIALYZER=dialyzer
 
 all:
 	@$(REBAR) get-deps compile
@@ -22,7 +23,8 @@ build_plt:
 	@$(REBAR) build-plt
 
 dialyzer:
-	@$(REBAR) dialyze
+	@$(REBAR) compile
+	@$(DIALYZER) -Wunderspecs ebin
 
 app:
 	@$(REBAR) create template=mochiwebapp dest=$(DEST) appid=$(PROJECT)

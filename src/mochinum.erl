@@ -24,7 +24,6 @@
 
 %% External API
 
-%% @spec digits(number()) -> string()
 %% @doc  Returns a string that accurately represents the given integer or float
 %%       using a conservative amount of digits. Great for generating
 %%       human-readable output, or compact ASCII serializations for floats.
@@ -45,15 +44,13 @@ digits(Float) ->
             R
     end.
 
-%% @spec frexp(F::float()) -> {Frac::float(), Exp::integer()}
 %% @doc  Return the fractional and exponent part of an IEEE 754 double,
 %%       equivalent to the libc function of the same name.
 %%       F = Frac * pow(2, Exp).
--spec frexp(float()) -> {float(), integer()}.
+-spec frexp(float()) -> {Frac::float(), Exp::integer()}.
 frexp(F) ->
     frexp1(unpack(F)).
 
-%% @spec int_pow(X::integer(), N::integer()) -> Y::integer()
 %% @doc  Moderately efficient way to exponentiate integers.
 %%       int_pow(10, 2) = 100.
 -spec int_pow(integer(), non_neg_integer()) -> integer().
@@ -62,7 +59,6 @@ int_pow(_X, 0) ->
 int_pow(X, N) when N > 0 ->
     int_pow(X, N, 1).
 
-%% @spec int_ceil(F::float()) -> integer()
 %% @doc  Return the ceiling of F as an integer. The ceiling is defined as
 %%       F when F == trunc(F);
 %%       trunc(F) when F &lt; 0;
@@ -258,16 +254,23 @@ prop_frexp_accuracy() ->
                 {Frac, Exp} = frexp(F),
                 F =:= Frac * math:pow(2, Exp)
             end).
+
+prop_int_ceil_validity() ->
+    ?FORALL(F, float(),
+            begin
+                CeilF = int_ceil(F),
+                case trunc(F) of
+                    N when F == N orelse F < 0 ->
+                        CeilF =:= N;
+                    N  ->
+                        CeilF =:= N + 1
+                end
+            end).
 -endif.
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
--ifdef(PROPER).
-proper_specs_test() ->
-    ?assertEqual([], proper:check_specs(?MODULE)).
-proper_module_test() ->
-    ?assertEqual([], proper:module(?MODULE)).
--endif.
+-include("proper_tests.hrl").
 
 int_ceil_test() ->
     ?assertEqual(1, int_ceil(0.0001)),
