@@ -248,6 +248,12 @@ frexp_int(F) ->
 %% Tests
 %%
 -ifdef(PROPER).
+prop_digits_exact() ->
+    ?FORALL(F, float(),
+            begin
+                F =:= list_to_float(digits(F))
+            end).
+
 prop_frexp_accuracy() ->
     ?FORALL(F, float(),
             begin
@@ -266,6 +272,20 @@ prop_int_ceil_validity() ->
                         CeilF =:= N + 1
                 end
             end).
+
+prop_int_pow_accurate() ->
+    ?FORALL(
+       N,
+       integer(),
+       ?FORALL(P, non_neg_integer(),
+                   begin
+                       F = fun (_F1, 0, Acc) ->
+                                   Acc;
+                               (F1, I, Acc) ->
+                                   F1(F1, I - 1, N * Acc)
+                           end,
+                       int_pow(N, P) =:= F(F, P, 1)
+                   end)).
 -endif.
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
