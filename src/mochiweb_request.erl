@@ -221,12 +221,13 @@ stream_body(MaxChunkSize, ChunkFun, FunState, MaxBodyLength) ->
                  Value when is_list(Value) ->
                      string:to_lower(Value)
              end,
-    _ = case Expect of
-            "100-continue" ->
-                start_raw_response({100, gb_trees:empty()});
-            _Else ->
-                ok
-        end,
+    case Expect of
+        "100-continue" ->
+            _ = start_raw_response({100, gb_trees:empty()}),
+            ok;
+        _Else ->
+            ok
+    end,
     case body_length() of
         undefined ->
             undefined;
@@ -399,14 +400,11 @@ should_close() ->
 %% @doc Clean up any junk in the process dictionary, required before continuing
 %%      a Keep-Alive request.
 cleanup() ->
-    _ = [erase(K) || K <- [?SAVE_QS,
-                           ?SAVE_PATH,
-                           ?SAVE_RECV,
-                           ?SAVE_BODY,
-                           ?SAVE_BODY_LENGTH,
-                           ?SAVE_POST,
-                           ?SAVE_COOKIE,
-                           ?SAVE_FORCE_CLOSE]],
+    L = [?SAVE_QS, ?SAVE_PATH, ?SAVE_RECV, ?SAVE_BODY, ?SAVE_BODY_LENGTH,
+         ?SAVE_POST, ?SAVE_COOKIE, ?SAVE_FORCE_CLOSE],
+    lists:foreach(fun(K) ->
+                          erase(K)
+                  end, L),
     ok.
 
 %% @spec parse_qs() -> [{Key::string(), Value::string()}]

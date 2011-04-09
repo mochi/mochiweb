@@ -117,14 +117,14 @@ parse_options([{profile_fun, ProfileFun} | Rest], State) when is_function(Profil
 
 
 start_server(State=#mochiweb_socket_server{ssl=Ssl, name=Name}) ->
-    _ = case Ssl of
-            true ->
-                ok = mochiweb:ensure_started(crypto),
-                ok = mochiweb:ensure_started(public_key),
-                ok = mochiweb:ensure_started(ssl);
-            false ->
-                void
-        end,
+    case Ssl of
+        true ->
+            ok = mochiweb:ensure_started(crypto),
+            ok = mochiweb:ensure_started(public_key),
+            ok = mochiweb:ensure_started(ssl);
+        false ->
+            ok
+    end,
     case Name of
         undefined ->
             gen_server:start_link(?MODULE, State, []);
