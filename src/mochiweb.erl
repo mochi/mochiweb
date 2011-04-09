@@ -9,6 +9,7 @@
 -export([start/0, stop/0]).
 -export([new_request/1, new_response/1]).
 -export([all_loaded/0, all_loaded/1, reload/0]).
+-export([ensure_started/1]).
 
 %% @spec start() -> ok
 %% @doc Start the MochiWeb server.
@@ -77,8 +78,9 @@ new_response({Request, Code, Headers}) ->
                           Code,
                           mochiweb_headers:make(Headers)).
 
-%% Internal API
 
+%% @spec ensure_started(App::atom()) -> ok
+%% @doc Start the given App if it has not been started already.
 ensure_started(App) ->
     case application:start(App) of
         ok ->
