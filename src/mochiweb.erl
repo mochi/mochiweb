@@ -19,9 +19,8 @@ start() ->
 %% @spec stop() -> ok
 %% @doc Stop the MochiWeb server.
 stop() ->
-    Res = application:stop(mochiweb),
-    application:stop(crypto),
-    Res.
+    ok = application:stop(mochiweb),
+    ok = application:stop(crypto).
 
 reload() ->
     [c:l(Module) || Module <- all_loaded()].
@@ -138,11 +137,11 @@ multiple_https_GET_test() ->
     do_GET(ssl, 3).
 
 hundred_http_GET_test_() -> % note the underscore
-    {timeout, ?LARGE_TIMEOUT, 
+    {timeout, ?LARGE_TIMEOUT,
      fun() -> ?assertEqual(ok, do_GET(plain,100)) end}.
 
 hundred_https_GET_test_() -> % note the underscore
-    {timeout, ?LARGE_TIMEOUT, 
+    {timeout, ?LARGE_TIMEOUT,
      fun() -> ?assertEqual(ok, do_GET(ssl,100)) end}.
 
 single_128_http_POST_test() ->
@@ -170,11 +169,11 @@ multiple_100K_https_POST_test() ->
     do_POST(ssl, 102400, 3).
 
 hundred_128_http_POST_test_() -> % note the underscore
-    {timeout, ?LARGE_TIMEOUT, 
+    {timeout, ?LARGE_TIMEOUT,
      fun() -> ?assertEqual(ok, do_POST(plain, 128, 100)) end}.
 
 hundred_128_https_POST_test_() -> % note the underscore
-    {timeout, ?LARGE_TIMEOUT, 
+    {timeout, ?LARGE_TIMEOUT,
      fun() -> ?assertEqual(ok, do_POST(ssl, 128, 100)) end}.
 
 do_GET(Transport, Times) ->

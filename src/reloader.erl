@@ -59,7 +59,7 @@ handle_cast(_Req, State) ->
 %% @doc gen_server callback.
 handle_info(doit, State) ->
     Now = stamp(),
-    doit(State#state.last, Now),
+    _ = doit(State#state.last, Now),
     {noreply, State#state{last = Now}};
 handle_info(_Info, State) ->
     {noreply, State}.
