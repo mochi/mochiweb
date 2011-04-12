@@ -8,6 +8,7 @@
 
 -export([new_request/1, new_response/1]).
 -export([all_loaded/0, all_loaded/1, reload/0]).
+-export([ensure_started/1]).
 
 reload() ->
     [c:l(Module) || Module <- all_loaded()].
@@ -63,6 +64,16 @@ new_response({Request, Code, Headers}) ->
     mochiweb_response:new(Request,
                           Code,
                           mochiweb_headers:make(Headers)).
+
+%% @spec ensure_started(App::atom()) -> ok
+%% @doc Start the given App if it has not been started already.
+ensure_started(App) ->
+    case application:start(App) of
+        ok ->
+            ok;
+        {error, {already_started, App}} ->
+            ok
+    end.
 
 %%
 %% Tests

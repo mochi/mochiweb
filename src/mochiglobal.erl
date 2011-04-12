@@ -30,7 +30,7 @@ put(K, V) ->
 put(_K, V, Mod) ->
     Bin = compile(Mod, V),
     code:purge(Mod),
-    code:load_binary(Mod, atom_to_list(Mod) ++ ".erl", Bin),
+    {module, Mod} = code:load_binary(Mod, atom_to_list(Mod) ++ ".erl", Bin),
     ok.
 
 -spec delete(atom()) -> boolean().
