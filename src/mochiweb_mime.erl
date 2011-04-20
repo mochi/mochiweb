@@ -125,7 +125,7 @@ from_extension(".mif") ->
 from_extension(".com") ->
     "application/x-msdos-program";
 from_extension(".exe") ->
-    "application/x-msdos-program";
+    "application/octet-stream";
 from_extension(".cdf") ->
     "application/x-netcdf";
 from_extension(".nc") ->
@@ -177,7 +177,7 @@ from_extension(".ustar") ->
 from_extension(".src") ->
     "application/x-wais-source";
 from_extension(".zip") ->
-    "application/x-zip-compressed";
+    "application/zip";
 from_extension(".tsi") ->
     "audio/TSP-audio";
 from_extension(".au") ->
@@ -305,7 +305,7 @@ from_extension(".jad") ->
 from_extension(".etx") ->
     "text/x-setext";
 from_extension(".xml") ->
-    "text/xml";
+    "application/xml";
 from_extension(".dl") ->
     "video/dl";
 from_extension(".fli") ->
