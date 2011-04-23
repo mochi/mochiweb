@@ -38,10 +38,28 @@ if __name__ == '__main__':
 		"%%      type such as \"text/html\". Will return the atom undefined if no good\n"\
 		"%%      guess is available.\n"
 
-	for e in sorted(root, key=lambda x: str(x.tag)):
+	mime_data = []
+
+	for e in root:
 		for ie in e:
 			if ie.tag == "{http://www.freedesktop.org/standards/shared-mime-info}glob":
-				print_mime(ie.get("pattern"), e.get("type"))
+				mime_data += [(ie.get("pattern"), e.get("type"))]
+
+	# drop several duplicated extensions
+	newlist = sorted(mime_data, key=lambda (e,m): str(e))
+	last = newlist[-1]
+	for i in range(len(newlist)-2, -1, -1):
+		(ExtA,MimeTypeA) = last
+		(ExtB,MimeTypeB) = newlist[i]
+		if ExtA == ExtB:
+			print >> sys.stderr, "DUPE: ", ExtA, " - ", MimeTypeA, " and ", MimeTypeB
+			del newlist[i]
+		else:
+			last = newlist[i]
+
+	# re-sort by mime-type
+	for (Ext,MimeType) in sorted(newlist, key=lambda (e,m): str(m)):
+		print_mime(Ext,MimeType)
 
 	print "from_extension(_) ->\n    undefined.\n"
 
