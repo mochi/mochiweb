@@ -76,6 +76,8 @@ test_basic_accept(Max, PoolSize, NumClients, ReportTo) ->
                   {send, Data, Tester}, {recv, size(Data), Timeout, Tester},
                   {close_sock}, {send_msg, done, Tester}],
     start_client_conns(Port, NumClients, fun client_fun/2, ClientCmds, Tester),
+    % Wait a bit for the connections to complete.
+    timer:sleep(2500),
     ConnectLoop =
         fun (Loop, Connected, Accepted, Errors) ->
                 case (length(Connected) + Errors >= NumClients) of
@@ -144,7 +146,7 @@ normal_acceptor_test_fun() ->
              ?assertEqual(Expected, Result)
      end || {Max, PoolSize, NumClients, Expected} <- Tests].
 
--define(LARGE_TIMEOUT, 20).
+-define(LARGE_TIMEOUT, 40).
 
 normal_acceptor_test_() ->
     Tests = normal_acceptor_test_fun(),
