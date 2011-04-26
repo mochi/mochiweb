@@ -198,6 +198,8 @@ listen(Port, Opts, State=#mochiweb_socket_server{ssl=Ssl, ssl_opts=SslOpts}) ->
 
 do_get(port, #mochiweb_socket_server{port=Port}) ->
     Port;
+do_get(waiting_acceptors, #mochiweb_socket_server{acceptor_pool=Pool}) ->
+    sets:size(Pool);
 do_get(active_sockets, #mochiweb_socket_server{active_sockets=ActiveSockets}) ->
     ActiveSockets.
 
