@@ -58,7 +58,7 @@ client_fun(Socket, [{send_msg, Msg, To} | Cmds]) ->
     To ! {Msg, self()},
     client_fun(Socket, Cmds).
 
-test_basic_accept(Max, PoolSize, NumClients) ->
+test_basic_accept(Max, PoolSize, NumClients, ReportTo) ->
     Tester = self(),
 
     ServerOpts = [{max, Max}, {acceptor_pool_size, PoolSize}],
@@ -119,9 +119,9 @@ test_basic_accept(Max, PoolSize, NumClients) ->
     WaitingAtEnd = mochiweb_socket_server:get(Server, waiting_acceptors),
     mochiweb_socket_server:stop(Server),
 
-    {length(Accepted),
-     ActiveAfterConnect, WaitingAfterConnect,
-     ActiveAtEnd, WaitingAtEnd}.
+    ReportTo ! {result, {length(Accepted),
+                         ActiveAfterConnect, WaitingAfterConnect,
+                         ActiveAtEnd, WaitingAtEnd}}.
 
 normal_acceptor_test_fun() ->
     %        {Max, PoolSize, NumClients,
@@ -136,7 +136,11 @@ normal_acceptor_test_fun() ->
              {3, 2, 10,  {3,   3, 0,   0, 2}}
             ],
     [fun () ->
-             Result = test_basic_accept(Max, PoolSize, NumClients),
+             Self = self(),
+             spawn(fun () ->
+                           test_basic_accept(Max, PoolSize, NumClients, Self)
+                   end),
+             Result = receive {result, R} -> R end,
              ?assertEqual(Expected, Result)
      end || {Max, PoolSize, NumClients, Expected} <- Tests].
 
