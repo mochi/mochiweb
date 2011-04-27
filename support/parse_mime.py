@@ -22,7 +22,7 @@ if __name__ == '__main__':
 
 	doc = etree.parse ( sys.argv[1] )
 	root = doc.getroot()
-	ext = re.compile("\*\.[a-zA-Z]*")
+	ext = re.compile("\*\.[a-zA-Z0-9\.]*")
 
 	print \
 		"%% @author Bob Ippolito <bob@mochimedia.com>\n" \
@@ -74,10 +74,9 @@ if __name__ == '__main__':
 			"    [?assertEqual(V, from_extension(K)) || {K, V} <- T].\n\n"\
 			"from_extension_test() ->"
 
-	for e in root:
-		for ie in e:
-			if ie.tag == "{http://www.freedesktop.org/standards/shared-mime-info}glob":
-				print_mime_test(ie.get("pattern"), e.get("type"))
+	# re-sort by mime-type
+	for (Ext,MimeType) in sorted(newlist, key=lambda (e,m): str(m)):
+		print_mime_test(Ext,MimeType)
 
 	print \
 			"    ?assertEqual(undefined,\n                 from_extension(\"\")),\n"\
