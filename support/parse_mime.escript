@@ -6,7 +6,7 @@
 
 main(FreeDesktopXml) ->
 	{R,_} = xmerl_scan:file(FreeDesktopXml),
-	List0 = [{X#xmlAttribute.value, Z#xmlAttribute.value} || #xmlElement{attributes=[X]} = Y <- xmerl_xpath:string("//mime-type", R), #xmlElement{attributes=[Z]} <- xmerl_xpath:string("//glob", Y), re:run(Z#xmlAttribute.value, "^\\*\\.[\\.a-zA-Z]*$") =/= nomatch],
+	List0 = [{X#xmlAttribute.value, Z#xmlAttribute.value} || #xmlElement{attributes=[X]} = Y <- xmerl_xpath:string("//mime-type", R), #xmlElement{attributes=[Z]} <- xmerl_xpath:string("//glob", Y), re:run(Z#xmlAttribute.value, "^\\*\\.[\\.a-zA-Z0-9]*$") =/= nomatch],
 
 	io:format(
 		"%% @author Bob Ippolito <bob@mochimedia.com>\n"
