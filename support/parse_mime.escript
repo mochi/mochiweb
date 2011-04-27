@@ -6,9 +6,8 @@
 
 main(FreeDesktopXml) ->
 	{R,_} = xmerl_scan:file(FreeDesktopXml),
-	List = [[X#xmlAttribute.value, Z#xmlAttribute.value] || #xmlElement{attributes=[X]} = Y <- xmerl_xpath:string("//mime-type", R), #xmlElement{attributes=[Z]} <- xmerl_xpath:string("//glob", Y), re:run(Z#xmlAttribute.value, "^\\*\\.[\\.a-zA-Z]*$") =/= nomatch],
+	List0 = [{X#xmlAttribute.value, Z#xmlAttribute.value} || #xmlElement{attributes=[X]} = Y <- xmerl_xpath:string("//mime-type", R), #xmlElement{attributes=[Z]} <- xmerl_xpath:string("//glob", Y), re:run(Z#xmlAttribute.value, "^\\*\\.[\\.a-zA-Z]*$") =/= nomatch],
 
-%	io:format("List: ~p~n", [List]),
 	io:format(
 		"%% @author Bob Ippolito <bob@mochimedia.com>\n"
 		"%% @author Peter Lemenkov <lemenkov@mochimedia.com>\n"
@@ -21,10 +20,23 @@ main(FreeDesktopXml) ->
 		"%% @spec from_extension(S::string()) -> string() | undefined\n"
 		"%% @doc Given a filename extension (e.g. \".html\") return a guess for the MIME\n"
 		"%%      type such as \"text/html\". Will return the atom undefined if no good\n"
-		"%%      guess is available.\n"
+		"%%      guess is available.\n\n"
 	),
 
-	lists:map(fun ([Desc,Ext]) -> [$* | BareExt ] = Ext, io:format("from_extension(\"~s\") ->~n    \"~s\";~n", [BareExt, Desc]) end, List),
+	% Drop duplicated extensions
+	List1 = lists:foldl(
+			fun(X,Acc) ->
+				{_D,E} = X,
+				case lists:keymember(E, 2, Acc) of
+					true -> Acc;
+					_ -> [X|Acc]
+				end
+			end,
+		[], List0),
+
+	List = lists:sort(fun ({D1, _E1}, {D2, _E2}) -> D1 =< D2 end, List1),
+
+	lists:map(fun ({Desc,Ext}) -> [$* | BareExt ] = Ext, io:format("from_extension(\"~s\") ->~n    \"~s\";~n", [BareExt, Desc]) end, List),
 
 	io:format("from_extension(_) ->\n    undefined.\n"),
 	io:format(
@@ -39,17 +51,12 @@ main(FreeDesktopXml) ->
 		"from_extension_test() ->\n"
 	),
 
-%	for e in root:
-%		for ie in e:
-%			if ie.tag == "{http://www.freedesktop.org/standards/shared-mime-info}glob":
-%				print_mime_test(ie.get("pattern"), e.get("type"))
-
-	lists:map(fun ([Desc,Ext]) -> [$* | BareExt ] = Ext, io:format("    ?assertEqual(\"~s\",~n                 from_extension(\"~s\")),~n", [Desc, BareExt]) end, List),
+	lists:map(fun ({Desc,Ext}) -> [$* | BareExt ] = Ext, io:format("    ?assertEqual(\"~s\",~n                 from_extension(\"~s\")),~n", [Desc, BareExt]) end, List),
 	io:format(
 		"    ?assertEqual(undefined,\n                 from_extension(\"\")),\n"
 		"    ?assertEqual(undefined,\n                 from_extension(\".wtf\")),\n"
 		"    ok.\n\n"
-		"-endif."
+		"-endif.\n"
 	),
 	ok;
 
