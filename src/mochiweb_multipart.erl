@@ -240,23 +240,48 @@ get_boundary(ContentType) ->
             S
     end.
 
-find_in_binary(B, Data) when size(B) > 0 ->
-    case size(Data) - size(B) of
-        Last when Last < 0 ->
-            partial_find(B, Data, 0, size(Data));
-        Last ->
-            find_in_binary(B, size(B), Data, 0, Last)
+%% @doc Returns the next index to search from.
+%% N is the current seach position.
+%% We check every PS char if it is a member of the pattern (CharSet).
+%% If so, we stop, otherwise we continue skipping as long as we can.
+skip_non_pattern_data(PS, D, DS, N, CharSet) ->
+    NI = N + PS-1,
+    case NI =< DS-1 of
+        true ->
+            <<_:NI/binary, C, _/binary>> = D,
+            case sets:is_element(C, CharSet) of
+                true -> N; % Find what might be part of pattern
+                false ->
+                    skip_non_pattern_data(PS, D, DS, NI+1, CharSet)
+            end;
+        false -> N
     end.
 
-find_in_binary(B, BS, D, N, Last) when N =< Last->
+%% @spec find_in_binary(Pattern::binary(), Data::binary()) ->
+%%            {exact, N} | {partial, N, K} | not_found.
+%% @doc Searches for the given pattern in the given binary.
+find_in_binary(P, Data) when size(P) > 0 ->
+    PS = size(P),
+    DS = size(Data),
+    case DS - PS of
+        Last when Last < 0 ->
+            partial_find(P, Data, 0, DS);
+        Last ->
+            CharSet = sets:from_list(binary_to_list(P)),
+            find_in_binary(P, PS, Data, DS, CharSet, 0, Last)
+    end.
+
+find_in_binary(P, PS, D, DS, CS, N, Last) when N =< Last->
     case D of
-        <<_:N/binary, B:BS/binary, _/binary>> ->
+        <<_:N/binary, P:PS/binary, _/binary>> ->
             {exact, N};
         _ ->
-            find_in_binary(B, BS, D, 1 + N, Last)
+            NN = skip_non_pattern_data(PS, D, DS, N+1, CS),
+            find_in_binary(P, PS, D, DS, CS, NN, Last)
     end;
-find_in_binary(B, BS, D, N, Last) when N =:= 1 + Last ->
-    partial_find(B, D, N, BS - 1).
+find_in_binary(P, PS, D, _DS, _CS, N, Last) ->
+    Diff = N - Last,
+    partial_find(P, D, N, PS - Diff).
 
 partial_find(_B, _D, _N, 0) ->
     not_found;
@@ -649,6 +674,18 @@ find_in_binary_test() ->
     {partial, 0, 3} = find_in_binary(<<"foobar">>, <<"foo">>),
     {partial, 1, 3} = find_in_binary(<<"foobar">>, <<"afoo">>),
     ok.
+
+skip_non_pattern_data_test() ->
+  Pattern = <<"boundary">>,
+  PS = size(Pattern),
+  CS = sets:from_list(binary_to_list(Pattern)),
+  0 = skip_non_pattern_data(PS, Pattern, PS, 0, CS),
+  0 = skip_non_pattern_data(PS, <<"Short">>, 7, 0, CS),
+  16 = skip_non_pattern_data(PS, <<"SkipThisEntirelY">>, 16, 0, CS),
+  8 = skip_non_pattern_data(PS, <<"SkipThisJunkNoto">>, 23, 0, CS),
+  8 = skip_non_pattern_data(PS, <<"SkipThisb">>, 9, 0, CS),
+  15 = skip_non_pattern_data(PS, <<"StopIfToLittleDataLeft">>, 22, 15, CS),
+  ok.
 
 flash_parse_http_test() ->
     flash_parse(plain).
