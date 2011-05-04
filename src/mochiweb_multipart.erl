@@ -676,16 +676,16 @@ find_in_binary_test() ->
     ok.
 
 skip_non_pattern_data_test() ->
-  Pattern = <<"boundary">>,
-  PS = size(Pattern),
-  CS = sets:from_list(binary_to_list(Pattern)),
-  0 = skip_non_pattern_data(PS, Pattern, PS, 0, CS),
-  0 = skip_non_pattern_data(PS, <<"Short">>, 7, 0, CS),
-  16 = skip_non_pattern_data(PS, <<"SkipThisEntirelY">>, 16, 0, CS),
-  8 = skip_non_pattern_data(PS, <<"SkipThisJunkNoto">>, 23, 0, CS),
-  8 = skip_non_pattern_data(PS, <<"SkipThisb">>, 9, 0, CS),
-  15 = skip_non_pattern_data(PS, <<"StopIfToLittleDataLeft">>, 22, 15, CS),
-  ok.
+    Pattern = <<"boundary">>,
+    PS = size(Pattern),
+    CS = sets:from_list(binary_to_list(Pattern)),
+    0 = skip_non_pattern_data(PS, Pattern, PS, 0, CS),
+    0 = skip_non_pattern_data(PS, <<"Short">>, 7, 0, CS),
+    16 = skip_non_pattern_data(PS, <<"SkipThisEntirelY">>, 16, 0, CS),
+    8 = skip_non_pattern_data(PS, <<"SkipThisJunkNoto">>, 23, 0, CS),
+    8 = skip_non_pattern_data(PS, <<"SkipThisb">>, 9, 0, CS),
+    15 = skip_non_pattern_data(PS, <<"StopIfToLittleDataLeft">>, 22, 15, CS),
+    ok.
 
 flash_parse_http_test() ->
     flash_parse(plain).
