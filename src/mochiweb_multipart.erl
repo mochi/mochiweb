@@ -858,4 +858,54 @@ multipart_body_test() ->
                                        10))),
     ok.
 
+% @todo Move somewhere more appropriate than in the test suite
+
+multipart_parsing_benchmark_test() ->
+  run_multipart_parsing_benchmark(10).
+
+run_multipart_parsing_benchmark(0) -> ok;
+run_multipart_parsing_benchmark(N) ->
+     multipart_parsing_benchmark(),
+     run_multipart_parsing_benchmark(N-1).
+
+multipart_parsing_benchmark() ->
+    ContentType = "multipart/form-data; boundary=----------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5",
+    Chunk = binary:copy(<<"This Is_%Some=Quite0Long4String2Used9For7BenchmarKing.5">>, 102400),
+    BinContent = <<"------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"Filename\"\r\n\r\nhello.txt\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"success_action_status\"\r\n\r\n201\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n", Chunk/binary, "\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5\r\nContent-Disposition: form-data; name=\"Upload\"\r\n\r\nSubmit Query\r\n------------ei4GI3GI3Ij5Ef1ae0KM7Ij5ei4Ij5--">>,
+    Expect = [{headers,
+               [{"content-disposition",
+                 {"form-data", [{"name", "Filename"}]}}]},
+              {body, <<"hello.txt">>},
+              body_end,
+              {headers,
+               [{"content-disposition",
+                 {"form-data", [{"name", "success_action_status"}]}}]},
+              {body, <<"201">>},
+              body_end,
+              {headers,
+               [{"content-disposition",
+                 {"form-data", [{"name", "file"}, {"filename", "hello.txt"}]}},
+                {"content-type", {"application/octet-stream", []}}]},
+              {body, Chunk},
+              body_end,
+              {headers,
+               [{"content-disposition",
+                 {"form-data", [{"name", "Upload"}]}}]},
+              {body, <<"Submit Query">>},
+              body_end,
+              eof],
+    TestCallback = fun (Next) -> test_callback(Next, Expect) end,
+    ServerFun = fun (Socket) ->
+                        ok = mochiweb_socket:send(Socket, BinContent),
+			exit(normal)
+                end,
+    ClientFun = fun (Socket) ->
+                        Req = fake_request(Socket, ContentType,
+                                           byte_size(BinContent)),
+                        Res = parse_multipart_request(Req, TestCallback),
+                        {0, <<>>, ok} = Res,
+                        ok
+                end,
+    ok = with_socket_server(plain, ServerFun, ClientFun),
+    ok.
 -endif.
