@@ -6,4 +6,3 @@
 .DS_Store
 /TEST-*.xml
 /deps
-src/mochiweb_mime.erl
