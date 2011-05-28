@@ -819,10 +819,10 @@ multipart_body_test() ->
                                        10))),
     ok.
 
-% @todo Move somewhere more appropriate than in the test suite
+%% @todo Move somewhere more appropriate than in the test suite
 
 multipart_parsing_benchmark_test() ->
-  run_multipart_parsing_benchmark(10).
+  run_multipart_parsing_benchmark(1).
 
 run_multipart_parsing_benchmark(0) -> ok;
 run_multipart_parsing_benchmark(N) ->
