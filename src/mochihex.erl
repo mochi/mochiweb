@@ -80,11 +80,6 @@ to_bin([C1, C2 | Rest], Acc) ->
 -include_lib("eunit/include/eunit.hrl").
 
 -ifdef(PROPER).
-hexchar() ->
-    union([integer($0, $9),
-           integer($a, $f),
-           integer($A, $F)]).
-
 proper_iodata() ->
     union([binary(),
            proper_iolist()]).
@@ -94,7 +89,7 @@ proper_iolist() ->
     list([binary(), byte(), []]).
 
 even_length_hex_string() ->
-    ?LET({H,T}, {hexchar(), list(hexchar())},
+    ?LET({H,T}, {hex_char(), list(hex_char())},
          begin
              case length(T) rem 2 of
                  0 ->
@@ -106,20 +101,16 @@ even_length_hex_string() ->
 
 prop_to_hex_int() ->
     ?FORALL(N, non_neg_integer(),
-            begin
-                list_to_integer(to_hex(N), 16) =:= N
-            end).
+            list_to_integer(to_hex(N), 16) =:= N).
 
 prop_to_hex_iodata() ->
     %% Current proper is missing iodata
     ?FORALL(B, proper_iodata(),
-            begin
-                to_bin(to_hex(B)) =:= iolist_to_binary(B)
-            end).
+            to_bin(to_hex(B)) =:= iolist_to_binary(B)).
 
 prop_to_bin_verify_bits() ->
     %% Guarantee that L is non-empty
-    ?FORALL({H1, H2, L0}, {hexchar(), hexchar(), even_length_hex_string()},
+    ?FORALL({H1, H2, L0}, {hex_char(), hex_char(), even_length_hex_string()},
             begin
                 L = [H1, H2 | L0],
                 Bits = length(L) * 4,
@@ -128,16 +119,12 @@ prop_to_bin_verify_bits() ->
             end).
 
 prop_dehex_verify() ->
-    ?FORALL(C, hexchar(),
-            begin
-                dehex(C) =:= list_to_integer([C], 16)
-            end).
+    ?FORALL(C, hex_char(),
+            dehex(C) =:= list_to_integer([C], 16)).
 
 prop_hexdigit_verify() ->
     ?FORALL(N, hex_int(),
-            begin
-                [hexdigit(N)] =:= string:to_lower(integer_to_list(N, 16))
-            end).
+            [hexdigit(N)] =:= string:to_lower(integer_to_list(N, 16))).
 -endif.
 
 %% Can't use the spec tests because of even_length_hex_string() and iodata().

@@ -202,9 +202,6 @@ invalid_utf8_indexes(<<>>, _N, Acc) ->
 -include_lib("eunit/include/eunit.hrl").
 
 -ifdef(PROPER).
-unichar() ->
-    union([integer(0, 16#d7ff), integer(16#e000, 16#10ffff)]).
-
 utf8_binary() ->
     ?LET(L, list(unichar()),
          unicode:characters_to_binary(L, utf8)).
@@ -215,9 +212,7 @@ nonempty_utf8_binary() ->
 
 prop_valid_utf8_bytes_valid() ->
     ?FORALL(B, utf8_binary(),
-            begin
-                B =:= valid_utf8_bytes(B)
-            end).
+            B =:= valid_utf8_bytes(B)).
 
 prop_valid_utf8_bytes_garbage() ->
     ?FORALL(B, binary(),
@@ -232,23 +227,17 @@ prop_valid_utf8_bytes_garbage() ->
 
 prop_codepoint_to_bytes_verify() ->
     ?FORALL(C, unichar(),
-            begin
-                codepoint_to_bytes(C) =:=
-                    unicode:characters_to_binary([C], utf8)
-            end).
+            codepoint_to_bytes(C) =:=
+                unicode:characters_to_binary([C], utf8)).
 
 prop_codepoints_to_bytes_verify() ->
     ?FORALL(L, [unichar()],
-            begin
-                codepoints_to_bytes(L) =:=
-                    unicode:characters_to_binary(L, utf8)
-            end).
+            codepoints_to_bytes(L) =:=
+                unicode:characters_to_binary(L, utf8)).
 
 prop_bytes_to_codepoints_verify() ->
     ?FORALL(B, utf8_binary(),
-            begin
-                bytes_to_codepoints(B) =:= unicode:characters_to_list(B, utf8)
-            end).
+            bytes_to_codepoints(B) =:= unicode:characters_to_list(B, utf8)).
 
 prop_bytes_foldl_verify() ->
     ?FORALL(B, utf8_binary(),
@@ -278,9 +267,8 @@ prop_read_codepoint_verify() ->
 
 prop_len_verify() ->
     ?FORALL(B, utf8_binary(),
-            begin
-                len(B) =:= length(bytes_to_codepoints(B))
-            end).
+            len(B) =:= length(bytes_to_codepoints(B))).
+
 -endif.
 %% Can't use the spec tests because of utf8_binary(), nonempty_utf8_binary()
 %% and accfun(T,Acc).
