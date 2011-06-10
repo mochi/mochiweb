@@ -2,7 +2,7 @@
 PREFIX:=../
 DEST:=$(PREFIX)$(PROJECT)
 
-REBAR=./rebar
+REBAR=`which rebar || ./rebar`
 DIALYZER=dialyzer
 
 all:

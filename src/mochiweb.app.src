@@ -4,6 +4,6 @@
   {vsn, "2.0.0"},
   {modules, []},
   {registered, []},
-  {mod, {mochiweb_app, []}},
   {env, []},
-  {applications, [kernel, stdlib, crypto, inets]}]}.
+  {applications, [kernel, stdlib, crypto, inets, ssl, xmerl,
+                  compiler, syntax_tools]}]}.
