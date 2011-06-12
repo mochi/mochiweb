@@ -23,7 +23,10 @@
 -export([accepted_encodings/1]).
 -export([accepts_content_type/1]).
 
+-define(SAVE_URL, mochiweb_request_url).
+-define(SAVE_RAW_QS, mochiweb_request_raw_qs).
 -define(SAVE_QS, mochiweb_request_qs).
+-define(SAVE_HOSTNAME, mochiweb_request_hostname).
 -define(SAVE_PATH, mochiweb_request_path).
 -define(SAVE_RECV, mochiweb_request_recv).
 -define(SAVE_BODY, mochiweb_request_body).
@@ -100,13 +103,46 @@ get(peer) ->
         {error, enotconn} ->
             exit(normal)
     end;
+get(hostname) ->
+    case erlang:get(?SAVE_HOSTNAME) of
+        undefined ->
+            Host = get_header_value(<<"host">>),
+            [Hostname | _Port] = binary:split(Host, <<":">>),
+            put(?SAVE_HOSTNAME, Hostname),
+            Hostname;
+        Cached ->
+            Cached
+    end;
 get(path) ->
     case erlang:get(?SAVE_PATH) of
         undefined ->
-            {Path0, _, _} = mochiweb_binary_util:urlsplit_path(RawPath),
+            {Path0, _, _} = case erlang:get(?SAVE_URL) of
+                undefined ->
+                    URL = mochiweb_binary_util:urlsplit_path(RawPath),
+                    put(?SAVE_URL, URL),
+                    URL;
+                URL ->
+                    URL
+            end,
             Path = mochiweb_binary_util:unquote(Path0),
             put(?SAVE_PATH, Path),
             Path;
+        Cached ->
+            Cached
+    end;
+get(raw_qs) ->
+    case erlang:get(?SAVE_RAW_QS) of
+        undefined ->
+            {_, QS, _} = case erlang:get(?SAVE_URL) of
+                undefined ->
+                    URL = mochiweb_binary_util:urlsplit_path(RawPath),
+                    put(?SAVE_URL, URL),
+                    URL;
+                URL ->
+                    URL
+            end,
+            put(?SAVE_RAW_QS, QS),
+            QS;
         Cached ->
             Cached
     end;
@@ -391,7 +427,7 @@ should_close() ->
         %% unread data left on the socket, can't safely continue
         orelse (DidNotRecv
                 andalso get_header_value(<<"content-length">>) =/= undefined
-                andalso list_to_integer(get_header_value(<<"content-length">>)) > 0)
+                andalso list_to_integer(binary_to_list(get_header_value(<<"content-length">>))) > 0)
         orelse (DidNotRecv
                 andalso get_header_value(<<"transfer-encoding">>) =:= <<"chunked">>).
 
@@ -399,7 +435,9 @@ should_close() ->
 %% @doc Clean up any junk in the process dictionary, required before continuing
 %%      a Keep-Alive request.
 cleanup() ->
-    [erase(K) || K <- [?SAVE_QS,
+    [erase(K) || K <- [?SAVE_URL,
+                       ?SAVE_RAW_QS,
+                       ?SAVE_QS,
                        ?SAVE_PATH,
                        ?SAVE_RECV,
                        ?SAVE_BODY,
@@ -414,7 +452,14 @@ cleanup() ->
 parse_qs() ->
     case erlang:get(?SAVE_QS) of
         undefined ->
-            {_, QueryString, _} = mochiweb_binary_util:urlsplit_path(RawPath),
+            {_, QueryString, _} = case erlang:get(?SAVE_URL) of
+                undefined ->
+                    URL = mochiweb_binary_util:urlsplit_path(RawPath),
+                    put(?SAVE_URL, URL),
+                    URL;
+                URL ->
+                    URL
+            end,
             Parsed = mochiweb_binary_util:parse_qs(QueryString),
             put(?SAVE_QS, Parsed),
             Parsed;
