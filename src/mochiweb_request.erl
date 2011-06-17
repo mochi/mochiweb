@@ -727,8 +727,6 @@ accepted_encodings(SupportedEncodings) ->
 %%      5) For an "Accept" header with value "text/*; q=0.0, */*":
 %%         accepts_content_type("text/plain") -> false
 %%
-accepts_content_type(ContentType) when is_binary(ContentType) ->
-    accepts_content_type(binary_to_list(ContentType));
 accepts_content_type(ContentType1) ->
     ContentType = re:replace(ContentType1, "\\s", "", [global, {return, list}]),
     AcceptHeader = case get_header_value("Accept") of
