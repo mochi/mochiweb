@@ -141,6 +141,11 @@ accepted_content_types_test() ->
     Req8 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
         mochiweb_headers:make([{"Accept", "text/html"}])),
     ?assertEqual([],
-        Req8:accepted_content_types(["application/json"])).
+        Req8:accepted_content_types(["application/json"])),
+
+    Req9 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept", "text/*;q=0.9, text/html;q=0.5, */*;q=0.7"}])),
+    ?assertEqual(["application/json", "text/html"],
+        Req9:accepted_content_types(["text/html", "application/json"])).
 
 -endif.
