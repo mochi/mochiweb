@@ -605,8 +605,12 @@ maybe_serve_file(File, ExtraHeaders) ->
                 _ ->
                     case file:open(File, [raw, binary]) of
                         {ok, IoDevice} ->
-                            ContentType = mochiweb_util:guess_mime(File),
-                            Res = ok({ContentType,
+                            CType = case proplists:get_value("Content-Type",
+                                    ExtraHeaders) of
+                                undefined -> mochiweb_util:guess_mime(File);
+                                X -> X
+                            end,
+                            Res = ok({CType,
                                       [{"last-modified", LastModified}
                                        | ExtraHeaders],
                                       {file, IoDevice}}),
