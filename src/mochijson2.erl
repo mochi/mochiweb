@@ -139,6 +139,8 @@ json_encode([{K, _}|_] = Props, State) when (K =/= struct andalso
     json_encode_proplist(Props, State);
 json_encode({struct, Props}, State) when is_list(Props) ->
     json_encode_proplist(Props, State);
+json_encode([{_K,_V}|_PropsT]=Props, State) ->
+    json_encode_proplist(Props, State);
 json_encode(Array, State) when is_list(Array) ->
     json_encode_array(Array, State);
 json_encode({array, Array}, State) when is_list(Array) ->
