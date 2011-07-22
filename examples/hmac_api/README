@@ -164,9 +164,9 @@ authorize/request/1 should be called in the loop of project_name_web.erl as per:
 
 When this is done you are ready to test the api:
 * run 'make' in project_name/ to build the Erlang
-* start the web server with 'start-dev.sh' in project_name/
+* start the web server with 'start-dev.sh' in project_name/ (this will also open an Erlang shell to the Erlang VM)
 
-To test the api run this command from the Erlang shell:
+To test the api run this command in the Erlang shell:
 * hmac_api_client:fire().
 
 The reference implementation uses 5 constants defined in hmac_api.hrl.
