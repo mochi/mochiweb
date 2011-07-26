@@ -5,11 +5,6 @@
 
 -author("Hypernumbers Ltd <gordon@hypernumbers.com>").
 
--define(RFC2116_SP, "\x20").
--define(RFC2116_HT, "\t"
-
--compile(export_all).
-
 %%% this library supports the hmac_sha api on both the client-side
 %%% AND the server-side
 %%%
@@ -122,8 +117,8 @@ canonicalise_headers(List) when is_list(List) ->
     c_headers2(consolidate(List2, []), []).
 
 c_headers2([], Acc)       -> string:join(Acc, "\n") ++ "\n";
-c_headers2([{[?headerprefix | Rest], Key} | T], Acc) ->
-    Hd = string:strip([?headerprefix | Rest]) ++ ":" ++ string:strip(Key),
+c_headers2([{?headerprefix ++ Rest, Key} | T], Acc) ->
+    Hd = string:strip(?headerprefix ++ Rest) ++ ":" ++ string:strip(Key),
     c_headers2(T, [Hd | Acc]);
 c_headers2([_H | T], Acc) -> c_headers2(T, Acc).
 

@@ -9,7 +9,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 -define(schema, "AWS").
 % defines the prefix for headers to be included in the signature
--define(headerprefix, $x,$-,$a,$m,$z,$-).
+-define(headerprefix, "x-amz-").
 % defines the date header
 -define(dateheader, "x-amz-date").
 
@@ -21,7 +21,7 @@
 %%%                                                                          %%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %-define(schema, "MOCHIAPI").
-%-define(headerprefix, $x,$-,$m,$o,$c,$h,$i,$w,$a,$p,$i,$-).
+%-define(headerprefix, "x-mochiapi-").
 %-define(dateheader, "x-mochiapi-date").
 
 % a couple of keys for testing
