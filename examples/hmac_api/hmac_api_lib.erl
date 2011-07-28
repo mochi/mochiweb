@@ -42,7 +42,7 @@ authorize_request(Req) ->
     Date        = get_header(Headers, "date"),
     IncAuth     = get_header(Headers, "authorization"),
     {_Schema, _PublicKey, _Sig} = breakout(IncAuth),
-    % normally you would use the public key to look up the private key
+    %% normally you would use the public key to look up the private key
     PrivateKey  = ?privatekey,
     Signature = #hmac_signature{method = Method,
                                 contentmd5 = ContentMD5,
@@ -104,9 +104,9 @@ sign_data(PrivateKey, #hmac_signature{} = Signature) ->
     Str = make_signature_string(Signature),
     sign2(PrivateKey, Str).
 
-% this fn is the entry point for a unit test which is why it is broken out...
-% if yer encryption and utf8 and base45 doo-dahs don't work then
-% yer Donald is well and truly Ducked so ye may as weel test it...
+%% this fn is the entry point for a unit test which is why it is broken out...
+%% if yer encryption and utf8 and base45 doo-dahs don't work then
+%% yer Donald is well and truly Ducked so ye may as weel test it...
 sign2(PrivateKey, Str) ->
     Sign = xmerl_ucs:to_utf8(Str),
     binary_to_list(base64:encode(crypto:sha_mac(PrivateKey, Sign))).
@@ -130,7 +130,7 @@ consolidate([{H1, K1}, {H2, K2} | Rest], Acc) ->
 
 join(A, B) -> string:strip(A) ++ ";" ++ string:strip(B).
 
-% removes line spacing as per RFC 2616 Section 4.2
+%% removes line spacing as per RFC 2616 Section 4.2
 rectify(String) ->
     Re = "[\x20* | \t*]+",
     re:replace(String, Re, " ", [{return, list}, global]).
@@ -154,7 +154,7 @@ c_res3(Tail) ->
              0  -> URL;
              N2 -> {U2, Q} = lists:split(N2, URL),
                    U2 ++ canonicalise_query(Q)
-    end,
+         end,
     string:to_lower(U3).
 
 canonicalise_query(List) ->
@@ -165,9 +165,9 @@ canonicalise_query(List) ->
 %% if there's a header date take it and ditch the date
 get_date([], Date)            -> Date;
 get_date([{K, _V} | T], Date) -> case string:to_lower(K) of
-                                    ?dateheader -> [];
-                                    _           ->  get_date(T, Date)
-                                end.
+                                     ?dateheader -> [];
+                                     _           ->  get_date(T, Date)
+                                 end.
 
 normalise(List) -> norm2(List, []).
 
@@ -189,8 +189,8 @@ get_header(Headers, Type) ->
 %%%                                                                          %%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% taken from Amazon docs
-% http://docs.amazonwebservices.com/AmazonS3/latest/dev/index.html?RESTAuthentication.html
+                                                % taken from Amazon docs
+%% http://docs.amazonwebservices.com/AmazonS3/latest/dev/index.html?RESTAuthentication.html
 hash_test1(_) ->
     Sig = "DELETE\n\n\n\nx-amz-date:Tue, 27 Mar 2007 21:20:26 +0000\n/johnsmith/photos/puppy.jpg",
     Key = ?privatekey,
@@ -198,8 +198,8 @@ hash_test1(_) ->
     Expected = "k3nL7gH3+PadhTEVn5Ip83xlYzk=",
     ?assertEqual(Expected, Hash).
 
-% taken from Amazon docs
-% http://docs.amazonwebservices.com/AmazonS3/latest/dev/index.html?RESTAuthentication.html
+%% taken from Amazon docs
+%% http://docs.amazonwebservices.com/AmazonS3/latest/dev/index.html?RESTAuthentication.html
 hash_test2(_) ->
     Sig = "GET\n\n\nTue, 27 Mar 2007 19:44:46 +0000\n/johnsmith/?acl",
     Key = "uV3F3YluFJax1cknvbcGwgjvx4QpvB+leU8dUj2o",
@@ -207,8 +207,8 @@ hash_test2(_) ->
     Expected = "thdUi9VAkzhkniLj96JIrOPGi0g=",
     ?assertEqual(Expected, Hash).
 
-% taken from Amazon docs
-% http://docs.amazonwebservices.com/AmazonS3/latest/dev/index.html?RESTAuthentication.html
+%% taken from Amazon docs
+%% http://docs.amazonwebservices.com/AmazonS3/latest/dev/index.html?RESTAuthentication.html
 hash_test3(_) ->
     Sig = "GET\n\n\nWed, 28 Mar 2007 01:49:49 +0000\n/dictionary/"
         ++ "fran%C3%A7ais/pr%c3%a9f%c3%a8re",
@@ -422,11 +422,11 @@ unit_test_() ->
                fun signature_test7/1,
                fun signature_test8/1,
                fun signature_test9/1
-               ],
+              ],
 
     Series3 = [
                fun amazon_test1/1
-               ],
+              ],
 
     {setup, Setup, Cleanup, [
                              {with, [], Series1},

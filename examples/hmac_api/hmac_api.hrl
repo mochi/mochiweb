@@ -8,9 +8,9 @@
 %%%                                                                          %%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 -define(schema, "AWS").
-% defines the prefix for headers to be included in the signature
+%% defines the prefix for headers to be included in the signature
 -define(headerprefix, "x-amz-").
-% defines the date header
+%% defines the date header
 -define(dateheader, "x-amz-date").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -20,14 +20,14 @@
 %%% Only change these if you alter the canonicalisation                      %%%
 %%%                                                                          %%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%-define(schema, "MOCHIAPI").
-%-define(headerprefix, "x-mochiapi-").
-%-define(dateheader, "x-mochiapi-date").
+%%-define(schema, "MOCHIAPI").
+%%-define(headerprefix, "x-mochiapi-").
+%%-define(dateheader, "x-mochiapi-date").
 
-% a couple of keys for testing
-% these are taken from the document
-% % http://docs.amazonwebservices.com/AmazonS3/latest/dev/index.html?RESTAuthentication.html
-% they are not valid keys!
+%% a couple of keys for testing
+%% these are taken from the document
+%% % http://docs.amazonwebservices.com/AmazonS3/latest/dev/index.html?RESTAuthentication.html
+%% they are not valid keys!
 -define(publickey,  "0PN5J17HBGZHT7JJ3X82").
 -define(privatekey, "uV3F3YluFJax1cknvbcGwgjvx4QpvB+leU8dUj2o").
 
@@ -40,4 +40,4 @@
           date,
           headers,
           resource
-         }).
+        }).
