@@ -7,6 +7,7 @@ accepts_content_type_test() ->
     Req1 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
         mochiweb_headers:make([{"Accept", "multipart/related"}])),
     ?assertEqual(true, Req1:accepts_content_type("multipart/related")),
+    ?assertEqual(true, Req1:accepts_content_type(<<"multipart/related">>)),
 
     Req2 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
         mochiweb_headers:make([{"Accept", "text/html"}])),
