@@ -311,7 +311,7 @@ from_extension(".dl") ->
 from_extension(".fli") ->
     "video/fli";
 from_extension(".flv") ->
-    "video/flv";
+    "video/x-flv";
 from_extension(".gl") ->
     "video/gl";
 from_extension(".mp4") ->
