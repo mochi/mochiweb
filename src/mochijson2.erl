@@ -75,7 +75,8 @@
 %%                     json_object() | json_iolist()
 
 -record(encoder, {handler=null,
-                  utf8=false}).
+                  utf8=false,
+                  encode_atoms=true}).
 
 -record(decoder, {object_hook=null,
                   offset=0,
@@ -85,8 +86,9 @@
 
 %% @spec encoder([encoder_option()]) -> function()
 %% @doc Create an encoder/1 with the given options.
-%% @type encoder_option() = handler_option() | utf8_option()
+%% @type encoder_option() = handler_option() | utf8_option() | encode_atoms_option()
 %% @type utf8_option() = boolean(). Emit unicode as utf8 (default - false)
+%% @type encode_atoms_option() = boolean(). Encode atoms other than true, false, null as string (default - true)
 encoder(Options) ->
     State = parse_encoder_options(Options, #encoder{}),
     fun (O) -> json_encode(O, State) end.
@@ -114,7 +116,9 @@ parse_encoder_options([], State) ->
 parse_encoder_options([{handler, Handler} | Rest], State) ->
     parse_encoder_options(Rest, State#encoder{handler=Handler});
 parse_encoder_options([{utf8, Switch} | Rest], State) ->
-    parse_encoder_options(Rest, State#encoder{utf8=Switch}).
+    parse_encoder_options(Rest, State#encoder{utf8=Switch});
+parse_encoder_options([{encode_atoms, Atoms} | Rest], State) ->
+    parse_encoder_options(Rest, State#encoder{encode_atoms=Atoms}).
 
 parse_decoder_options([], State) ->
     State;
@@ -131,7 +135,9 @@ json_encode(I, _State) when is_integer(I) ->
     integer_to_list(I);
 json_encode(F, _State) when is_float(F) ->
     mochinum:digits(F);
-json_encode(S, State) when is_binary(S); is_atom(S) ->
+json_encode(S, State) when is_binary(S) ->
+    json_encode_string(S, State);
+json_encode(S, State=#encoder{encode_atoms=true}) when is_atom(S) ->
     json_encode_string(S, State);
 json_encode([{K, _}|_] = Props, State) when (K =/= struct andalso
                                              K =/= array andalso
@@ -844,6 +850,12 @@ handler_test() ->
     ?assertEqual(
        <<"[]">>,
        iolist_to_binary((encoder([{handler, F}]))({}))),
+    ok.
+
+encode_atoms_test() ->    
+    ?assertEqual(<<"\"undefined\"">>, iolist_to_binary(encode(undefined))),
+    Encoder = encoder([{handler, fun(undefined) -> null end}, {encode_atoms, false}]),
+    ?assertEqual(<<"null">>, iolist_to_binary(Encoder(undefined))),
     ok.
 
 -endif.
