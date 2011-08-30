@@ -98,7 +98,7 @@ with_server(Transport, ServerFun, ClientFun) ->
         ssl ->
             ServerOpts0 ++ [{ssl, true}, {ssl_opts, ssl_cert_opts()}]
     end,
-    {ok, Server} = mochiweb_http:start(ServerOpts),
+    {ok, Server} = mochiweb_http:start_link(ServerOpts),
     Port = mochiweb_socket_server:get(Server, port),
     Res = (catch ClientFun(Transport, Port)),
     mochiweb_http:stop(Server),

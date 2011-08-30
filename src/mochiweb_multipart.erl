@@ -311,7 +311,7 @@ with_socket_server(Transport, ServerFun, ClientFun) ->
         ssl ->
             ServerOpts0 ++ [{ssl, true}, {ssl_opts, ssl_cert_opts()}]
     end,
-    {ok, Server} = mochiweb_socket_server:start(ServerOpts),
+    {ok, Server} = mochiweb_socket_server:start_link(ServerOpts),
     Port = mochiweb_socket_server:get(Server, port),
     ClientOpts = [binary, {active, false}],
     {ok, Client} = case Transport of
