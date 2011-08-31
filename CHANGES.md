@@ -1,3 +1,7 @@
+Version 2.2.1 released 2011-08-31
+
+* Removed `mochiweb_skel` module from the pre-rebar era
+
 Version 2.2.0 released 2011-08-29
 
 * Added new `mochiweb_http:start_link/1` and
