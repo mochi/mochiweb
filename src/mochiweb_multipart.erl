@@ -241,7 +241,7 @@ get_boundary(ContentType) ->
     end.
 
 %% @spec find_in_binary(Pattern::binary(), Data::binary()) ->
-%%            {exact, N} | {partial, N, K} | not_found.
+%%            {exact, N} | {partial, N, K} | not_found
 %% @doc Searches for the given pattern in the given binary.
 find_in_binary(P, Data) when size(P) > 0 ->
     PS = size(P),
