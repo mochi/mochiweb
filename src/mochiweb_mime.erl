@@ -368,6 +368,28 @@ from_extension(".m4a") ->
     "audio/mpeg";
 from_extension(".csv") ->
     "text/csv";
+from_extension(".eot") ->
+    "application/vnd.ms-fontobject";
+from_extension(".m4v") ->
+    "video/mp4";
+from_extension(".svg") ->
+    "image/svg+xml";
+from_extension(".svgz") ->
+    "image/svg+xml";
+from_extension(".ttc") ->
+    "application/x-font-ttf";
+from_extension(".ttf") ->
+    "application/x-font-ttf";
+from_extension(".vcf") ->
+    "text/x-vcard";
+from_extension(".webm") ->
+    "video/web";
+from_extension(".webp") ->
+    "image/web";
+from_extension(".woff") ->
+    "application/x-font-woff";
+from_extension(".otf") ->
+    "font/opentype";
 from_extension(_) ->
     undefined.
 
