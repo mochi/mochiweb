@@ -388,6 +388,8 @@ from_extension(".webp") ->
     "image/web";
 from_extension(".woff") ->
     "application/x-font-woff";
+from_extension(".otf") ->
+    "font/opentype";
 from_extension(_) ->
     undefined.
 
