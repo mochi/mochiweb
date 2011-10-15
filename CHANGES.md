@@ -1,3 +1,12 @@
+Version 2.3.0 released 2011-10-14
+
+* Handle ssl_closed message in mochiweb_http (#59)
+* Added support for new MIME types (otf, eot, m4v, svg, svgz, ttc, ttf,
+  vcf, webm, webp, woff) (#61)
+* Updated mochiweb_charref to support all HTML5 entities. Note that
+  if you are using this module directly, the spec has changed to return
+  `[integer()]` for some entities. (#64)
+
 Version 2.2.1 released 2011-08-31
 
 * Removed `mochiweb_skel` module from the pre-rebar era
