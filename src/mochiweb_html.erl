@@ -480,7 +480,7 @@ tokenize_attr_value(Attr, B, S) ->
         _ ->
             {Attr, S1}
     end.
-    
+
 tokenize_quoted_or_unquoted_attr_value(B, S=#decoder{offset=O}) ->
     case B of
         <<_:O/binary>> ->
@@ -491,7 +491,7 @@ tokenize_quoted_or_unquoted_attr_value(B, S=#decoder{offset=O}) ->
         <<_:O/binary, _/binary>> ->
             tokenize_unquoted_attr_value(B, S, [])
     end.
-    
+
 tokenize_quoted_attr_value(B, S=#decoder{offset=O}, Acc, Q) ->
     case B of
         <<_:O/binary>> ->
@@ -506,7 +506,7 @@ tokenize_quoted_attr_value(B, S=#decoder{offset=O}, Acc, Q) ->
         <<_:O/binary, C, _/binary>> ->
             tokenize_quoted_attr_value(B, ?INC_COL(S), [C|Acc], Q)
     end.
-    
+
 tokenize_unquoted_attr_value(B, S=#decoder{offset=O}, Acc) ->
     case B of
         <<_:O/binary>> ->
@@ -520,7 +520,7 @@ tokenize_unquoted_attr_value(B, S=#decoder{offset=O}, Acc) ->
             { iolist_to_binary(lists:reverse(Acc)), S };
         <<_:O/binary, C, _/binary>> ->
             tokenize_unquoted_attr_value(B, ?INC_COL(S), [C|Acc])
-    end.   
+    end.
 
 skip_whitespace(B, S=#decoder{offset=O}) ->
     case B of
@@ -627,8 +627,10 @@ tokenize_charref(Bin, S=#decoder{offset=O}, Start) ->
                            Len1 = Len + 2,
                            <<_:Start1/binary, R:Len1/binary, _/binary>> = Bin,
                            R;
-                       Unichar ->
-                           mochiutf8:codepoint_to_bytes(Unichar)
+                       Unichar when is_integer(Unichar) ->
+                           mochiutf8:codepoint_to_bytes(Unichar);
+                       Unichars when is_list(Unichars) ->
+                           unicode:characters_to_binary(Unichars)
                    end,
             {{data, Data, false}, ?INC_COL(S)};
         _ ->
@@ -1195,43 +1197,43 @@ parse_unquoted_attr_test() ->
             { <<"img">>, [ { <<"src">>, <<"/images/icon.png">> } ], [] }
         ]},
         mochiweb_html:parse(D0)),
-    
+
     D1 = <<"<html><img src=/images/icon.png></img></html>">>,
         ?assertEqual(
             {<<"html">>,[],[
                 { <<"img">>, [ { <<"src">>, <<"/images/icon.png">> } ], [] }
             ]},
             mochiweb_html:parse(D1)),
-    
+
     D2 = <<"<html><img src=/images/icon&gt;.png width=100></img></html>">>,
         ?assertEqual(
             {<<"html">>,[],[
                 { <<"img">>, [ { <<"src">>, <<"/images/icon>.png">> }, { <<"width">>, <<"100">> } ], [] }
             ]},
             mochiweb_html:parse(D2)),
-    ok.        
-    
-parse_quoted_attr_test() ->    
+    ok.
+
+parse_quoted_attr_test() ->
     D0 = <<"<html><img src='/images/icon.png'></html>">>,
     ?assertEqual(
         {<<"html">>,[],[
             { <<"img">>, [ { <<"src">>, <<"/images/icon.png">> } ], [] }
         ]},
-        mochiweb_html:parse(D0)),     
-        
+        mochiweb_html:parse(D0)),
+
     D1 = <<"<html><img src=\"/images/icon.png'></html>">>,
     ?assertEqual(
         {<<"html">>,[],[
             { <<"img">>, [ { <<"src">>, <<"/images/icon.png'></html>">> } ], [] }
         ]},
-        mochiweb_html:parse(D1)),     
+        mochiweb_html:parse(D1)),
 
     D2 = <<"<html><img src=\"/images/icon&gt;.png\"></html>">>,
     ?assertEqual(
         {<<"html">>,[],[
             { <<"img">>, [ { <<"src">>, <<"/images/icon>.png">> } ], [] }
         ]},
-        mochiweb_html:parse(D2)),     
+        mochiweb_html:parse(D2)),
     ok.
 
 parse_missing_attr_name_test() ->
@@ -1245,7 +1247,7 @@ parse_broken_pi_test() ->
 	D0 = <<"<html><?xml:namespace prefix = o ns = \"urn:schemas-microsoft-com:office:office\" /></html>">>,
 	?assertEqual(
 		{<<"html">>, [], [
-			{ pi, <<"xml:namespace">>, [ { <<"prefix">>, <<"o">> }, 
+			{ pi, <<"xml:namespace">>, [ { <<"prefix">>, <<"o">> },
 			                             { <<"ns">>, <<"urn:schemas-microsoft-com:office:office">> } ] }
 		] },
 		mochiweb_html:parse(D0)),
@@ -1260,5 +1262,5 @@ parse_funny_singletons_test() ->
 		] },
 		mochiweb_html:parse(D0)),
 	ok.
-    
+
 -endif.
