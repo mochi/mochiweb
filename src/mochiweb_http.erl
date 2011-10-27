@@ -6,7 +6,7 @@
 -module(mochiweb_http).
 -author('bob@mochimedia.com').
 -export([start/1, start_link/1, stop/0, stop/1]).
--export([loop/2]).
+-export([loop/2, loop/3]).
 -export([after_response/2, reentry/1]).
 -export([parse_range_request/1, range_skip_length/2]).
 
@@ -14,14 +14,22 @@
 -define(HEADERS_RECV_TIMEOUT, 30000).    %% timeout waiting for headers
 
 -define(MAX_HEADERS, 1000).
+-define(MAX_HEADER_BYTES, 256*1024).
 -define(DEFAULTS, [{name, ?MODULE},
                    {port, 8888}]).
 
 parse_options(Options) ->
     {loop, HttpLoop} = proplists:lookup(loop, Options),
-    Loop = {?MODULE, loop, [HttpLoop]},
+    LoopArgs = case proplists:lookup(max_header_bytes, Options) of
+                   none ->
+                       [HttpLoop];
+                   {max_header_bytes, MaxHdrBytes} ->
+                       [HttpLoop, MaxHdrBytes]
+               end,
+    Loop = {?MODULE, loop, LoopArgs},
     Options1 = [{loop, Loop} | proplists:delete(loop, Options)],
-    mochilists:set_defaults(?DEFAULTS, Options1).
+    Options2 = proplists:delete(max_header_bytes, Options1),
+    mochilists:set_defaults(?DEFAULTS, Options2).
 
 stop() ->
     mochiweb_socket_server:stop(?MODULE).
@@ -47,19 +55,29 @@ start_link(Options) ->
     mochiweb_socket_server:start_link(parse_options(Options)).
 
 loop(Socket, Body) ->
-    ok = mochiweb_socket:setopts(Socket, [{packet, http}]),
-    request(Socket, Body).
+    ok = mochiweb_socket:setopts(Socket, [{packet, line}]),
+    request(Socket, Body, <<>>, 0, ?MAX_HEADER_BYTES).
+loop(Socket, Body, MaxHdrBytes) ->
+    ok = mochiweb_socket:setopts(Socket, [{packet, line}]),
+    request(Socket, Body, <<>>, 0, MaxHdrBytes).
 
-request(Socket, Body) ->
+request(Socket, Body, Prev, HdrBytes, MaxHdrBytes) ->
     ok = mochiweb_socket:setopts(Socket, [{active, once}]),
     receive
-        {Protocol, _, {http_request, Method, Path, Version}} when Protocol == http orelse Protocol == ssl ->
-            ok = mochiweb_socket:setopts(Socket, [{packet, httph}]),
-            headers(Socket, {Method, Path, Version}, [], Body, 0);
-        {Protocol, _, {http_error, "\r\n"}} when Protocol == http orelse Protocol == ssl ->
-            request(Socket, Body);
-        {Protocol, _, {http_error, "\n"}} when Protocol == http orelse Protocol == ssl ->
-            request(Socket, Body);
+        {Protocol, _, Bin} when Protocol =:= tcp orelse Protocol =:= ssl ->
+            FullBin = <<Prev/binary, Bin/binary>>,
+            case erlang:decode_packet(http, FullBin, []) of
+                {ok, {http_request, Method, Path, Version}, <<>>} ->
+                    NewHdrBytes = size(FullBin) + HdrBytes,
+                    collect_headers(Socket, {Method, Path, Version}, Body,
+                                    <<>>, false, 0, NewHdrBytes, MaxHdrBytes);
+                {error, {http_error, "\r\n"}} ->
+                    request(Socket, Body, <<>>, 0, MaxHdrBytes);
+                {error, {http_error, "\n"}} ->
+                    request(Socket, Body, <<>>, 0, MaxHdrBytes);
+                {more, _} ->
+                    request(Socket, Body, FullBin, size(FullBin), MaxHdrBytes)
+            end;
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
@@ -78,28 +96,76 @@ reentry(Body) ->
             ?MODULE:after_response(Body, Req)
     end.
 
-headers(Socket, Request, Headers, _Body, ?MAX_HEADERS) ->
+collect_headers(Socket, Request, _Body, _Collected, _Trunc,
+                ?MAX_HEADERS, _HdrBytes, _MaxHdrBytes) ->
     %% Too many headers sent, bad request.
-    ok = mochiweb_socket:setopts(Socket, [{packet, raw}]),
-    handle_invalid_request(Socket, Request, Headers);
-headers(Socket, Request, Headers, Body, HeaderCount) ->
+    handle_invalid_request(Socket, Request, []);
+collect_headers(Socket, Request, _Body, _Collected, _Trunc,
+                _HeaderCount, HdrBytes, MaxHdrBytes)
+  when HdrBytes >= MaxHdrBytes ->
+    %% Too many headers sent, bad request.
+    handle_invalid_request(Socket, Request, []);
+collect_headers(Socket, Request, Body, Collected, Trunc,
+                HeaderCount, HdrBytes, MaxHdrBytes) ->
     ok = mochiweb_socket:setopts(Socket, [{active, once}]),
     receive
-        {Protocol, _, http_eoh} when Protocol == http orelse Protocol == ssl ->
-            Req = new_request(Socket, Request, Headers),
-            call_body(Body, Req),
-            ?MODULE:after_response(Body, Req);
-        {Protocol, _, {http_header, _, Name, _, Value}} when Protocol == http orelse Protocol == ssl ->
-            headers(Socket, Request, [{Name, Value} | Headers], Body,
-                    1 + HeaderCount);
+        {Protocol, _, More} when Protocol =:= tcp orelse Protocol =:= ssl ->
+            NewHdrBytes = HdrBytes + size(More),
+            if
+                NewHdrBytes >= MaxHdrBytes ->
+                    handle_invalid_request(Socket, Request, []);
+                true ->
+                    case {Trunc, More} of
+                        {false, <<"\n">>} ->
+                            ok = mochiweb_socket:setopts(Socket, [{packet,raw}]),
+                            parse_headers(Socket, Request, Body,
+                                          <<Collected/binary, "\r\n">>, []);
+                        {false, <<"\r\n">>} ->
+                            ok = mochiweb_socket:setopts(Socket, [{packet,raw}]),
+                            parse_headers(Socket, Request, Body,
+                                          <<Collected/binary, "\r\n">>, []);
+                        {_, More} ->
+                            NewBin = <<Collected/binary, More/binary>>,
+                            AllButOne= size(More) - 1,
+                            {Truncated, NewHdrCount} =
+                                case More of
+                                    <<_:AllButOne/binary, "\n">> ->
+                                        {false, 1 + HeaderCount};
+                                    _ ->
+                                        {true, HeaderCount}
+                                end,
+                            collect_headers(Socket, Request, Body, NewBin,
+                                            Truncated, NewHdrCount,
+                                            NewHdrBytes, MaxHdrBytes)
+                    end
+            end;
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
+        {ssl_closed, _} ->
+            mochiweb_socket:close(Socket),
+            exit(normal);
         _Other ->
-            handle_invalid_request(Socket, Request, Headers)
+            handle_invalid_request(Socket, Request, [])
     after ?HEADERS_RECV_TIMEOUT ->
         mochiweb_socket:close(Socket),
         exit(normal)
+    end.
+
+parse_headers(Socket, Request, Body, <<"\r\n">>, Headers) ->
+    Req = new_request(Socket, Request, lists:reverse(Headers)),
+    call_body(Body, Req),
+    ?MODULE:after_response(Body, Req);
+parse_headers(Socket, Request, Body, Bin, Headers) ->
+    case erlang:decode_packet(httph, Bin, []) of
+        {ok, {http_header, _, Name, _, Value}, More} ->
+            parse_headers(Socket, Request, Body, More,
+                          [{Name, Value} | Headers]);
+        {more, _} ->
+            handle_invalid_request(Socket, Request, Headers);
+        {error, _Reason} ->
+            mochiweb_socket:close(Socket),
+            exit(normal)
     end.
 
 call_body({M, F, A}, Req) ->
@@ -245,5 +311,89 @@ range_skip_length_test() ->
     ?assertEqual(invalid_range,
                  range_skip_length({BodySize, none}, BodySize)),
     ok.
+
+long_request_line_test() ->
+    {ok, LS} = gen_tcp:listen(0, [binary, {active, false}]),
+    {ok, Port} = inet:port(LS),
+    spawn_link(fun() ->
+                       {ok, S} = gen_tcp:accept(LS),
+                       try
+                           loop(S, fun(Req) ->
+                                           Req:ok({"text/plain", "ok"})
+                                   end)
+                       after
+                           gen_tcp:close(S),
+                           gen_tcp:close(LS)
+                       end
+               end),
+    {ok, S} = gen_tcp:connect("localhost", Port, [binary, {active, false}]),
+    try
+        Req = "GET /" ++ string:chars($X, 8192) ++ " HTTP/1.1\r\n"
+            ++ "Host: localhost\r\n\r\n",
+        ok = gen_tcp:send(S, Req),
+        inet:setopts(S, [{packet, http}]),
+        ?assertEqual({ok, {http_response, {1,1}, 200, "OK"}},
+                     gen_tcp:recv(S, 0)),
+        ok
+    after
+        gen_tcp:close(S)
+    end.
+
+long_header_test() ->
+    {ok, LS} = gen_tcp:listen(0, [binary, {active, false}]),
+    {ok, Port} = inet:port(LS),
+    spawn_link(fun() ->
+                       {ok, S} = gen_tcp:accept(LS),
+                       try
+                           loop(S, fun(Req) ->
+                                           Req:ok({"text/plain", "ok"})
+                                   end)
+                       after
+                           gen_tcp:close(S),
+                           gen_tcp:close(LS)
+                       end
+               end),
+    {ok, S} = gen_tcp:connect("localhost", Port, [binary, {active, false}]),
+    try
+        Req = "GET / HTTP/1.1\r\n"
+            ++ "Host: localhost\r\n"
+            ++ "Link: /" ++ string:chars($X, 8192) ++ "\r\n\r\n",
+        ok = gen_tcp:send(S, Req),
+        inet:setopts(S, [{packet, http}]),
+        ?assertEqual({ok, {http_response, {1,1}, 200, "OK"}},
+                     gen_tcp:recv(S, 0)),
+        ok
+    after
+        gen_tcp:close(S)
+    end.
+
+max_header_bytes_test() ->
+    MaxHdrBytes = 100,
+    {ok, LS} = gen_tcp:listen(0, [binary, {active, false}]),
+    {ok, Port} = inet:port(LS),
+    spawn_link(fun() ->
+                       {ok, S} = gen_tcp:accept(LS),
+                       try
+                           loop(S, fun(Req) ->
+                                           Req:ok({"text/plain", "ok"})
+                                   end,
+                                MaxHdrBytes)
+                       after
+                           gen_tcp:close(S),
+                           gen_tcp:close(LS)
+                       end
+               end),
+    {ok, S} = gen_tcp:connect("localhost", Port, [binary, {active, false}]),
+    try
+        Req = "GET /" ++ string:chars($X, MaxHdrBytes-20) ++ " HTTP/1.1\r\n"
+            ++ "Host: localhost\r\n\r\n",
+        ok = gen_tcp:send(S, Req),
+        inet:setopts(S, [{packet, http}]),
+        ?assertEqual({ok, {http_response, {1,1}, 400, "Bad Request"}},
+                     gen_tcp:recv(S, 0)),
+        ok
+    after
+        gen_tcp:close(S)
+    end.
 
 -endif.
