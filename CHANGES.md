@@ -1,3 +1,8 @@
+Version 2.3.1 released XXXX-XX-XX
+
+* Add a manual garbage collection between requests to avoid worst case behavior
+  on keep-alive sockets.
+
 Version 2.3.0 released 2011-10-14
 
 * Handle ssl_closed message in mochiweb_http (#59)

@@ -133,6 +133,7 @@ after_response(Body, Req) ->
             exit(normal);
         false ->
             Req:cleanup(),
+            erlang:garbage_collect(),
             ?MODULE:loop(Socket, Body)
     end.
 
