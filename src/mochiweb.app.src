@@ -1,7 +1,7 @@
 %% This is generated from src/mochiweb.app.src
 {application, mochiweb,
  [{description, "MochiMedia Web Server"},
-  {vsn, "2.3.0"},
+  {vsn, "2.3.1"},
   {modules, []},
   {registered, []},
   {env, []},
