@@ -1,5 +1,6 @@
 Version 2.3.1 released XXXX-XX-XX
 
+* Fix mochiweb_html handling of invalid charref sequences (unescaped &) (#69).
 * Add a manual garbage collection between requests to avoid worst case behavior
   on keep-alive sockets.
 
