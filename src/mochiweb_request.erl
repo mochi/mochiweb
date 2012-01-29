@@ -19,7 +19,7 @@
 -export([parse_post/0, parse_qs/0]).
 -export([should_close/0, cleanup/0]).
 -export([parse_cookie/0, get_cookie_value/1]).
--export([serve_file/2, serve_file/3]).
+-export([serve_file/2, serve_file/3, serve_file/4]).
 -export([accepted_encodings/1]).
 -export([accepts_content_type/1, accepted_content_types/1]).
 
@@ -550,6 +550,9 @@ serve_file(Path, DocRoot) ->
 %% @spec serve_file(Path, DocRoot, ExtraHeaders) -> Response
 %% @doc Serve a file relative to DocRoot.
 serve_file(Path, DocRoot, ExtraHeaders) ->
+    serve_file(Path, DocRoot, ExtraHeaders, []).
+
+serve_file(Path, DocRoot, ExtraHeaders, Options) ->   
     case mochiweb_util:safe_relative_path(Path) of
         undefined ->
             not_found(ExtraHeaders);
@@ -557,9 +560,9 @@ serve_file(Path, DocRoot, ExtraHeaders) ->
             FullPath = filename:join([DocRoot, RelPath]),
             case filelib:is_dir(FullPath) of
                 true ->
-                    maybe_redirect(RelPath, FullPath, ExtraHeaders);
+                    maybe_redirect(RelPath, FullPath, ExtraHeaders, Options);
                 false ->
-                    maybe_serve_file(FullPath, ExtraHeaders)
+                    maybe_serve_file(FullPath, ExtraHeaders, Options)
             end
     end.
 
@@ -569,13 +572,10 @@ serve_file(Path, DocRoot, ExtraHeaders) ->
 directory_index(FullPath) ->
     filename:join([FullPath, "index.html"]).
 
-maybe_redirect([], FullPath, ExtraHeaders) ->
-    maybe_serve_file(directory_index(FullPath), ExtraHeaders);
-
-maybe_redirect(RelPath, FullPath, ExtraHeaders) ->
+maybe_redirect(RelPath, FullPath, ExtraHeaders, Options) ->
     case string:right(RelPath, 1) of
         "/" ->
-            maybe_serve_file(directory_index(FullPath), ExtraHeaders);
+            maybe_serve_file(directory_index(FullPath), ExtraHeaders, Options);
         _   ->
             Host = mochiweb_headers:get_value("host", Headers),
             Location = "http://" ++ Host  ++ "/" ++ RelPath ++ "/",
@@ -593,7 +593,7 @@ maybe_redirect(RelPath, FullPath, ExtraHeaders) ->
             respond({301, MoreHeaders, Body})
     end.
 
-maybe_serve_file(File, ExtraHeaders) ->
+maybe_serve_file(File, ExtraHeaders, Options) ->    
     case file:read_file_info(File) of
         {ok, FileInfo} ->
             LastModified = httpd_util:rfc1123_date(FileInfo#file_info.mtime),
@@ -603,7 +603,9 @@ maybe_serve_file(File, ExtraHeaders) ->
                 _ ->
                     case file:open(File, [raw, binary]) of
                         {ok, IoDevice} ->
-                            ContentType = mochiweb_util:guess_mime(File),
+                            Charset = proplists:get_value(charset, Options, []),
+                            MimeType = proplists:get_value(encoding, Options, mochiweb_util:guess_mime(File)),
+                            ContentType = construct_content_type(MimeType, Charset),
                             Res = ok({ContentType,
                                       [{"last-modified", LastModified}
                                        | ExtraHeaders],
@@ -617,6 +619,13 @@ maybe_serve_file(File, ExtraHeaders) ->
         {error, _} ->
             not_found(ExtraHeaders)
     end.
+
+construct_content_type(ContentType, []) ->
+    ContentType;
+
+construct_content_type(ContentType, Charset) -> 
+    ContentType ++ ";charset=" ++ Charset ++ ";".
+
 
 server_headers() ->
     [{"Server", "MochiWeb/1.0 (" ++ ?QUIP ++ ")"},
