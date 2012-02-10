@@ -159,8 +159,7 @@ recv(Length, Timeout) ->
         {ok, Data} ->
             put(?SAVE_RECV, true),
             Data;
-        Error ->
-            io:fwrite("Error mochi ~p~n", [Error]),
+        _ ->         
             exit(normal)
     end.
 
