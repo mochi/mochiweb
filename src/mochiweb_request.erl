@@ -153,13 +153,12 @@ recv(Length) ->
 %% @spec recv(integer(), integer()) -> binary()
 %% @doc Receive Length bytes from the client as a binary, with the given
 %%      Timeout in msec.
-recv(Length, Timeout) ->
-    
+recv(Length, Timeout) ->    
     case mochiweb_socket:recv(Socket, Length, Timeout) of
         {ok, Data} ->
             put(?SAVE_RECV, true),
             Data;
-        _ ->         
+        _ ->
             exit(normal)
     end.
 
