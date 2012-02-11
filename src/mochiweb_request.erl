@@ -604,7 +604,8 @@ maybe_serve_file(File, ExtraHeaders, Options) ->
                     case file:open(File, [raw, binary]) of
                         {ok, IoDevice} ->
                             Charset = proplists:get_value(charset, Options, []),
-                            ContentType = construct_content_type(mochiweb_util:guess_mime(File), Charset),
+                            MimeType = proplists:get_value(encoding, Options, mochiweb_util:guess_mime(File)),
+                            ContentType = construct_content_type(MimeType, Charset),
                             Res = ok({ContentType,
                                       [{"last-modified", LastModified}
                                        | ExtraHeaders],
