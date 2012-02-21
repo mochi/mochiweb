@@ -5,7 +5,7 @@ The latest version of MochiWeb is available at http://github.com/mochi/mochiweb
 The mailing list for MochiWeb is at http://groups.google.com/group/mochiweb/
 
 R12B compatibility:
-The master of MochiWeb is tested with R13B04 and later. A branch compatible
+The master of MochiWeb is tested with R14A and later. A branch compatible
 with R12B is maintained separately at http://github.com/lemenkov/mochiweb
 The R12B branch of that repository is mirrored in the official repository
 occasionally for convenience.

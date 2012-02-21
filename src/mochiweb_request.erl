@@ -21,7 +21,7 @@
 -export([parse_cookie/0, get_cookie_value/1]).
 -export([serve_file/2, serve_file/3]).
 -export([accepted_encodings/1]).
--export([accepts_content_type/1]).
+-export([accepts_content_type/1, accepted_content_types/1]).
 
 -define(SAVE_QS, mochiweb_request_qs).
 -define(SAVE_PATH, mochiweb_request_path).
@@ -727,16 +727,9 @@ accepted_encodings(SupportedEncodings) ->
 %%      5) For an "Accept" header with value "text/*; q=0.0, */*":
 %%         accepts_content_type("text/plain") -> false
 %%
-accepts_content_type(ContentType) when is_binary(ContentType) ->
-    accepts_content_type(binary_to_list(ContentType));
 accepts_content_type(ContentType1) ->
     ContentType = re:replace(ContentType1, "\\s", "", [global, {return, list}]),
-    AcceptHeader = case get_header_value("Accept") of
-        undefined ->
-            "*/*";
-        Value ->
-            Value
-    end,
+    AcceptHeader = accept_header(),
     case mochiweb_util:parse_qvalues(AcceptHeader) of
         invalid_qvalue_string ->
             bad_accept_header;
@@ -755,6 +748,80 @@ accepts_content_type(ContentType1) ->
             ) andalso
             (not lists:member({ContentType, 0.0}, QList)) andalso
             (not lists:member({SuperType, 0.0}, QList))
+    end.
+
+%% @spec accepted_content_types([string() | binary()]) -> [string()] | bad_accept_header
+%%
+%% @doc Filters which of the given media types this request accepts. This filtering
+%%      is performed by analyzing the "Accept" header. The returned list is sorted
+%%      according to the preferences specified in the "Accept" header (higher Q values
+%%      first). If two or more types have the same preference (Q value), they're order
+%%      in the returned list is the same as they're order in the input list.
+%%
+%%      Examples
+%%
+%%      1) For a missing "Accept" header:
+%%         accepted_content_types(["text/html", "application/json"]) ->
+%%             ["text/html", "application/json"]
+%%
+%%      2) For an "Accept" header with value "text/html, application/*":
+%%         accepted_content_types(["application/json", "text/html"]) ->
+%%             ["application/json", "text/html"]
+%%
+%%      3) For an "Accept" header with value "text/html, */*; q=0.0":
+%%         accepted_content_types(["text/html", "application/json"]) ->
+%%             ["text/html"]
+%%
+%%      4) For an "Accept" header with value "text/html; q=0.5, */*; q=0.1":
+%%         accepts_content_types(["application/json", "text/html"]) ->
+%%             ["text/html", "application/json"]
+%%
+accepted_content_types(Types1) ->
+    Types = lists:map(
+        fun(T) -> re:replace(T, "\\s", "", [global, {return, list}]) end,
+        Types1),
+    AcceptHeader = accept_header(),
+    case mochiweb_util:parse_qvalues(AcceptHeader) of
+        invalid_qvalue_string ->
+            bad_accept_header;
+        QList ->
+            TypesQ = lists:foldr(
+                fun(T, Acc) ->
+                    case proplists:get_value(T, QList) of
+                        undefined ->
+                            [MainType, _SubType] = string:tokens(T, "/"),
+                            case proplists:get_value(MainType ++ "/*", QList) of
+                                undefined ->
+                                    case proplists:get_value("*/*", QList) of
+                                        Q when is_float(Q), Q > 0.0 ->
+                                            [{Q, T} | Acc];
+                                        _ ->
+                                            Acc
+                                    end;
+                                Q when Q > 0.0 ->
+                                    [{Q, T} | Acc];
+                                _ ->
+                                    Acc
+                            end;
+                        Q when Q > 0.0 ->
+                            [{Q, T} | Acc];
+                        _ ->
+                            Acc
+                    end
+                end,
+                [], Types),
+            % Note: Stable sort. If 2 types have the same Q value we leave them in the
+            % same order as in the input list.
+            SortFun = fun({Q1, _}, {Q2, _}) -> Q1 >= Q2 end,
+            [Type || {_Q, Type} <- lists:sort(SortFun, TypesQ)]
+    end.
+
+accept_header() ->
+    case get_header_value("Accept") of
+        undefined ->
+            "*/*";
+        Value ->
+            Value
     end.
 
 %%

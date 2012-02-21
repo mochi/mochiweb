@@ -7,6 +7,7 @@ accepts_content_type_test() ->
     Req1 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
         mochiweb_headers:make([{"Accept", "multipart/related"}])),
     ?assertEqual(true, Req1:accepts_content_type("multipart/related")),
+    ?assertEqual(true, Req1:accepts_content_type(<<"multipart/related">>)),
 
     Req2 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
         mochiweb_headers:make([{"Accept", "text/html"}])),
@@ -100,5 +101,52 @@ accepted_encodings_test() ->
         mochiweb_headers:make([{"Accept-Encoding", "deflate, *;q=0.0"}])),
     ?assertEqual([],
                  Req8:accepted_encodings(["gzip", "identity"])).
+
+accepted_content_types_test() ->
+    Req1 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept", "text/html"}])),
+    ?assertEqual(["text/html"],
+        Req1:accepted_content_types(["text/html", "application/json"])),
+
+    Req2 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept", "text/html, */*;q=0"}])),
+    ?assertEqual(["text/html"],
+        Req2:accepted_content_types(["text/html", "application/json"])),
+
+    Req3 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept", "text/*, */*;q=0"}])),
+    ?assertEqual(["text/html"],
+        Req3:accepted_content_types(["text/html", "application/json"])),
+
+    Req4 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept", "text/*;q=0.8, */*;q=0.5"}])),
+    ?assertEqual(["text/html", "application/json"],
+        Req4:accepted_content_types(["application/json", "text/html"])),
+
+    Req5 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept", "text/*;q=0.8, */*;q=0.5"}])),
+    ?assertEqual(["text/html", "application/json"],
+        Req5:accepted_content_types(["text/html", "application/json"])),
+
+    Req6 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept", "text/*;q=0.5, */*;q=0.5"}])),
+    ?assertEqual(["application/json", "text/html"],
+        Req6:accepted_content_types(["application/json", "text/html"])),
+
+    Req7 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make(
+            [{"Accept", "text/html;q=0.5, application/json;q=0.5"}])),
+    ?assertEqual(["application/json", "text/html"],
+        Req7:accepted_content_types(["application/json", "text/html"])),
+
+    Req8 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept", "text/html"}])),
+    ?assertEqual([],
+        Req8:accepted_content_types(["application/json"])),
+
+    Req9 = mochiweb_request:new(nil, 'GET', "/foo", {1, 1},
+        mochiweb_headers:make([{"Accept", "text/*;q=0.9, text/html;q=0.5, */*;q=0.7"}])),
+    ?assertEqual(["application/json", "text/html"],
+        Req9:accepted_content_types(["text/html", "application/json"])).
 
 -endif.
