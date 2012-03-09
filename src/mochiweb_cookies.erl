@@ -122,6 +122,13 @@ quote(V0) ->
 rfc2109_cookie_expires_date(LocalTime) ->
     {{YYYY,MM,DD},{Hour,Min,Sec}} =
         case calendar:local_time_to_universal_time_dst(LocalTime) of
+            [] ->
+                {Date, {Hour1, Min1, Sec1}} = LocalTime,
+                LocalTime2 = {Date, {Hour1 + 1, Min1, Sec1}},
+                case calendar:local_time_to_universal_time_dst(LocalTime2) of
+                    [Gmt]   -> Gmt;
+                    [_,Gmt] -> Gmt
+                end;
             [Gmt]   -> Gmt;
             [_,Gmt] -> Gmt
         end,
