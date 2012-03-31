@@ -1,9 +1,12 @@
-Version 2.3.1 released XXXX-XX-XX
+Version 2.3.1 released 2012-03-31
 
 * Fix edoc warnings (#63)
 * Fix mochiweb_html handling of invalid charref sequences (unescaped &) (#69).
 * Add a manual garbage collection between requests to avoid worst case behavior
   on keep-alive sockets.
+* Fix dst cookie bug (#73)
+* Removed unnecessary template_dir option, see
+  https://github.com/basho/rebar/issues/203
 
 Version 2.3.0 released 2011-10-14
 
@@ -33,4 +36,3 @@ Version 2.1.0 released 2011-08-29
 * Added new `mochijson2:decode/2` with `{format, struct | proplist | eep18}`
   options for easy decoding to various proplist formats. Also added encoding
   support for eep18 style objects.
-
