@@ -312,7 +312,8 @@ tokenize(B, S=#decoder{offset=O}) ->
             {Tag, S1} = tokenize_literal(B, ?ADV_COL(S, 2)),
             {S2, _} = find_gt(B, S1),
             {{end_tag, Tag}, S2};
-        <<_:O/binary, "<", C, _/binary>> when ?IS_WHITESPACE(C) ->
+        <<_:O/binary, "<", C, _/binary>> 
+                when ?IS_WHITESPACE(C); not ?IS_LITERAL_SAFE(C) ->
             %% This isn't really strict HTML
             {{data, Data, _Whitespace}, S1} = tokenize_data(B, ?INC_COL(S)),
             {{data, <<$<, Data/binary>>, false}, S1};
@@ -501,8 +502,6 @@ tokenize_quoted_attr_value(B, S=#decoder{offset=O}, Acc, Q) ->
             tokenize_quoted_attr_value(B, S1, [Data|Acc], Q);
         <<_:O/binary, Q, _/binary>> ->
             { iolist_to_binary(lists:reverse(Acc)), ?INC_COL(S) };
-        <<_:O/binary, $\n, _/binary>> ->
-            { iolist_to_binary(lists:reverse(Acc)), ?INC_LINE(S) };
         <<_:O/binary, C, _/binary>> ->
             tokenize_quoted_attr_value(B, ?INC_COL(S), [C|Acc], Q)
     end.
@@ -1233,6 +1232,14 @@ parse_quoted_attr_test() ->
             { <<"img">>, [ { <<"src">>, <<"/images/icon>.png">> } ], [] }
         ]},
         mochiweb_html:parse(D2)),
+
+    %% Quoted attributes can contain whitespace and newlines
+    D3 = <<"<html><a href=\"#\" onclick=\"javascript: test(1,\ntrue);\"></html>">>,
+    ?assertEqual(
+        {<<"html">>,[],[
+            { <<"a">>, [ { <<"href">>, <<"#">> }, {<<"onclick">>, <<"javascript: test(1,\ntrue);">>} ], [] }
+        ]},
+        mochiweb_html:parse(D3)),     
     ok.
 
 parse_missing_attr_name_test() ->
@@ -1279,5 +1286,18 @@ parse_amp_test_() ->
         {<<"html">>,[],
          [{<<"body">>,[],[<<"&">>]}]},
         mochiweb_html:parse("<html><body>&</body></html>"))].
+
+parse_unescaped_lt_test() ->
+    D1 = <<"<div> < < <a href=\"/\">Back</a></div>">>,
+    ?assertEqual(
+        {<<"div">>, [], [<<" < < ">>, {<<"a">>, [{<<"href">>, <<"/">>}], 
+                                       [<<"Back">>]}]},
+        mochiweb_html:parse(D1)),
+
+    D2 = <<"<div> << <a href=\"/\">Back</a></div>">>,
+    ?assertEqual(
+        {<<"div">>, [], [<<" << ">>, {<<"a">>, [{<<"href">>, <<"/">>}], 
+                                      [<<"Back">>]}]},
+    mochiweb_html:parse(D2)).
 
 -endif.
