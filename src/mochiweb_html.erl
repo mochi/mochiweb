@@ -502,8 +502,6 @@ tokenize_quoted_attr_value(B, S=#decoder{offset=O}, Acc, Q) ->
             tokenize_quoted_attr_value(B, S1, [Data|Acc], Q);
         <<_:O/binary, Q, _/binary>> ->
             { iolist_to_binary(lists:reverse(Acc)), ?INC_COL(S) };
-        <<_:O/binary, $\n, _/binary>> ->
-            { iolist_to_binary(lists:reverse(Acc)), ?INC_LINE(S) };
         <<_:O/binary, C, _/binary>> ->
             tokenize_quoted_attr_value(B, ?INC_COL(S), [C|Acc], Q)
     end.
@@ -1234,6 +1232,14 @@ parse_quoted_attr_test() ->
             { <<"img">>, [ { <<"src">>, <<"/images/icon>.png">> } ], [] }
         ]},
         mochiweb_html:parse(D2)),
+
+    %% Quoted attributes can contain whitespace and newlines
+    D3 = <<"<html><a href=\"#\" onclick=\"javascript: test(1,\ntrue);\"></html>">>,
+    ?assertEqual(
+        {<<"html">>,[],[
+            { <<"a">>, [ { <<"href">>, <<"#">> }, {<<"onclick">>, <<"javascript: test(1,\ntrue);">>} ], [] }
+        ]},
+        mochiweb_html:parse(D3)),     
     ok.
 
 parse_missing_attr_name_test() ->
