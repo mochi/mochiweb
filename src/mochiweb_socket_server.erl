@@ -184,9 +184,14 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog, nodelay=No
 new_acceptor_pool(Listen,
                   State=#mochiweb_socket_server{acceptor_pool=Pool,
                                                 acceptor_pool_size=Size,
-                                                loop=Loop}) ->
+                                                loop=Loop,
+                                                name=Name}) ->
+    Server = case Name of
+               undefined -> self();
+               {local,N} -> N
+           end,
     F = fun (_, S) ->
-                Pid = mochiweb_acceptor:start_link(self(), Listen, Loop),
+                Pid = mochiweb_acceptor:start_link(Server, Listen, Loop),
                 sets:add_element(Pid, S)
         end,
     Pool1 = lists:foldl(F, Pool, lists:seq(1, Size)),
@@ -275,10 +280,15 @@ recycle_acceptor(Pid, State=#mochiweb_socket_server{
                         acceptor_pool=Pool,
                         listen=Listen,
                         loop=Loop,
-                        active_sockets=ActiveSockets}) ->
+                        active_sockets=ActiveSockets,
+                        name=Name}) ->
+    Server = case Name of
+                 undefined -> self();
+                 {local, N} -> N
+             end,
     case sets:is_element(Pid, Pool) of
         true ->
-            Acceptor = mochiweb_acceptor:start_link(self(), Listen, Loop),
+            Acceptor = mochiweb_acceptor:start_link(Server, Listen, Loop),
             Pool1 = sets:add_element(Acceptor, sets:del_element(Pid, Pool)),
             State#mochiweb_socket_server{acceptor_pool=Pool1};
         false ->
