@@ -95,7 +95,12 @@ to_tokens({Tag0, Acc}) ->
     to_tokens({Tag0, [], Acc});
 to_tokens({Tag0, Attrs, Acc}) ->
     Tag = to_tag(Tag0),
-    to_tokens([{Tag, Acc}], [{start_tag, Tag, Attrs, is_singleton(Tag)}]).
+    case is_singleton(Tag) of 
+        true ->
+            to_tokens([], [{start_tag, Tag, Attrs, true}]);
+        false ->
+            to_tokens([{Tag, Acc}], [{start_tag, Tag, Attrs, false}])
+    end.
 
 %% @spec to_html([html_token()] | html_node()) -> iolist()
 %% @doc Convert a list of html_token() to a HTML document.
@@ -1268,6 +1273,30 @@ parse_funny_singletons_test() ->
 		] },
 		mochiweb_html:parse(D0)),
 	ok.
+
+to_html_singleton_test() ->
+    D0 = <<"<link />">>,
+    T0 = {<<"link">>,[],[]},
+    ?assertEqual(D0, iolist_to_binary(to_html(T0))),
+
+    D1 = <<"<head><link /></head>">>,
+    T1 = {<<"head">>,[],[{<<"link">>,[],[]}]},
+    ?assertEqual(D1, iolist_to_binary(to_html(T1))),
+
+    D2 = <<"<head><link /><link /></head>">>,
+    T2 = {<<"head">>,[],[{<<"link">>,[],[]}, {<<"link">>,[],[]}]},
+    ?assertEqual(D2, iolist_to_binary(to_html(T2))),
+
+    %% Make sure singletons are converted to singletons.
+    D3 = <<"<head><link /></head>">>,
+    T3 = {<<"head">>,[],[{<<"link">>,[],[<<"funny">>]}]},
+    ?assertEqual(D3, iolist_to_binary(to_html(T3))),
+
+    D4 = <<"<link />">>,
+    T4 = {<<"link">>,[],[<<"funny">>]},
+    ?assertEqual(D4, iolist_to_binary(to_html(T4))),
+
+    ok.
 
 parse_amp_test_() ->
     [?_assertEqual(
