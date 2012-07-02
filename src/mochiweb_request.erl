@@ -319,12 +319,10 @@ respond({Code, ResponseHeaders, chunked}) ->
                  end,
     start_response({Code, HResponse1});
 respond({Code, ResponseHeaders, Body}) ->
-    Response = start_response_length({Code, ResponseHeaders, iolist_size(Body)}),
-    case Method of
-        'HEAD' ->
-            ok;
-        _ ->
-            send(Body)
+    BodySize = iolist_size(Body),
+    Response = start_response_length({Code, ResponseHeaders, BodySize}),
+    if Method == 'HEAD'; BodySize == 0 -> ok;
+    true -> send(Body)
     end,
     Response.
 
