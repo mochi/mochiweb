@@ -95,8 +95,8 @@ get(peer) ->
             end;
         {ok, {Addr, _Port}} ->
             inet_parse:ntoa(Addr);
-        {error, enotconn} ->
-            exit(normal)
+        Error ->
+            exit(Error)
     end;
 get(path) ->
     case erlang:get(?SAVE_PATH) of
@@ -140,8 +140,8 @@ send(Data) ->
     case mochiweb_socket:send(Socket, Data) of
         ok ->
             ok;
-        _ ->
-            exit(normal)
+        Error ->
+            exit(Error)
     end.
 
 %% @spec recv(integer()) -> binary()
@@ -158,8 +158,8 @@ recv(Length, Timeout) ->
         {ok, Data} ->
             put(?SAVE_RECV, true),
             Data;
-        _ ->
-            exit(normal)
+        Error ->
+            exit(Error)
     end.
 
 %% @spec body_length() -> undefined | chunked | unknown_transfer_encoding | integer()
@@ -319,12 +319,10 @@ respond({Code, ResponseHeaders, chunked}) ->
                  end,
     start_response({Code, HResponse1});
 respond({Code, ResponseHeaders, Body}) ->
-    Response = start_response_length({Code, ResponseHeaders, iolist_size(Body)}),
-    case Method of
-        'HEAD' ->
-            ok;
-        _ ->
-            send(Body)
+    BodySize = iolist_size(Body),
+    Response = start_response_length({Code, ResponseHeaders, BodySize}),
+    if Method == 'HEAD'; BodySize == 0 -> ok;
+    true -> send(Body)
     end,
     Response.
 
@@ -510,8 +508,8 @@ read_chunk_length() ->
                        end,
             {Hex, _Rest} = lists:splitwith(Splitter, binary_to_list(Header)),
             mochihex:to_int(Hex);
-        _ ->
-            exit(normal)
+        Error ->
+            exit(Error)
     end.
 
 %% @spec read_chunk(integer()) -> Chunk::binary() | [Footer::binary()]
@@ -525,8 +523,8 @@ read_chunk(0) ->
                         Acc;
                     {ok, Footer} ->
                         F1(F1, [Footer | Acc]);
-                    _ ->
-                        exit(normal)
+                    Error ->
+                        exit(Error)
                 end
         end,
     Footers = F(F, []),
@@ -537,8 +535,8 @@ read_chunk(Length) ->
     case mochiweb_socket:recv(Socket, 2 + Length, ?IDLE_TIMEOUT) of
         {ok, <<Chunk:Length/binary, "\r\n">>} ->
             Chunk;
-        _ ->
-            exit(normal)
+        Error ->
+            exit(Error)
     end.
 
 read_sub_chunks(Length, MaxChunkSize, Fun, FunState) when Length > MaxChunkSize ->
