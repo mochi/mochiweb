@@ -1,3 +1,7 @@
+Version 2.3.2 released 2012-07-27
+
+* Case insensitive match for "Connection: close" (#81)
+
 Version 2.3.1 released 2012-03-31
 
 * Fix edoc warnings (#63)

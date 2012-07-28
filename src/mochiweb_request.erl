@@ -383,7 +383,7 @@ should_close() ->
     DidNotRecv = erlang:get(?SAVE_RECV) =:= undefined,
     ForceClose orelse Version < {1, 0}
         %% Connection: close
-        orelse get_header_value("connection") =:= "close"
+        orelse is_close(get_header_value("connection"))
         %% HTTP 1.0 requires Connection: Keep-Alive
         orelse (Version =:= {1, 0}
                 andalso get_header_value("connection") =/= "Keep-Alive")
@@ -393,6 +393,13 @@ should_close() ->
                 andalso list_to_integer(get_header_value("content-length")) > 0)
         orelse (DidNotRecv
                 andalso get_header_value("transfer-encoding") =:= "chunked").
+
+is_close("close") ->
+    true;
+is_close(S=[_C, _L, _O, _S, _E]) ->
+    string:to_lower(S) =:= "close";
+is_close(_) ->
+    false.
 
 %% @spec cleanup() -> ok
 %% @doc Clean up any junk in the process dictionary, required before continuing
