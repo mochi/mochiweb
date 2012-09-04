@@ -74,7 +74,8 @@
 %%                     json_object() | json_eep18_object() | json_iolist()
 
 -record(encoder, {handler=null,
-                  utf8=false}).
+                  utf8=false,
+                  safe_string_escaping=true}).
 
 -record(decoder, {object_hook=null,
                   offset=0,
@@ -121,7 +122,10 @@ parse_encoder_options([], State) ->
 parse_encoder_options([{handler, Handler} | Rest], State) ->
     parse_encoder_options(Rest, State#encoder{handler=Handler});
 parse_encoder_options([{utf8, Switch} | Rest], State) ->
-    parse_encoder_options(Rest, State#encoder{utf8=Switch}).
+    parse_encoder_options(Rest, State#encoder{utf8=Switch});
+parse_encoder_options([{safe_string_escaping, Bool} | Rest], State) ->
+    parse_encoder_options(Rest, State#encoder{safe_string_escaping=Bool}).
+
 
 parse_decoder_options([], State) ->
     State;
@@ -186,27 +190,42 @@ json_encode_proplist(Props, State) ->
 
 json_encode_string(A, State) when is_atom(A) ->
     L = atom_to_list(A),
-    case json_string_is_safe(L) of
+    case State#encoder.safe_string_escaping of
         true ->
-            [?Q, L, ?Q];
+            case json_string_is_safe(L) of
+                true ->
+                    [?Q, L, ?Q];
+                false ->
+                    json_encode_string_unicode(xmerl_ucs:from_utf8(L), State, [?Q])
+            end;
         false ->
-            json_encode_string_unicode(xmerl_ucs:from_utf8(L), State, [?Q])
+            [?Q, L, ?Q]
     end;
 json_encode_string(B, State) when is_binary(B) ->
-    case json_bin_is_safe(B) of
+    case State#encoder.safe_string_escaping of
         true ->
-            [?Q, B, ?Q];
+            case json_bin_is_safe(B) of
+                true ->
+                    [?Q, B, ?Q];
+                false ->
+                    json_encode_string_unicode(xmerl_ucs:from_utf8(B), State, [?Q])
+            end;
         false ->
-            json_encode_string_unicode(xmerl_ucs:from_utf8(B), State, [?Q])
+            [?Q, B, ?Q]
     end;
 json_encode_string(I, _State) when is_integer(I) ->
     [?Q, integer_to_list(I), ?Q];
 json_encode_string(L, State) when is_list(L) ->
-    case json_string_is_safe(L) of
+    case State#encoder.safe_string_escaping of
         true ->
-            [?Q, L, ?Q];
+            case json_string_is_safe(L) of
+                true ->
+                    [?Q, L, ?Q];
+                false ->
+                    json_encode_string_unicode(L, State, [?Q])
+            end;
         false ->
-            json_encode_string_unicode(L, State, [?Q])
+            [?Q, L, ?Q]
     end.
 
 json_string_is_safe([]) ->
@@ -788,7 +807,7 @@ key_encode_test() ->
     ?assertEqual(
        <<"{\"foo\":1}">>,
        iolist_to_binary(encode({struct, [{"foo", 1}]}))),
-	?assertEqual(
+        ?assertEqual(
        <<"{\"foo\":1}">>,
        iolist_to_binary(encode([{foo, 1}]))),
     ?assertEqual(
