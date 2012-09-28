@@ -365,7 +365,8 @@ ok({ContentType, ResponseHeaders, Body}) ->
                                                         ContentType,
                                                         HResponse),
                     %% could be 416, for now we'll just return 200
-                    respond({200, HResponse1, Body});
+                    %% with an empty body.
+                    respond({200, HResponse1, <<"">>});
                 PartList ->
                     {RangeHeaders, RangeBody} =
                         mochiweb_multipart:parts_to_body(PartList, ContentType, Size),
