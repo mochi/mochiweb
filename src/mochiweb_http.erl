@@ -171,6 +171,8 @@ range_skip_length(Spec, Size) ->
             invalid_range;
         {Start, End} when 0 =< Start, Start =< End, End < Size ->
             {Start, End - Start + 1};
+        {Start, End} when 0 =< Start, Start =< End, End >= Size ->
+            {Start, Size - Start};
         {_OutOfRange, _End} ->
             invalid_range
     end.
@@ -225,18 +227,22 @@ range_skip_length_test() ->
     BodySizeLess1 = BodySize - 1,
     ?assertEqual({BodySizeLess1, 1},
                  range_skip_length({BodySize - 1, none}, BodySize)),
+    ?assertEqual({BodySizeLess1, 1},
+                 range_skip_length({BodySize - 1, BodySize+5}, BodySize)),
+    ?assertEqual({BodySizeLess1, 1},
+                 range_skip_length({BodySize - 1, BodySize}, BodySize)),
 
     %% out of range, return whole thing
     ?assertEqual({0, BodySize},
                  range_skip_length({none, BodySize + 1}, BodySize)),
     ?assertEqual({0, BodySize},
                  range_skip_length({none, -1}, BodySize)),
+    ?assertEqual({0, BodySize},
+                 range_skip_length({0, BodySize + 1}, BodySize)),
 
     %% invalid ranges
     ?assertEqual(invalid_range,
                  range_skip_length({-1, 30}, BodySize)),
-    ?assertEqual(invalid_range,
-                 range_skip_length({0, BodySize + 1}, BodySize)),
     ?assertEqual(invalid_range,
                  range_skip_length({-1, BodySize + 1}, BodySize)),
     ?assertEqual(invalid_range,
