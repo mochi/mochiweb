@@ -6,7 +6,7 @@
 -module(mochiweb_headers).
 -author('bob@mochimedia.com').
 -export([empty/0, from_list/1, insert/3, enter/3, get_value/2, lookup/2]).
--export([delete_any/2, get_primary_value/2]).
+-export([delete_any/2, get_primary_value/2, get_combined_value/2]).
 -export([default/3, enter_from_list/2, default_from_list/2]).
 -export([to_list/1, make/1]).
 -export([from_binary/1]).
@@ -110,6 +110,32 @@ get_primary_value(K, T) ->
             undefined;
         V ->
             lists:takewhile(fun (C) -> C =/= $; end, V)
+    end.
+
+%% @spec get_combined_value(key(), headers()) -> string() | undefined
+%% @doc Return the value from the given header using a case insensitive search.
+%%      If the value of the header is a comma-separated list where holds values
+%%      are all identical, the identical value will be returned.
+%%      undefined will be returned for keys that are not present or the
+%%      values in the list are not the same.
+%%
+%%      Section 4.2 of the RFC 2616 (HTTP 1.1) describes multiple message-header
+%%      fields with the same field-name may be present in a message if and only
+%%      if the entire field-value for that header field is defined as a
+%%      comma-separated list [i.e., #(values)].
+get_combined_value(K, T) ->
+    case get_value(K, T) of
+        undefined ->
+            undefined;
+        V ->
+            UniqueValuesList = sets:to_list(sets:from_list(string:tokens(V, " ,"))),
+            case length(UniqueValuesList) =:= 1 of
+                true ->
+                    [Val|_Ignore] = UniqueValuesList,
+                    Val;
+                false ->
+                    undefined
+            end
     end.
 
 %% @spec lookup(key(), headers()) -> {value, {key(), string()}} | none
@@ -235,6 +261,37 @@ get_primary_value_test() ->
     ?assertEqual(
        "wibble",
        get_primary_value(<<"baz">>, H)),
+    ok.
+
+get_combined_value_test() ->
+    H = make([{hdr, foo}, {baz, <<"wibble,taco">>}, {content_length, "123, 123"},
+              {test, " 123,  123,     123  , 123,123 "},
+              {test2, "456,  123,     123  , 123"},
+              {test3, "123"}, {test4, " 123, "}]),
+    ?assertEqual(
+       "foo",
+       get_combined_value(hdr, H)),
+    ?assertEqual(
+       undefined,
+       get_combined_value(bar, H)),
+    ?assertEqual(
+       undefined,
+       get_combined_value(<<"baz">>, H)),
+    ?assertEqual(
+       "123",
+       get_combined_value(<<"content_length">>, H)),
+    ?assertEqual(
+       "123",
+       get_combined_value(<<"test">>, H)),
+    ?assertEqual(
+       undefined,
+       get_combined_value(<<"test2">>, H)),
+    ?assertEqual(
+       "123",
+       get_combined_value(<<"test3">>, H)),
+    ?assertEqual(
+       "123",
+       get_combined_value(<<"test4">>, H)),
     ok.
 
 set_cookie_test() ->

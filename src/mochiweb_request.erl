@@ -11,7 +11,7 @@
 
 -define(QUIP, "Any of you quaids got a smint?").
 
--export([get_header_value/1, get_primary_header_value/1, get/1, dump/0]).
+-export([get_header_value/1, get_primary_header_value/1, get_combined_header_value/1, get/1, dump/0]).
 -export([send/1, recv/1, recv/2, recv_body/0, recv_body/1, stream_body/3]).
 -export([start_response/1, start_response_length/1, start_raw_response/1]).
 -export([respond/1, ok/1]).
@@ -51,6 +51,9 @@ get_header_value(K) ->
 
 get_primary_header_value(K) ->
     mochiweb_headers:get_primary_value(K, Headers).
+
+get_combined_header_value(K) ->
+    mochiweb_headers:get_combined_value(K, Headers).
 
 %% @type field() = socket | scheme | method | raw_path | version | headers | peer | path | body_length | range
 
@@ -167,7 +170,7 @@ recv(Length, Timeout) ->
 body_length() ->
     case get_header_value("transfer-encoding") of
         undefined ->
-            case get_header_value("content-length") of
+            case get_combined_header_value("content-length") of
                 undefined ->
                     undefined;
                 Length ->
@@ -389,8 +392,8 @@ should_close() ->
                 andalso get_header_value("connection") =/= "Keep-Alive")
         %% unread data left on the socket, can't safely continue
         orelse (DidNotRecv
-                andalso get_header_value("content-length") =/= undefined
-                andalso list_to_integer(get_header_value("content-length")) > 0)
+                andalso get_combined_header_value("content-length") =/= undefined
+                andalso list_to_integer(get_combined_header_value("content-length")) > 0)
         orelse (DidNotRecv
                 andalso get_header_value("transfer-encoding") =:= "chunked").
 
