@@ -128,12 +128,10 @@ get_combined_value(K, T) ->
         undefined ->
             undefined;
         V ->
-            UniqueValuesList = sets:to_list(sets:from_list(string:tokens(V, " ,"))),
-            case length(UniqueValuesList) =:= 1 of
-                true ->
-                    [Val|_Ignore] = UniqueValuesList,
+            case sets:to_list(sets:from_list(string:tokens(V, " ,"))) of
+                [Val] ->
                     Val;
-                false ->
+                _ ->
                     undefined
             end
     end.
