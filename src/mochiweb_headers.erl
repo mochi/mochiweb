@@ -119,6 +119,10 @@ get_primary_value(K, T) ->
 %%      undefined will be returned for keys that are not present or the
 %%      values in the list are not the same.
 %%
+%%      NOTE: The process isn't designed for a general purpose. If you need
+%%            to access all values in the combined header, please refer to
+%%            '''tokenize_header_value/1'''.
+%%
 %%      Section 4.2 of the RFC 2616 (HTTP 1.1) describes multiple message-header
 %%      fields with the same field-name may be present in a message if and only
 %%      if the entire field-value for that header field is defined as a
@@ -128,7 +132,7 @@ get_combined_value(K, T) ->
         undefined ->
             undefined;
         V ->
-            case sets:to_list(sets:from_list(string:tokens(V, " ,"))) of
+            case sets:to_list(sets:from_list(tokenize_header_value(V))) of
                 [Val] ->
                     Val;
                 _ ->
@@ -187,6 +191,37 @@ delete_any(K, T) ->
     gb_trees:delete_any(K1, T).
 
 %% Internal API
+
+-define(QUOTED_STRING_RE, "^\"([^\"\\\\]*?(\\\\.[^\"\\\\]*)*)\"").
+-define(VALUE_RE, "^([^\s,\"]+)").
+
+tokenize_header_value(undefined, _) ->
+    undefined;
+tokenize_header_value([], Tokens) ->
+    Tokens;
+tokenize_header_value([H|Rest], Tokens) when H =:= $\s orelse H =:= $, ->
+    tokenize_header_value(Rest, Tokens);
+tokenize_header_value(V, Tokens) ->
+    QsMatches = re:run(V, ?QUOTED_STRING_RE),
+    case QsMatches of
+        {match, [{WholeStart, WholeLength}, {QSStart, QSLength} | _]} ->
+            Rest = string:substr(V, WholeStart + WholeLength + 1),
+            Token = string:substr(V, QSStart + 1, QSLength),
+            tokenize_header_value(Rest, Tokens ++ [Token]);
+        _NoMatchedQs ->
+            ValueMatches = re:run(V, ?VALUE_RE),
+            case ValueMatches of
+                {match, [{WholeStart, WholeLength}, {VStart, VLength}]} ->
+                    Rest = string:substr(V, WholeStart + WholeLength + 1),
+                    Token = string:substr(V, VStart + 1, VLength),
+                    tokenize_header_value(Rest, Tokens ++ [Token]);
+                _ ->
+                    undefined
+            end
+    end.
+
+tokenize_header_value(V) ->
+    tokenize_header_value(V, []).
 
 expand({array, L}) ->
     mochiweb_util:join(lists:reverse(L), ", ");
@@ -350,5 +385,24 @@ headers_test() ->
     [] = ?MODULE:to_list(?MODULE:from_binary([<<"\r\n">>])),
     [] = ?MODULE:to_list(?MODULE:from_binary([<<"\r\n\r\n">>])),
     ok.
+
+tokenize_header_value_test() ->
+    ?assertEqual(["a quote in a \\\"quote\\\"."],
+                 tokenize_header_value("\"a quote in a \\\"quote\\\".\"")),
+    ?assertEqual(["abc"], tokenize_header_value("abc")),
+    ?assertEqual(["abc", "def"], tokenize_header_value("abc def")),
+    ?assertEqual(["abc", "def"], tokenize_header_value("abc , def")),
+    ?assertEqual(["abc", "def"], tokenize_header_value(",abc ,, def,,")),
+    ?assertEqual(["abc def"], tokenize_header_value("\"abc def\"      ")),
+    ?assertEqual(["abc, def"], tokenize_header_value("\"abc, def\"")),
+    ?assertEqual(["\\a\\$"], tokenize_header_value("\"\\a\\$\"")),
+    ?assertEqual(["abc def", "foo, bar", "12345", ""],
+                 tokenize_header_value("\"abc def\" \"foo, bar\" , 12345, \"\"")),
+    ?assertEqual(undefined,
+                 tokenize_header_value(undefined)),
+    ?assertEqual(undefined,
+                 tokenize_header_value("umatched quote\"")),
+    ?assertEqual(undefined,
+                 tokenize_header_value("\"unmatched quote")).
 
 -endif.
