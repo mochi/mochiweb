@@ -6,7 +6,7 @@
 -module(mochiweb_headers).
 -author('bob@mochimedia.com').
 -export([empty/0, from_list/1, insert/3, enter/3, get_value/2, lookup/2]).
--export([delete_any/2, get_primary_value/2]).
+-export([delete_any/2, get_primary_value/2, get_combined_value/2]).
 -export([default/3, enter_from_list/2, default_from_list/2]).
 -export([to_list/1, make/1]).
 -export([from_binary/1]).
@@ -112,6 +112,34 @@ get_primary_value(K, T) ->
             lists:takewhile(fun (C) -> C =/= $; end, V)
     end.
 
+%% @spec get_combined_value(key(), headers()) -> string() | undefined
+%% @doc Return the value from the given header using a case insensitive search.
+%%      If the value of the header is a comma-separated list where holds values
+%%      are all identical, the identical value will be returned.
+%%      undefined will be returned for keys that are not present or the
+%%      values in the list are not the same.
+%%
+%%      NOTE: The process isn't designed for a general purpose. If you need
+%%            to access all values in the combined header, please refer to
+%%            '''tokenize_header_value/1'''.
+%%
+%%      Section 4.2 of the RFC 2616 (HTTP 1.1) describes multiple message-header
+%%      fields with the same field-name may be present in a message if and only
+%%      if the entire field-value for that header field is defined as a
+%%      comma-separated list [i.e., #(values)].
+get_combined_value(K, T) ->
+    case get_value(K, T) of
+        undefined ->
+            undefined;
+        V ->
+            case sets:to_list(sets:from_list(tokenize_header_value(V))) of
+                [Val] ->
+                    Val;
+                _ ->
+                    undefined
+            end
+    end.
+
 %% @spec lookup(key(), headers()) -> {value, {key(), string()}} | none
 %% @doc Return the case preserved key and value for the given header using
 %%      a case insensitive search. none will be returned for keys that are
@@ -163,6 +191,37 @@ delete_any(K, T) ->
     gb_trees:delete_any(K1, T).
 
 %% Internal API
+
+-define(QUOTED_STRING_RE, "^\"([^\"\\\\]*?(\\\\.[^\"\\\\]*)*)\"").
+-define(VALUE_RE, "^([^\s,\"]+)").
+
+tokenize_header_value(undefined, _) ->
+    undefined;
+tokenize_header_value([], Tokens) ->
+    Tokens;
+tokenize_header_value([H|Rest], Tokens) when H =:= $\s orelse H =:= $, ->
+    tokenize_header_value(Rest, Tokens);
+tokenize_header_value(V, Tokens) ->
+    QsMatches = re:run(V, ?QUOTED_STRING_RE),
+    case QsMatches of
+        {match, [{WholeStart, WholeLength}, {QSStart, QSLength} | _]} ->
+            Rest = string:substr(V, WholeStart + WholeLength + 1),
+            Token = string:substr(V, QSStart + 1, QSLength),
+            tokenize_header_value(Rest, Tokens ++ [Token]);
+        _NoMatchedQs ->
+            ValueMatches = re:run(V, ?VALUE_RE),
+            case ValueMatches of
+                {match, [{WholeStart, WholeLength}, {VStart, VLength}]} ->
+                    Rest = string:substr(V, WholeStart + WholeLength + 1),
+                    Token = string:substr(V, VStart + 1, VLength),
+                    tokenize_header_value(Rest, Tokens ++ [Token]);
+                _ ->
+                    undefined
+            end
+    end.
+
+tokenize_header_value(V) ->
+    tokenize_header_value(V, []).
 
 expand({array, L}) ->
     mochiweb_util:join(lists:reverse(L), ", ");
@@ -237,6 +296,37 @@ get_primary_value_test() ->
        get_primary_value(<<"baz">>, H)),
     ok.
 
+get_combined_value_test() ->
+    H = make([{hdr, foo}, {baz, <<"wibble,taco">>}, {content_length, "123, 123"},
+              {test, " 123,  123,     123  , 123,123 "},
+              {test2, "456,  123,     123  , 123"},
+              {test3, "123"}, {test4, " 123, "}]),
+    ?assertEqual(
+       "foo",
+       get_combined_value(hdr, H)),
+    ?assertEqual(
+       undefined,
+       get_combined_value(bar, H)),
+    ?assertEqual(
+       undefined,
+       get_combined_value(<<"baz">>, H)),
+    ?assertEqual(
+       "123",
+       get_combined_value(<<"content_length">>, H)),
+    ?assertEqual(
+       "123",
+       get_combined_value(<<"test">>, H)),
+    ?assertEqual(
+       undefined,
+       get_combined_value(<<"test2">>, H)),
+    ?assertEqual(
+       "123",
+       get_combined_value(<<"test3">>, H)),
+    ?assertEqual(
+       "123",
+       get_combined_value(<<"test4">>, H)),
+    ok.
+
 set_cookie_test() ->
     H = make([{"set-cookie", foo}, {"set-cookie", bar}, {"set-cookie", baz}]),
     ?assertEqual(
@@ -295,5 +385,24 @@ headers_test() ->
     [] = ?MODULE:to_list(?MODULE:from_binary([<<"\r\n">>])),
     [] = ?MODULE:to_list(?MODULE:from_binary([<<"\r\n\r\n">>])),
     ok.
+
+tokenize_header_value_test() ->
+    ?assertEqual(["a quote in a \\\"quote\\\"."],
+                 tokenize_header_value("\"a quote in a \\\"quote\\\".\"")),
+    ?assertEqual(["abc"], tokenize_header_value("abc")),
+    ?assertEqual(["abc", "def"], tokenize_header_value("abc def")),
+    ?assertEqual(["abc", "def"], tokenize_header_value("abc , def")),
+    ?assertEqual(["abc", "def"], tokenize_header_value(",abc ,, def,,")),
+    ?assertEqual(["abc def"], tokenize_header_value("\"abc def\"      ")),
+    ?assertEqual(["abc, def"], tokenize_header_value("\"abc, def\"")),
+    ?assertEqual(["\\a\\$"], tokenize_header_value("\"\\a\\$\"")),
+    ?assertEqual(["abc def", "foo, bar", "12345", ""],
+                 tokenize_header_value("\"abc def\" \"foo, bar\" , 12345, \"\"")),
+    ?assertEqual(undefined,
+                 tokenize_header_value(undefined)),
+    ?assertEqual(undefined,
+                 tokenize_header_value("umatched quote\"")),
+    ?assertEqual(undefined,
+                 tokenize_header_value("\"unmatched quote")).
 
 -endif.
