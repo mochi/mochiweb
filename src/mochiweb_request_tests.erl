@@ -149,4 +149,34 @@ accepted_content_types_test() ->
     ?assertEqual(["application/json", "text/html"],
         Req9:accepted_content_types(["text/html", "application/json"])).
 
+should_close_test() ->
+    F = fun (V, H) ->
+                (mochiweb_request:new(
+                   nil, 'GET', "/", V,
+                   mochiweb_headers:make(H)
+                  )):should_close()
+        end,
+    ?assertEqual(
+       true,
+       F({1, 1}, [{"Connection", "close"}])),
+    ?assertEqual(
+       true,
+       F({1, 0}, [{"Connection", "close"}])),
+    ?assertEqual(
+       true,
+       F({1, 1}, [{"Connection", "ClOSe"}])),
+    ?assertEqual(
+       false,
+       F({1, 1}, [{"Connection", "closer"}])),
+    ?assertEqual(
+       false,
+       F({1, 1}, [])),
+    ?assertEqual(
+       true,
+       F({1, 0}, [])),
+    ?assertEqual(
+       false,
+       F({1, 0}, [{"Connection", "Keep-Alive"}])),
+    ok.
+
 -endif.

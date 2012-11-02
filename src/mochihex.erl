@@ -8,9 +8,6 @@
 
 -export([to_hex/1, to_bin/1, to_int/1, dehex/1, hexdigit/1]).
 
-%% @type iolist() = [char() | binary() | iolist()]
-%% @type iodata() = iolist() | binary()
-
 %% @spec to_hex(integer | iolist()) -> string()
 %% @doc Convert an iolist to a hexadecimal string.
 to_hex(0) ->
