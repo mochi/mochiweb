@@ -128,7 +128,7 @@ default_file_handler_1(Filename, ContentType, Acc) ->
 
 parse_multipart_request(Req, Callback) ->
     %% TODO: Support chunked?
-    Length = list_to_integer(Req:get_header_value("content-length")),
+    Length = list_to_integer(Req:get_combined_header_value("content-length")),
     Boundary = iolist_to_binary(
                  get_boundary(Req:get_header_value("content-type"))),
     Prefix = <<"\r\n--", Boundary/binary>>,
