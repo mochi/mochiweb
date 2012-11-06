@@ -11,6 +11,8 @@
 -export([to_list/1, make/1]).
 -export([from_binary/1]).
 
+-compile(export_all).
+
 %% @type headers().
 %% @type key() = atom() | binary() | string().
 %% @type value() = atom() | binary() | string() | integer().
@@ -192,36 +194,48 @@ delete_any(K, T) ->
 
 %% Internal API
 
--define(QUOTED_STRING_RE, "^\"([^\"\\\\]*?(\\\\.[^\"\\\\]*)*)\"").
--define(VALUE_RE, "^([^\s,\"]+)").
-
-tokenize_header_value(undefined, _) ->
+tokenize_header_value(undefined) ->
     undefined;
-tokenize_header_value([], Tokens) ->
-    Tokens;
-tokenize_header_value([H|Rest], Tokens) when H =:= $\s orelse H =:= $, ->
-    tokenize_header_value(Rest, Tokens);
-tokenize_header_value(V, Tokens) ->
-    QsMatches = re:run(V, ?QUOTED_STRING_RE),
-    case QsMatches of
-        {match, [{WholeStart, WholeLength}, {QSStart, QSLength} | _]} ->
-            Rest = string:substr(V, WholeStart + WholeLength + 1),
-            Token = string:substr(V, QSStart + 1, QSLength),
-            tokenize_header_value(Rest, Tokens ++ [Token]);
-        _NoMatchedQs ->
-            ValueMatches = re:run(V, ?VALUE_RE),
-            case ValueMatches of
-                {match, [{WholeStart, WholeLength}, {VStart, VLength}]} ->
-                    Rest = string:substr(V, WholeStart + WholeLength + 1),
-                    Token = string:substr(V, VStart + 1, VLength),
-                    tokenize_header_value(Rest, Tokens ++ [Token]);
-                _ ->
-                    undefined
-            end
-    end.
-
 tokenize_header_value(V) ->
-    tokenize_header_value(V, []).
+    reversed_tokens(trim_and_reverse(V, false), [], []).
+
+trim_and_reverse([S | Rest], Reversed) when S=:=$ ; S=:=$\n; S=:=$\t ->
+    trim_and_reverse(Rest, Reversed);
+trim_and_reverse(V, false) ->
+    trim_and_reverse(lists:reverse(V), true);
+trim_and_reverse(V, true) ->
+    V.
+
+reversed_tokens([], [], Acc) ->
+    Acc;
+reversed_tokens([], Token, Acc) ->
+    [Token | Acc];
+reversed_tokens("\"" ++ Rest, [], Acc) ->
+    case extract_quoted_string(Rest, []) of
+        {String, NewRest} ->
+            reversed_tokens(NewRest, [], [String | Acc]);
+        undefined ->
+            undefined
+    end;
+reversed_tokens("\"" ++ _Rest, _Token, _Acc) ->
+    undefined;
+reversed_tokens([C | Rest], [], Acc) when C=:=$ ;C=:=$\n;C=:=$\t;C=:=$, ->
+    reversed_tokens(Rest, [], Acc);
+reversed_tokens([C | Rest], Token, Acc) when C=:=$ ;C=:=$\n;C=:=$\t;C=:=$, ->
+    reversed_tokens(Rest, [], [Token | Acc]);
+reversed_tokens([C | Rest], Token, Acc) ->
+    reversed_tokens(Rest, [C | Token], Acc);
+reversed_tokens(_, _, _) ->
+    undefeined.
+
+extract_quoted_string([], _Acc) ->
+    undefined;
+extract_quoted_string("\"\\" ++ Rest, Acc) ->
+    extract_quoted_string(Rest, "\"" ++ Acc);
+extract_quoted_string("\"" ++ Rest, Acc) ->
+    {Acc, Rest};
+extract_quoted_string([C | Rest], Acc) ->
+    extract_quoted_string(Rest, [C | Acc]).
 
 expand({array, L}) ->
     mochiweb_util:join(lists:reverse(L), ", ");
@@ -387,7 +401,7 @@ headers_test() ->
     ok.
 
 tokenize_header_value_test() ->
-    ?assertEqual(["a quote in a \\\"quote\\\"."],
+    ?assertEqual(["a quote in a \"quote\"."],
                  tokenize_header_value("\"a quote in a \\\"quote\\\".\"")),
     ?assertEqual(["abc"], tokenize_header_value("abc")),
     ?assertEqual(["abc", "def"], tokenize_header_value("abc def")),
