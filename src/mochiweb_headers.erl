@@ -11,8 +11,6 @@
 -export([to_list/1, make/1]).
 -export([from_binary/1]).
 
--compile(export_all).
-
 %% @type headers().
 %% @type key() = atom() | binary() | string().
 %% @type value() = atom() | binary() | string() | integer().
