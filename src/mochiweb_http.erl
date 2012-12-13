@@ -66,6 +66,10 @@ request(Socket, Body) ->
         {ssl_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
+        {tcp_error,_,emsgsize} ->
+            % R15B02 returns this then closes the socket, so close and exit
+            mochiweb_socket:close(Socket),
+            exit(normal);
         _Other ->
             handle_invalid_request(Socket)
     after ?REQUEST_RECV_TIMEOUT ->
@@ -93,6 +97,10 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
             headers(Socket, Request, [{Name, Value} | Headers], Body,
                     1 + HeaderCount);
         {tcp_closed, _} ->
+            mochiweb_socket:close(Socket),
+            exit(normal);
+        {tcp_error,_,emsgsize} ->
+            % R15B02 returns this then closes the socket, so close and exit
             mochiweb_socket:close(Socket),
             exit(normal);
         _Other ->
