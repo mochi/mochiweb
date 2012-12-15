@@ -1,3 +1,12 @@
+Version 2.4.0 released XXXX-XX-XX
+
+* Fix for mochiweb_acceptor crash with extra-long HTTP headers under
+  R15B02 (#91)
+* Fix case in handling range headers (#85)
+* Handle combined Content-Length header (#88)
+* Windows security fix for `safe_relative_path`, any path with a
+  backslash on any platform is now considered unsafe (#92)
+
 Version 2.3.2 released 2012-07-27
 
 * Case insensitive match for "Connection: close" (#81)
