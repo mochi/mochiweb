@@ -6,6 +6,7 @@
 
 -module(mochiweb_session).
 -export([generate_session_data/5,generate_session_cookie/5,check_session_cookie/4]).
+-export([cookie_encode/1,cookie_decode/1]).
 
 
 %% @spec generate_session_data(UserName,ExpirationTime,SessionExtraData : iolist(),FSessionKey : function(A),ServerKey) -> string()
@@ -14,7 +15,7 @@
 %%       SessionExtraData MUST be of iolist() type
 generate_session_data(UserName,ExpirationTime,SessionExtraData,FSessionKey,ServerKey) when is_integer(ExpirationTime)->
     SessionExtraData2=erlang:term_to_binary(SessionExtraData),
-    ExpTime=integer_to_list(timestamp_sec(now())+ExpirationTime),
+    ExpTime=integer_to_list(ExpirationTime),
     Key=cookie_gen_key(UserName,ExpTime,ServerKey),
     Hmac=cookie_gen_hmac(UserName,ExpTime,SessionExtraData2,FSessionKey(UserName),Key),
     EData=cookie_encrypt_data(SessionExtraData2,Key),
@@ -34,9 +35,13 @@ check_session_cookie(undefined,_,_,_) ->
     {false,[]};
 check_session_cookie([],_,_,_) ->
     {false,[]};
-check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_list(Cookie)->
-    check_session_cookie(list_to_binary(Cookie),ExpirationTime,FSessionKey,ServerKey);
-check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_integer(ExpirationTime) and is_binary(Cookie)->
+
+%% check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_list(Cookie)->
+%%     check_session_cookie(list_to_binary(Cookie),ExpirationTime,FSessionKey,ServerKey);
+%% check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_integer(ExpirationTime) and is_binary(Cookie)->
+%%     check_session_cookie(string:tokens(binary_to_list(cookie_decode(Cookie)), ","),Cookie,ExpirationTime,FSessionKey,ServerKey).
+
+check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_integer(ExpirationTime)->
     check_session_cookie(string:tokens(binary_to_list(cookie_decode(Cookie)), ","),Cookie,ExpirationTime,FSessionKey,ServerKey).
 check_session_cookie([UserName, ExpirationTime1, EData, Hmac],Cookie,ExpirationTime,FSessionKey,ServerKey) 
   when is_integer(ExpirationTime) and is_binary(Cookie)->
@@ -51,14 +56,15 @@ check_session_cookie([UserName, ExpirationTime1, EData, Hmac],Cookie,ExpirationT
 	       true  -> {false,[UserName,ExpirationTime1,erlang:binary_to_term(Data)]}
 	    end
     end;
-check_session_cookie(_,_,_,_,_) ->
+check_session_cookie(A,_,_,_,_) ->
+    io:format("what the hell ~p~n",[A]),
     {false,[]}.
 
 %% @doc This does not encrypt the whole cookie
-cookie_decode (Encoded) when is_binary (Encoded) ->
-    erlang:binary_to_term (from_base64 (Encoded)).
+cookie_decode (Encoded) ->
+    erlang:binary_to_term (hexstr_to_bin(Encoded)).
 cookie_encode (Term) ->
-    to_base64(erlang:term_to_binary (Term, [compressed,{minor_version,1}])).
+    bin_to_hexstr(erlang:term_to_binary (Term, [compressed,{minor_version,1}])).
 
 %% cookie_encrypt_data(Data,Key)-> binary()
 %%                                Data = Key = iolist() | binary
@@ -85,8 +91,8 @@ from_base64 (Bin) ->
 from_base64_char (N) when N >= $a, N =< $z -> N - $a;
 from_base64_char (N) when N >= $A, N =< $Z -> 26 + (N - $A);
 from_base64_char (N) when N >= $0, N =< $9 -> 52 + (N - $0);
-from_base64_char ($_) -> 62;
-from_base64_char ($-) -> 63.
+from_base64_char ($.) -> 62;
+from_base64_char ($+) -> 63.
 
 to_base64 (Bin) when (8 * byte_size (Bin)) rem 6 =:= 0 ->
     to_base64_padded (Bin);
@@ -101,12 +107,27 @@ to_base64_padded (Bin) ->
 to_base64_char (N) when N >= 0, N =< 25 -> $a + N;
 to_base64_char (N) when N >= 26, N =< 51 -> $A + (N - 26);
 to_base64_char (N) when N >= 52, N =< 61 -> $0 + (N - 52);
-to_base64_char (62) -> $_;
-to_base64_char (63) -> $-.
+to_base64_char (62) -> $.;
+to_base64_char (63) -> $+.
+
+
+bin_to_hexstr(Bin) ->
+  lists:flatten([io_lib:format("~2.16.0B", [X]) ||
+    X <- binary_to_list(Bin)]).
+
+hexstr_to_bin(S) ->
+  hexstr_to_bin(S, []).
+hexstr_to_bin([], Acc) ->
+  list_to_binary(lists:reverse(Acc));
+hexstr_to_bin([X,Y|T], Acc) ->
+  {ok, [V], []} = io_lib:fread("~16u", [X,Y]),
+  hexstr_to_bin(T, [V | Acc]).
 
 
 timestamp_sec({MGS,S,_})->
     MGS*1000000+S.
+
+
 
 
 
@@ -123,16 +144,16 @@ server_key()->
 
 generate_check_session_cookie([ServerKey,TimeStamp]) ->
     [?_assertEqual({true,["alice",integer_to_list(TimeStamp+1000),["alice"]]},
-		   check_session_cookie(generate_session_data("alice",1000,["alice"],fun(A)-> A end,ServerKey),
+		   check_session_cookie(generate_session_data("alice",TimeStamp+1000,["alice"],fun(A)-> A end,ServerKey),
 					TimeStamp,fun(A)-> A end,ServerKey)),
      ?_assertEqual({true,["alice",integer_to_list(TimeStamp+1000),[["sex","female",a]]]},
-		   check_session_cookie(generate_session_data("alice",1000,[["sex","female",a]],fun(A)-> A end,ServerKey),
+		   check_session_cookie(generate_session_data("alice",TimeStamp+1000,[["sex","female",a]],fun(A)-> A end,ServerKey),
 					TimeStamp,fun(A)-> A end,ServerKey)),
      ?_assertEqual({true,["alice",integer_to_list(TimeStamp+1000),{tuple,one}]},
-		   check_session_cookie(generate_session_data("alice",1000,{tuple,one},fun(A)-> A end,ServerKey),
+		   check_session_cookie(generate_session_data("alice",TimeStamp+1000,{tuple,one},fun(A)-> A end,ServerKey),
 					TimeStamp,fun(A)-> A end,ServerKey)),
      ?_assertEqual({false,["alice",integer_to_list(TimeStamp-1),{tuple,one}]},
-		   check_session_cookie(generate_session_data("alice",-1,{tuple,one},fun(A)-> A end,ServerKey),
+		   check_session_cookie(generate_session_data("alice",TimeStamp-1,{tuple,one},fun(A)-> A end,ServerKey),
 					TimeStamp,fun(A)-> A end,ServerKey))%current timestamp newer than cookie, it's expired
     ].
 
