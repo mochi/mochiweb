@@ -8,7 +8,6 @@
 -export([generate_session_data/5,generate_session_cookie/5,check_session_cookie/4]).
 -export([cookie_encode/1,cookie_decode/1]).
 
-
 %% @spec generate_session_data(UserName,ExpirationTime,SessionExtraData : iolist(),FSessionKey : function(A),ServerKey) -> string()
 %% @doc generates a secure encrypted string convining all the parameters.
 %%      The expritation time is considered in seconds
@@ -27,7 +26,6 @@ generate_session_cookie(UserName,ExpirationTime,SessionExtraData,FSessionKey,Ser
     CookieData=generate_session_data(UserName,ExpirationTime,SessionExtraData,FSessionKey,ServerKey),
     mochiweb_cookies:cookie("id",CookieData,[{max_age,20000},{local_time,calendar:universal_time_to_local_time(calendar:universal_time())}]).
 
-
 %% @spec cookie_check_session(RawData,ExpirationTime,FSessionKey : function(A), ServerKey)->{false,[UserName,Expiration,Data]} | 
 %%                                                                                          {false,[]}                         |
 %%                                                                                          {true,[UserName,Expiration,Data]}
@@ -35,16 +33,10 @@ check_session_cookie(undefined,_,_,_) ->
     {false,[]};
 check_session_cookie([],_,_,_) ->
     {false,[]};
-
-%% check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_list(Cookie)->
-%%     check_session_cookie(list_to_binary(Cookie),ExpirationTime,FSessionKey,ServerKey);
-%% check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_integer(ExpirationTime) and is_binary(Cookie)->
-%%     check_session_cookie(string:tokens(binary_to_list(cookie_decode(Cookie)), ","),Cookie,ExpirationTime,FSessionKey,ServerKey).
-
-check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_integer(ExpirationTime)->
+check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_integer(ExpirationTime), is_list(Cookie), is_list(ServerKey)->
     check_session_cookie(string:tokens(binary_to_list(cookie_decode(Cookie)), ","),Cookie,ExpirationTime,FSessionKey,ServerKey).
 check_session_cookie([UserName, ExpirationTime1, EData, Hmac],Cookie,ExpirationTime,FSessionKey,ServerKey) 
-  when is_integer(ExpirationTime) and is_binary(Cookie)->
+  when is_integer(ExpirationTime) , is_list(Cookie), is_list(ServerKey)->
     ExpTime=list_to_integer(ExpirationTime1),
     Key=cookie_gen_key(UserName,ExpirationTime1,ServerKey),
     Data=cookie_decrypt_data(EData,Key),
@@ -57,14 +49,7 @@ check_session_cookie([UserName, ExpirationTime1, EData, Hmac],Cookie,ExpirationT
 	    end
     end;
 check_session_cookie(A,_,_,_,_) ->
-    io:format("what the hell ~p~n",[A]),
     {false,[]}.
-
-%% @doc This does not encrypt the whole cookie
-cookie_decode (Encoded) ->
-    erlang:binary_to_term (hexstr_to_bin(Encoded)).
-cookie_encode (Term) ->
-    bin_to_hexstr(erlang:term_to_binary (Term, [compressed,{minor_version,1}])).
 
 %% cookie_encrypt_data(Data,Key)-> binary()
 %%                                Data = Key = iolist() | binary
@@ -80,36 +65,11 @@ cookie_gen_key(UserName,ExpirationTime,ServerKey)->
 cookie_gen_hmac(UserName,ExpirationTime,Data,SessionKey,Key)->
     crypto:sha_mac(Key,[UserName,ExpirationTime,Data,SessionKey]).
 
-
-
-
-
-
-from_base64 (Bin) ->
-    << <<(from_base64_char (N)):6>> || <<N:8>> <= Bin >>.
-
-from_base64_char (N) when N >= $a, N =< $z -> N - $a;
-from_base64_char (N) when N >= $A, N =< $Z -> 26 + (N - $A);
-from_base64_char (N) when N >= $0, N =< $9 -> 52 + (N - $0);
-from_base64_char ($.) -> 62;
-from_base64_char ($+) -> 63.
-
-to_base64 (Bin) when (8 * byte_size (Bin)) rem 6 =:= 0 ->
-    to_base64_padded (Bin);
-to_base64 (Bin) when (8 * byte_size (Bin)) rem 6 =:= 2 ->
-    to_base64_padded (<<Bin/binary, 0:16>>);
-to_base64 (Bin) when (8 * byte_size (Bin)) rem 6 =:= 4 ->
-    to_base64_padded (<<Bin/binary, 0:8>>).
-
-to_base64_padded (Bin) ->
-    << <<(to_base64_char (N)):8>> || <<N:6>> <= Bin >>.
-
-to_base64_char (N) when N >= 0, N =< 25 -> $a + N;
-to_base64_char (N) when N >= 26, N =< 51 -> $A + (N - 26);
-to_base64_char (N) when N >= 52, N =< 61 -> $0 + (N - 52);
-to_base64_char (62) -> $.;
-to_base64_char (63) -> $+.
-
+%% @doc Using 
+cookie_decode (Encoded) ->
+    erlang:binary_to_term(hexstr_to_bin(Encoded)).
+cookie_encode (Term) ->
+    bin_to_hexstr(erlang:term_to_binary (Term, [compressed,{minor_version,1}])).
 
 bin_to_hexstr(Bin) ->
   lists:flatten([io_lib:format("~2.16.0B", [X]) ||
@@ -128,9 +88,6 @@ timestamp_sec({MGS,S,_})->
     MGS*1000000+S.
 
 
-
-
-
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
@@ -139,7 +96,7 @@ generate_check_session_cookie_test_()->
      fun server_key/0, %setup function
      fun generate_check_session_cookie/1}.
 
-server_key()->
+server_key()->%setup function
     ["adfasdfasfs",timestamp_sec(now())].
 
 generate_check_session_cookie([ServerKey,TimeStamp]) ->
