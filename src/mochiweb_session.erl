@@ -5,25 +5,24 @@
 %%      In order to achieve more security, it is adviced to use https
 
 -module(mochiweb_session).
--export([generate_session_data/5,generate_session_cookie/5,check_session_cookie/4]).
--export([cookie_encode/1,cookie_decode/1]).
+-export([generate_session_data/4,generate_session_cookie/4,check_session_cookie/4]).
+-export([cookie_encode/1,cookie_decode/1,timestamp_sec/1]).%Useful fuctions for more specific purposes
 
-%% @spec generate_session_data(UserName,ExpirationTime,SessionExtraData : iolist(),FSessionKey : function(A),ServerKey) -> string()
+%% @spec generate_session_data(ExpirationTime,Data :: string(),FSessionKey : function(A),ServerKey) -> string()
 %% @doc generates a secure encrypted string convining all the parameters.
 %%      The expritation time is considered in seconds
-%%       SessionExtraData MUST be of iolist() type
-generate_session_data(UserName,ExpirationTime,SessionExtraData,FSessionKey,ServerKey) when is_integer(ExpirationTime)->
-    SessionExtraData2=erlang:term_to_binary(SessionExtraData),
+generate_session_data(ExpirationTime,Data,FSessionKey,ServerKey) when is_integer(ExpirationTime),is_list(Data), is_function(FSessionKey)->
+    BData=list_to_binary(Data),
     ExpTime=integer_to_list(ExpirationTime),
-    Key=cookie_gen_key(UserName,ExpTime,ServerKey),
-    Hmac=cookie_gen_hmac(UserName,ExpTime,SessionExtraData2,FSessionKey(UserName),Key),
-    EData=cookie_encrypt_data(SessionExtraData2,Key),
-    cookie_encode(iolist_to_binary([ UserName, $,, ExpTime, $,, EData, $,,  Hmac ])).
+    Key=cookie_gen_key(ExpTime,ServerKey),
+    Hmac=cookie_gen_hmac(ExpTime,BData,FSessionKey(integer_to_list(ExpirationTime)),Key),
+    EData=cookie_encrypt_data(BData,Key),
+    iolist_to_binary([ ExpTime,$,, EData,  Hmac ]).
 
 %% @spec generate_session_data(UserName,ExpirationTime,SessionExtraData,FSessionKey : function(A),ServerKey) -> mochiweb_cookie()
 %% @doc generates a secure encrypted cookie using the generate_session_data function.
-generate_session_cookie(UserName,ExpirationTime,SessionExtraData,FSessionKey,ServerKey) when is_integer(ExpirationTime)->
-    CookieData=generate_session_data(UserName,ExpirationTime,SessionExtraData,FSessionKey,ServerKey),
+generate_session_cookie(ExpirationTime,Data,FSessionKey,ServerKey) when is_integer(ExpirationTime)->
+    CookieData=generate_session_data(ExpirationTime,Data,FSessionKey,ServerKey),
     mochiweb_cookies:cookie("id",CookieData,[{max_age,20000},{local_time,calendar:universal_time_to_local_time(calendar:universal_time())}]).
 
 %% @spec cookie_check_session(RawData,ExpirationTime,FSessionKey : function(A), ServerKey)->{false,[UserName,Expiration,Data]} | 
@@ -33,23 +32,31 @@ check_session_cookie(undefined,_,_,_) ->
     {false,[]};
 check_session_cookie([],_,_,_) ->
     {false,[]};
-check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_integer(ExpirationTime), is_list(Cookie), is_list(ServerKey)->
-    check_session_cookie(string:tokens(binary_to_list(cookie_decode(Cookie)), ","),Cookie,ExpirationTime,FSessionKey,ServerKey).
-check_session_cookie([UserName, ExpirationTime1, EData, Hmac],Cookie,ExpirationTime,FSessionKey,ServerKey) 
-  when is_integer(ExpirationTime) , is_list(Cookie), is_list(ServerKey)->
+check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_binary(Cookie)->
+    {P1,_}=binary:match(Cookie,<<",">>),
+    ExpirationTime1=binary:part(Cookie,0,P1),
+    Data=binary:part(Cookie,P1+1,byte_size(Cookie)-20),
+    io:format("~p   ~p    ~p",[ExpirationTime1,Data,Cookie]),
+    Hmac=binary:part(Cookie,byte_size(Cookie)-20,byte_size(Cookie)-2),
+    check_session_cookie(list_to_integer(binary_to_list(ExpirationTime1)),Data,Hmac,ExpirationTime,FSessionKey,ServerKey);
+check_session_cookie(_,_,_,_) ->
+    {false,[]}.
+check_session_cookie(ExpirationTime1, EData, Hmac,ExpirationTime,FSessionKey,ServerKey) 
+  when is_integer(ExpirationTime) , is_list(ServerKey)->
     ExpTime=list_to_integer(ExpirationTime1),
-    Key=cookie_gen_key(UserName,ExpirationTime1,ServerKey),
+    Key=cookie_gen_key(ExpirationTime1,ServerKey),
     Data=cookie_decrypt_data(EData,Key),
-    Hmac2=cookie_gen_hmac(UserName,ExpirationTime1,Data,FSessionKey(UserName),Key),
+    Hmac2=cookie_gen_hmac(ExpirationTime1,Data,FSessionKey(ExpirationTime1),Key),
     BHmac=list_to_binary(Hmac),
-    if ExpTime<ExpirationTime -> {false,[UserName,ExpirationTime1,erlang:binary_to_term(Data)]};
+    if ExpTime<ExpirationTime -> {false,[ExpirationTime1,binary_to_list(Data)]};
        true -> 
-	    if Hmac2==BHmac -> {true,[UserName,ExpirationTime1,erlang:binary_to_term(Data)]};
-	       true  -> {false,[UserName,ExpirationTime1,erlang:binary_to_term(Data)]}
+	    if Hmac2==BHmac -> {true,[ExpirationTime1,binary_to_list(Data)]};
+	       true  -> {false,[ExpirationTime1,binary_to_list(Data)]}
 	    end
     end;
-check_session_cookie(A,_,_,_,_) ->
+check_session_cookie(_,_,_,_,_,_) ->
     {false,[]}.
+
 
 %% cookie_encrypt_data(Data,Key)-> binary()
 %%                                Data = Key = iolist() | binary
@@ -60,16 +67,16 @@ cookie_decrypt_data(EData,Key) when is_list(EData)->
     {IV, Crypt} = lists:split(16, EData),
     crypto:aes_cfb_128_decrypt(Key, list_to_binary(IV),list_to_binary(Crypt)).
 
-cookie_gen_key(UserName,ExpirationTime,ServerKey)->
-    crypto:md5_mac(ServerKey, [UserName, ExpirationTime]).
-cookie_gen_hmac(UserName,ExpirationTime,Data,SessionKey,Key)->
-    crypto:sha_mac(Key,[UserName,ExpirationTime,Data,SessionKey]).
+cookie_gen_key(ExpirationTime,ServerKey)->
+    crypto:md5_mac(ServerKey, [ExpirationTime]).
+cookie_gen_hmac(ExpirationTime,Data,SessionKey,Key)->
+    crypto:sha_mac(Key,[ExpirationTime,Data,SessionKey]).
 
 %% @doc Using 
 cookie_decode (Encoded) ->
-    erlang:binary_to_term(hexstr_to_bin(Encoded)).
+    hexstr_to_bin(Encoded).
 cookie_encode (Term) ->
-    bin_to_hexstr(erlang:term_to_binary (Term, [compressed,{minor_version,1}])).
+    bin_to_hexstr(Term).
 
 bin_to_hexstr(Bin) ->
   lists:flatten([io_lib:format("~2.16.0B", [X]) ||
@@ -99,18 +106,241 @@ generate_check_session_cookie_test_()->
 server_key()->%setup function
     ["adfasdfasfs",timestamp_sec(now())].
 
+mac_length_test_() ->
+    [?_assertEqual(20,length(binary_to_list(cookie_gen_hmac(integer_to_list(timestamp_sec(now())),"dfasdfasdjkfkasdjfjkasdf","sdfjasldfjkdfjklsdf","ldsfjaklsdfjla")))),
+     ?_assertEqual(20,length(binary_to_list(cookie_gen_hmac(integer_to_list(timestamp_sec(now())),"dfasdfasdasdjfjkasdf","sjkdfjklsdf","ldsfjaklsdfjla")))),
+     ?_assertEqual(20,length(binary_to_list(cookie_gen_hmac(integer_to_list(timestamp_sec(now())+10),"dfasdasdjfjkasdf","sjkdfsdf","ldslsdfjla"))))
+    ].
+
 generate_check_session_cookie([ServerKey,TimeStamp]) ->
-    [?_assertEqual({true,["alice",integer_to_list(TimeStamp+1000),["alice"]]},
-		   check_session_cookie(generate_session_data("alice",TimeStamp+1000,["alice"],fun(A)-> A end,ServerKey),
+    [?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
 					TimeStamp,fun(A)-> A end,ServerKey)),
-     ?_assertEqual({true,["alice",integer_to_list(TimeStamp+1000),[["sex","female",a]]]},
-		   check_session_cookie(generate_session_data("alice",TimeStamp+1000,[["sex","female",a]],fun(A)-> A end,ServerKey),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
 					TimeStamp,fun(A)-> A end,ServerKey)),
-     ?_assertEqual({true,["alice",integer_to_list(TimeStamp+1000),{tuple,one}]},
-		   check_session_cookie(generate_session_data("alice",TimeStamp+1000,{tuple,one},fun(A)-> A end,ServerKey),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
 					TimeStamp,fun(A)-> A end,ServerKey)),
-     ?_assertEqual({false,["alice",integer_to_list(TimeStamp-1),{tuple,one}]},
-		   check_session_cookie(generate_session_data("alice",TimeStamp-1,{tuple,one},fun(A)-> A end,ServerKey),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,"alice",fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({true,[integer_to_list(TimeStamp+1000),"alice456689875"]},
+		   check_session_cookie(generate_session_data(TimeStamp+1000,["alice","456689875"],fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertError(function_clause, 
+		   check_session_cookie(generate_session_data(TimeStamp+1000,{tuple,one},fun(A)-> A end,ServerKey),
+					TimeStamp,fun(A)-> A end,ServerKey)),
+     ?_assertEqual({false,[integer_to_list(TimeStamp-1),"bob"]},
+		   check_session_cookie(generate_session_data(TimeStamp-1,"bob",fun(A)-> A end,ServerKey),
 					TimeStamp,fun(A)-> A end,ServerKey))%current timestamp newer than cookie, it's expired
     ].
 
