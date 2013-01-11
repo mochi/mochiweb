@@ -7,6 +7,7 @@
 -module(mochiweb_session).
 -export([generate_session_data/4,generate_session_cookie/4,check_session_cookie/4]).
 -export([cookie_encode/1,cookie_decode/1,timestamp_sec/1]).%Useful fuctions for more specific purposes
+-export([cookie_encrypt_data/2,cookie_decrypt_data/2]).
 
 %% @spec generate_session_data(ExpirationTime,Data :: string(),FSessionKey : function(A),ServerKey) -> string()
 %% @doc generates a secure encrypted string convining all the parameters.
@@ -16,7 +17,10 @@ generate_session_data(ExpirationTime,Data,FSessionKey,ServerKey) when is_integer
     ExpTime=integer_to_list(ExpirationTime),
     Key=cookie_gen_key(ExpTime,ServerKey),
     Hmac=cookie_gen_hmac(ExpTime,BData,FSessionKey(integer_to_list(ExpirationTime)),Key),
+    io:format("1. ~p~n",[Hmac]),
     EData=cookie_encrypt_data(BData,Key),
+    EData2=cookie_decrypt_data(EData,Key),
+    io:format("2. ~p - ~p ~n",[BData,EData2]),
     iolist_to_binary([ ExpTime,$,, EData,  Hmac ]).
 
 %% @spec generate_session_data(UserName,ExpirationTime,SessionExtraData,FSessionKey : function(A),ServerKey) -> mochiweb_cookie()
@@ -36,18 +40,17 @@ check_session_cookie(Cookie,ExpirationTime,FSessionKey,ServerKey) when is_binary
     {P1,_}=binary:match(Cookie,<<",">>),
     ExpirationTime1=binary:part(Cookie,0,P1),
     Data=binary:part(Cookie,P1+1,byte_size(Cookie)-20),
-    io:format("~p   ~p    ~p",[ExpirationTime1,Data,Cookie]),
-    Hmac=binary:part(Cookie,byte_size(Cookie)-20,byte_size(Cookie)-2),
-    check_session_cookie(list_to_integer(binary_to_list(ExpirationTime1)),Data,Hmac,ExpirationTime,FSessionKey,ServerKey);
+    Hmac=binary:part(Cookie,byte_size(Cookie)-20,20),
+    check_session_cookie(binary_to_list(ExpirationTime1),Data,Hmac,ExpirationTime,FSessionKey,ServerKey);
 check_session_cookie(_,_,_,_) ->
     {false,[]}.
-check_session_cookie(ExpirationTime1, EData, Hmac,ExpirationTime,FSessionKey,ServerKey) 
-  when is_integer(ExpirationTime) , is_list(ServerKey)->
+check_session_cookie(ExpirationTime1, EData, BHmac,ExpirationTime,FSessionKey,ServerKey) 
+  when is_integer(ExpirationTime) , is_list(ServerKey), is_list(ExpirationTime1)->
     ExpTime=list_to_integer(ExpirationTime1),
     Key=cookie_gen_key(ExpirationTime1,ServerKey),
-    Data=cookie_decrypt_data(EData,Key),
+    Data=cookie_decrypt_data(binary_to_list(EData),Key),
     Hmac2=cookie_gen_hmac(ExpirationTime1,Data,FSessionKey(ExpirationTime1),Key),
-    BHmac=list_to_binary(Hmac),
+    io:format("~p  ====  ~p",[Hmac2,BHmac]),
     if ExpTime<ExpirationTime -> {false,[ExpirationTime1,binary_to_list(Data)]};
        true -> 
 	    if Hmac2==BHmac -> {true,[ExpirationTime1,binary_to_list(Data)]};
@@ -58,14 +61,15 @@ check_session_cookie(_,_,_,_,_,_) ->
     {false,[]}.
 
 
+
 %% cookie_encrypt_data(Data,Key)-> binary()
 %%                                Data = Key = iolist() | binary
-cookie_encrypt_data(Data,Key) when is_binary(Data), is_binary(Key)->
+cookie_encrypt_data(Data,Key) ->
     IV = crypto:rand_bytes(16),
-    [IV] ++ [crypto:aes_cfb_128_encrypt(Key, IV, Data)].
-cookie_decrypt_data(EData,Key) when is_list(EData)->
-    {IV, Crypt} = lists:split(16, EData),
-    crypto:aes_cfb_128_decrypt(Key, list_to_binary(IV),list_to_binary(Crypt)).
+    Crypt=crypto:aes_cfb_128_encrypt(Key, IV, Data),
+    <<IV/binary,Crypt/binary>>.
+cookie_decrypt_data(<<IV:16,Crypt/binary>>,Key) ->
+    crypto:aes_cfb_128_decrypt(Key, IV,Crypt).
 
 cookie_gen_key(ExpirationTime,ServerKey)->
     crypto:md5_mac(ServerKey, [ExpirationTime]).
