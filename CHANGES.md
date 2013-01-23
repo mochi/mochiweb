@@ -1,5 +1,7 @@
-Version 2.4.0 released XXXX-XX-XX
+Version 2.4.0 released 2013-01-23
 
+* Switch from parameterized modules to explicit tuple module calls for
+  R16 compatibility (#95)
 * Fix for mochiweb_acceptor crash with extra-long HTTP headers under
   R15B02 (#91)
 * Fix case in handling range headers (#85)
