@@ -25,8 +25,8 @@ get_value(Key, Rec, {?MODULE, Recs})
         end
     catch error:_ -> mochifmt:get_value(Key, Rec)
     end;
-get_value(Key, Args, {?MODULE, _Recs}=THIS) ->
-    mochifmt:get_value(Key, Args, THIS).
+get_value(Key, Args, {?MODULE, _Recs}) ->
+    mochifmt:get_value(Key, Args).
 
 get_rec_index(Atom, [Atom | _], Index) ->
     Index;

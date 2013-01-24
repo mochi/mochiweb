@@ -1,3 +1,8 @@
+Version 2.4.1 released XXXX-XX-XX
+
+* Fixed issue in mochifmt_records introduced in v2.4.0
+  https://github.com/mochi/mochiweb/issues/96
+
 Version 2.4.0 released 2013-01-23
 
 * Switch from parameterized modules to explicit tuple module calls for
