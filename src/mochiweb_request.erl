@@ -306,7 +306,9 @@ respond({Code, ResponseHeaders, {file, IoDevice}},
         'HEAD' ->
             ok;
         _ ->
-            mochiweb_io:iodevice_stream(fun send/2, IoDevice)
+            mochiweb_io:iodevice_stream(
+              fun (Body) -> send(Body, THIS) end,
+              IoDevice)
     end,
     Response;
 respond({Code, ResponseHeaders, chunked}, {?MODULE, [_Socket, Method, _RawPath, Version, _Headers]}=THIS) ->

@@ -1,5 +1,7 @@
 Version 2.4.1 released XXXX-XX-XX
 
+* Fixed issue in mochiweb_request introduced in v2.4.0
+  https://github.com/mochi/mochiweb/issues/97
 * Fixed issue in mochifmt_records introduced in v2.4.0
   https://github.com/mochi/mochiweb/issues/96
 
