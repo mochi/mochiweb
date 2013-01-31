@@ -94,14 +94,16 @@ get(peer, {?MODULE, [Socket, _Method, _RawPath, _Version, _Headers]}=THIS) ->
                 undefined ->
                     inet_parse:ntoa(Addr);
                 Hosts ->
-                    string:strip(lists:last(string:tokens(Hosts, ",")))
+					[Peer|_] = string:tokens(Hosts, ","),
+                    string:strip(Peer)
             end;
         {ok, {{127, 0, 0, 1}, _Port}} ->
             case get_header_value("x-forwarded-for", THIS) of
                 undefined ->
                     "127.0.0.1";
                 Hosts ->
-                    string:strip(lists:last(string:tokens(Hosts, ",")))
+					[Peer|_] = string:tokens(Hosts, ","),
+                    string:strip(Peer)
             end;
         {ok, {Addr, _Port}} ->
             inet_parse:ntoa(Addr);
