@@ -177,7 +177,7 @@ gettempdir_cwd_test() ->
     ok.
 
 rngchars_test() ->
-    crypto:start(),
+    application:start(crypto),
     ?assertEqual(
        "",
        rngchars(0)),
@@ -199,7 +199,7 @@ rngchar_test() ->
     ok.
 
 mkdtemp_n_failonce_test() ->
-    crypto:start(),
+    application:start(crypto),
     D = mkdtemp(),
     Path = filename:join([D, "testdir"]),
     %% Toggle the existence of a dir so that it fails
@@ -246,7 +246,7 @@ make_dir_fail_test() ->
     ok.
 
 mkdtemp_test() ->
-    crypto:start(),
+    application:start(crypto),
     D = mkdtemp(),
     ?assertEqual(
        true,
@@ -257,7 +257,7 @@ mkdtemp_test() ->
     ok.
 
 rmtempdir_test() ->
-    crypto:start(),
+    application:start(crypto),
     D1 = mkdtemp(),
     ?assertEqual(
        true,
