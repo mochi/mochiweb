@@ -1,3 +1,8 @@
+Version 2.4.2 released 2013-02-05
+
+* Fixed issue in mochiweb_response introduced in v2.4.0
+  https://github.com/mochi/mochiweb/pull/100
+
 Version 2.4.1 released 2013-01-30
 
 * Fixed issue in mochiweb_request introduced in v2.4.0
