@@ -43,19 +43,19 @@ dump({?MODULE, [Request, Code, Headers]}) ->
 
 %% @spec send(iodata(), response()) -> ok
 %% @doc Send data over the socket if the method is not HEAD.
-send(Data, {?MODULE, [Request, _Code, _Headers]}=THIS) ->
-    case Request:get(method, THIS) of
+send(Data, {?MODULE, [Request, _Code, _Headers]}) ->
+    case Request:get(method) of
         'HEAD' ->
             ok;
         _ ->
-            Request:send(Data, THIS)
+            Request:send(Data)
     end.
 
 %% @spec write_chunk(iodata(), response()) -> ok
 %% @doc Write a chunk of a HTTP chunked response. If Data is zero length,
 %%      then the chunked response will be finished.
 write_chunk(Data, {?MODULE, [Request, _Code, _Headers]}=THIS) ->
-    case Request:get(version, THIS) of
+    case Request:get(version) of
         Version when Version >= {1, 1} ->
             Length = iolist_size(Data),
             send([io_lib:format("~.16b\r\n", [Length]), Data, <<"\r\n">>], THIS);
