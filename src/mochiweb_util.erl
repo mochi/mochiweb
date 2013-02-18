@@ -11,7 +11,7 @@
 -export([guess_mime/1, parse_header/1]).
 -export([shell_quote/1, cmd/1, cmd_string/1, cmd_port/2, cmd_status/1, cmd_status/2]).
 -export([record_to_proplist/2, record_to_proplist/3]).
--export([safe_relative_path/1, partition/2]).
+-export([safe_relative_path/1, interpret_path_links/1, interpret_path_links/2, partition/2]).
 -export([parse_qvalues/1, pick_accepted_encodings/3]).
 -export([make_io/1]).
 
@@ -101,6 +101,27 @@ safe_relative_path(P, Acc) ->
         {Part, _, Rest} ->
             safe_relative_path(Rest, [Part | Acc])
     end.
+
+%% @spec interpret_path_links(string()) -> string()
+%% @doc Interprets the links for a given path.
+interpret_path_links(Path) ->
+    interpret_link_components("/", filename:split(filename:absname(Path))).
+
+%% @spec interpret_path_links(string(), string()) -> string()
+%% @doc Interprets the links for a given path relative to a root path.
+interpret_path_links(RootPath, RelPath) ->
+    interpret_link_components(RootPath, filename:split(RelPath)).
+
+interpret_link_components(RootPath, [Component|Rest]) ->
+    NewRootPath = filename:join(RootPath, Component),
+    case file:read_link(NewRootPath) of
+        {ok, LinkPath} ->
+            interpret_link_components(filename:absname(LinkPath), Rest);
+        {error, _} ->
+            interpret_link_components(NewRootPath, Rest)
+    end;
+interpret_link_components(Path, []) ->
+    Path.
 
 %% @spec shell_quote(string()) -> string()
 %% @doc Quote a string according to UNIX shell quoting rules, returns a string
@@ -822,6 +843,10 @@ safe_relative_path_test() ->
     undefined = safe_relative_path("foo/../.."),
     undefined = safe_relative_path("foo//"),
     undefined = safe_relative_path("foo\\bar"),
+    ok.
+
+interpret_path_links_test() ->
+    % Tests a'coming.
     ok.
 
 parse_qvalues_test() ->
