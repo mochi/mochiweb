@@ -846,7 +846,18 @@ safe_relative_path_test() ->
     ok.
 
 interpret_path_links_test() ->
-    % Tests a'coming.
+    TestDir = filename:absname("interpret-path-links-test"),
+    DocRoot = filename:join(TestDir, "docroot"),
+    AdditionalResource = filename:join(TestDir, "additional-resource"),
+    ok = file:make_dir(TestDir),
+    ok = file:make_dir(DocRoot),
+    ok = file:make_dir(AdditionalResource),
+    ok = file:make_symlink(AdditionalResource, filename:join(DocRoot,
+                                                             "foo")),
+    ?assertEqual(AdditionalResource,
+                 interpret_path_links(DocRoot, "foo")),
+    ?assertNotEqual(AdditionalResource,
+                    interpret_path_links(DocRoot, "bar")),
     ok.
 
 parse_qvalues_test() ->
