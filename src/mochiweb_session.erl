@@ -103,6 +103,7 @@ generate_check_session_cookie_test_()->
      fun generate_check_session_cookie/1}.
 
 server_key()->%setup function
+    crypto:start(),
     ["adfasdfasfs",30000].
 
 generate_check_session_cookie([ServerKey, TS]) ->
