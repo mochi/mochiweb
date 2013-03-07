@@ -2,7 +2,8 @@ Version 2.5.0 released 2013-03-04
 
 * Replace now() with os:timestamp() in acceptor (optimization)
   https://github.com/mochi/mochiweb/pull/102
-* New mochiweb_session module for managing session cookies
+* New mochiweb_session module for managing session cookies.
+  NOTE: this module is only supported on R15B02 and later!
   https://github.com/mochi/mochiweb/pull/94
   
 Version 2.4.2 released 2013-02-05

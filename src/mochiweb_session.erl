@@ -1,12 +1,13 @@
 %% @author Asier Azkuenaga Batiz <asier@zebixe.com>
 
-
 %% @doc HTTP Cookie session. Note that the expiration time travels unencrypted
 %% as far as this module is concerned. In order to achieve more security,
 %% it is advised to use https.
 %% Based on the paper
 %% <a href="http://www.cse.msu.edu/~alexliu/publications/Cookie/cookie.pdf">
 %% "A Secure Cookie Protocol"</a>.
+%% This module is only supported on R15B02 and later, the AES CFB mode is not
+%% available in earlier releases of crypto.
 -module(mochiweb_session).
 -export([generate_session_data/4, generate_session_cookie/4,
          check_session_cookie/4]).
