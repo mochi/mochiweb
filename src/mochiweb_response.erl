@@ -11,7 +11,7 @@
 -export([new/3, get_header_value/2, get/2, dump/1]).
 -export([send/2, write_chunk/2]).
 
-%% @type response() = {atom(), [Request, Code, Headers]}
+%% @type response(). A mochiweb_response parameterized module instance.
 
 %% @spec new(Request, Code, Headers) -> response()
 %% @doc Create a new mochiweb_response instance.

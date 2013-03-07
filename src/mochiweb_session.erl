@@ -2,39 +2,46 @@
 
 
 %% @doc HTTP Cookie session. Note that the expiration time travels unencrypted
-%%      as far as this module concerns.
-%%      In order to achieve more security, it is adviced to use https
+%% as far as this module is concerned. In order to achieve more security,
+%% it is advised to use https.
+%% Based on the paper
+%% <a href="http://www.cse.msu.edu/~alexliu/publications/Cookie/cookie.pdf">
+%% "A Secure Cookie Protocol"</a>.
 -module(mochiweb_session).
 -export([generate_session_data/4, generate_session_cookie/4,
          check_session_cookie/4]).
 
-%% @spec generate_session_data(ExpirationTime, Data, FSessionKey, ServerKey)
-%%             -> binary()
-%%                                      ExpirationTime = integer(),
-%%                                      Data = string(),
-%%                                      FSessionKey = function(A),
-%%                                      ServerKey = string(),
-%% @doc  generates a secure encrypted binary convining all the parameters. The
-%%       expiration time is a number represented on 32 bit.
+-export_types([expiration_time/0]).
+-type expiration_time() :: integer().
+-type key_fun() :: fun((string()) -> iolist()).
+
+%% TODO: Import this from elsewhere after attribute types refactor.
+-type header() :: {string(), string()}.
+
+%% @doc Generates a secure encrypted binary convining all the parameters. The
+%% expiration time must be a 32-bit integer.
+-spec generate_session_data(
+        ExpirationTime :: expiration_time(),
+        Data :: iolist(),
+        FSessionKey :: key_fun(),
+        ServerKey :: iolist()) -> binary().
 generate_session_data(ExpirationTime, Data, FSessionKey, ServerKey)
   when is_integer(ExpirationTime), is_function(FSessionKey)->
     BData = ensure_binary(Data),
     ExpTime = integer_to_list(ExpirationTime),
-    Key = gen_key(ExpTime,ServerKey),
-    Hmac = gen_hmac(ExpTime,BData,FSessionKey(ExpTime),Key),
-    EData = encrypt_data(BData,Key),
-    base64:encode(<< ExpirationTime:32/integer, Hmac/binary, EData/binary >>).
+    Key = gen_key(ExpTime, ServerKey),
+    Hmac = gen_hmac(ExpTime, BData, FSessionKey(ExpTime), Key),
+    EData = encrypt_data(BData, Key),
+    base64:encode(<<ExpirationTime:32/integer, Hmac/binary, EData/binary>>).
 
-%% @spec generate_session_data(UserName, ExpirationTime, SessionExtraData,
-%%                                 FSessionKey,ServerKey) -> mochiweb_cookie()
-%%                                     ExpirationTime = integer(),
-%%                                     Data = string(),
-%%                                     FSessionKey = function(A),
-%%                                     ServerKey = string(),
-%% @doc  generates a secure encrypted binary convining all the parameters.
-%%       The expiration time is a number represented on 32 bit.
-%%       This function conveniently generates a mochiweb cookie using the "id"
-%%       as key and current local time as local time
+%% @doc Convenience wrapper for generate_session_data that returns a
+%% mochiweb cookie with "id" as the key, a max_age of 20000 seconds,
+%% and the current local time as local time.
+-spec generate_session_cookie(
+        ExpirationTime :: expiration_time(),
+        Data :: iolist(),
+        FSessionKey :: key_fun(),
+        ServerKey :: iolist()) -> header().
 generate_session_cookie(ExpirationTime, Data, FSessionKey, ServerKey)
   when is_integer(ExpirationTime), is_function(FSessionKey)->
     CookieData = generate_session_data(ExpirationTime, Data,
@@ -45,51 +52,67 @@ generate_session_cookie(ExpirationTime, Data, FSessionKey, ServerKey)
                               calendar:universal_time_to_local_time(
                                 calendar:universal_time())}]).
 
-%% @spec cookie_check_session(RawData,ExpirationTime,FSessionKey, ServerKey)->
-%%                                              {false,[ExpirationTime,Data]} |
-%%                                              {false,[]}                    |
-%%                                              {true,[ExpirationTime,Data]},
-%%                                              RawData = binary() ,
-%%                                              ExpirationTime = integer(),
-%%                                              FSessionKey = function(A) ,
-%%                                              ServerKey = string()
-check_session_cookie(undefined,_,_,_) ->
-    {false, []};
-check_session_cookie([],_,_,_) ->
-    {false, []};
+%% TODO: This return type is messy to express in the type system.
+-spec check_session_cookie(
+        ECookie :: binary(),
+        ExpirationTime :: string(),
+        FSessionKey :: key_fun(),
+        ServerKey :: iolist()) ->
+    {Success :: boolean(),
+     ExpTimeAndData :: [integer() | binary()]}.
 check_session_cookie(ECookie, ExpirationTime, FSessionKey, ServerKey)
   when is_binary(ECookie), is_integer(ExpirationTime),
-       is_function(FSessionKey)->
-    << ExpirationTime1:32/integer, BHmac:20/binary, EData/binary >> =
-        base64:decode(ECookie),
-    Key = gen_key(integer_to_list(ExpirationTime1), ServerKey),
-    Data = decrypt_data(EData, Key),
-    Hmac2 = gen_hmac(integer_to_list(ExpirationTime1), Data,
-                     FSessionKey(integer_to_list(ExpirationTime1)), Key),
-    if ExpirationTime1 < ExpirationTime ->
-            {false, [ExpirationTime1, binary_to_list(Data)]};
-       true ->
-            if Hmac2 == BHmac ->
-                    {true, [ExpirationTime1, binary_to_list(Data)]};
-               true  ->
-                    {false, [ExpirationTime1, binary_to_list(Data)]}
-            end
-    end.
+       is_function(FSessionKey) ->
+    case base64:decode(ECookie) of
+        <<ExpirationTime1:32/integer, BHmac:20/binary, EData/binary>> ->
+            ETString = integer_to_list(ExpirationTime1),
+            Key = gen_key(ETString, ServerKey),
+            Data = decrypt_data(EData, Key),
+            Hmac2 = gen_hmac(ETString,
+                             Data,
+                             FSessionKey(ETString),
+                             Key),
+            {ExpirationTime1 >= ExpirationTime andalso eq(Hmac2, BHmac),
+             [ExpirationTime1, binary_to_list(Data)]};
+        _ ->
+            {false, []}
+    end;
+check_session_cookie(_ECookie, _ExpirationTime, _FSessionKey, _ServerKey) ->
+    {false, []}.
 
+%% 'Constant' time =:= operator for binary, to mitigate timing attacks.
+-spec eq(binary(), binary()) -> boolean().
+eq(A, B) when is_binary(A) andalso is_binary(B) ->
+    eq(A, B, 0).
+
+eq(<<A, As/binary>>, <<B, Bs/binary>>, Acc) ->
+    eq(As, Bs, Acc bor (A bxor B));
+eq(<<>>, <<>>, 0) ->
+    true;
+eq(_As, _Bs, _Acc) ->
+    false.
+
+-spec ensure_binary(iolist()) -> binary().
 ensure_binary(B) when is_binary(B) ->
     B;
 ensure_binary(L) when is_list(L) ->
     iolist_to_binary(L).
 
+-spec encrypt_data(iolist(), iolist()) -> binary().
 encrypt_data(Data, Key) ->
     IV = crypto:rand_bytes(16),
     Crypt = crypto:aes_cfb_128_encrypt(Key, IV, Data),
-    << IV/binary, Crypt/binary >>.
-decrypt_data(<< IV:16/binary, Crypt/binary >>, Key) ->
+    <<IV/binary, Crypt/binary>>.
+
+-spec decrypt_data(binary(), iolist()) -> binary().
+decrypt_data(<<IV:16/binary, Crypt/binary>>, Key) ->
     crypto:aes_cfb_128_decrypt(Key, IV, Crypt).
 
+-spec gen_key(iolist(), iolist()) -> binary().
 gen_key(ExpirationTime, ServerKey)->
     crypto:md5_mac(ServerKey, [ExpirationTime]).
+
+-spec gen_hmac(iolist(), iolist(), iolist(), iolist()) -> binary().
 gen_hmac(ExpirationTime, Data, SessionKey, Key)->
     crypto:sha_mac(Key, [ExpirationTime, Data, SessionKey]).
 
@@ -97,65 +120,68 @@ gen_hmac(ExpirationTime, Data, SessionKey, Key)->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-generate_check_session_cookie_test_()->
+generate_check_session_cookie_test_() ->
     {setup,
-     fun server_key/0, %setup function
+     fun setup_server_key/0,
      fun generate_check_session_cookie/1}.
 
-server_key()->%setup function
+setup_server_key() ->
     crypto:start(),
     ["adfasdfasfs",30000].
 
 generate_check_session_cookie([ServerKey, TS]) ->
+    Id = fun (A) -> A end,
+    TSFuture = TS + 1000,
+    TSPast = TS - 1,
     [?_assertEqual(
-        {true, [TS+1000, "alice"]},
+        {true, [TSFuture, "alice"]},
         check_session_cookie(
-          generate_session_data(TS+1000, "alice", fun(A)-> A end, ServerKey),
-          TS, fun(A)-> A end, ServerKey)),
+          generate_session_data(TSFuture, "alice", Id, ServerKey),
+          TS, Id, ServerKey)),
      ?_assertEqual(
-        {true, [TS+1000, "alice and"]},
+        {true, [TSFuture, "alice and"]},
         check_session_cookie(
-          generate_session_data(TS+1000, "alice and", fun(A)-> A end, ServerKey),
-          TS, fun(A)-> A end, ServerKey)),
+          generate_session_data(TSFuture, "alice and", Id, ServerKey),
+          TS, Id, ServerKey)),
      ?_assertEqual(
-        {true, [TS+1000, "alice and"]},
+        {true, [TSFuture, "alice and"]},
         check_session_cookie(
-          generate_session_data(TS+1000, "alice and", fun(A)-> A end, ServerKey),
-          TS, fun(A)-> A end,ServerKey)),
+          generate_session_data(TSFuture, "alice and", Id, ServerKey),
+          TS, Id,ServerKey)),
      ?_assertEqual(
-        {true, [TS+1000, "alice and bob"]},
+        {true, [TSFuture, "alice and bob"]},
         check_session_cookie(
-          generate_session_data(TS+1000, "alice and bob",
-                                fun(A)-> A end, ServerKey),
-          TS, fun(A)-> A end, ServerKey)),
+          generate_session_data(TSFuture, "alice and bob",
+                                Id, ServerKey),
+          TS, Id, ServerKey)),
      ?_assertEqual(
-        {true, [TS+1000, "alice jlkjfkjsdfg sdkfjgldsjgl"]},
+        {true, [TSFuture, "alice jlkjfkjsdfg sdkfjgldsjgl"]},
         check_session_cookie(
-          generate_session_data(TS+1000, "alice jlkjfkjsdfg sdkfjgldsjgl",
-                                fun(A)-> A end, ServerKey),
-          TS, fun(A)-> A end, ServerKey)),
+          generate_session_data(TSFuture, "alice jlkjfkjsdfg sdkfjgldsjgl",
+                                Id, ServerKey),
+          TS, Id, ServerKey)),
      ?_assertEqual(
-        {true, [TS+1000, "alice .'¡'ç+-$%/(&\""]},
+        {true, [TSFuture, "alice .'¡'ç+-$%/(&\""]},
         check_session_cookie(
-          generate_session_data(TS+1000, "alice .'¡'ç+-$%/(&\""
-                                ,fun(A)-> A end, ServerKey),
-          TS, fun(A)-> A end, ServerKey)),
+          generate_session_data(TSFuture, "alice .'¡'ç+-$%/(&\""
+                                ,Id, ServerKey),
+          TS, Id, ServerKey)),
      ?_assertEqual(
-        {true,[TS+1000,"alice456689875"]},
+        {true,[TSFuture,"alice456689875"]},
         check_session_cookie(
-          generate_session_data(TS+1000, ["alice","456689875"],
-                                fun(A)-> A end, ServerKey),
-          TS, fun(A)-> A end, ServerKey)),
+          generate_session_data(TSFuture, ["alice","456689875"],
+                                Id, ServerKey),
+          TS, Id, ServerKey)),
      ?_assertError(
         function_clause,
         check_session_cookie(
-          generate_session_data(TS+1000, {tuple,one},
-                                fun(A)-> A end, ServerKey),
-          TS, fun(A)-> A end,ServerKey)),
+          generate_session_data(TSFuture, {tuple,one},
+                                Id, ServerKey),
+          TS, Id,ServerKey)),
      ?_assertEqual(
-        {false, [TS-1, "bob"]},
+        {false, [TSPast, "bob"]},
         check_session_cookie(
-          generate_session_data(TS-1, "bob", fun(A)-> A end,ServerKey),
-          TS, fun(A)-> A end, ServerKey))
+          generate_session_data(TSPast, "bob", Id,ServerKey),
+          TS, Id, ServerKey))
     ].
 -endif.

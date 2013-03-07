@@ -36,7 +36,7 @@
 %% @type key() = atom() | string() | binary()
 %% @type value() = atom() | string() | binary() | integer()
 %% @type headers(). A mochiweb_headers structure.
-%% @type request() = {mochiweb_request,[_Socket,_Method,_RawPath,_Version,_Headers]}
+%% @type request(). A mochiweb_request parameterized module instance.
 %% @type response(). A mochiweb_response parameterized module instance.
 %% @type ioheaders() = headers() | [{key(), value()}].
 
