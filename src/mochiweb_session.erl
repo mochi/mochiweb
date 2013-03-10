@@ -99,13 +99,13 @@ ensure_binary(B) when is_binary(B) ->
 ensure_binary(L) when is_list(L) ->
     iolist_to_binary(L).
 
--spec encrypt_data(iolist(), iolist()) -> binary().
+-spec encrypt_data(binary(), binary()) -> binary().
 encrypt_data(Data, Key) ->
     IV = crypto:rand_bytes(16),
     Crypt = crypto:aes_cfb_128_encrypt(Key, IV, Data),
     <<IV/binary, Crypt/binary>>.
 
--spec decrypt_data(binary(), iolist()) -> binary().
+-spec decrypt_data(binary(), binary()) -> binary().
 decrypt_data(<<IV:16/binary, Crypt/binary>>, Key) ->
     crypto:aes_cfb_128_decrypt(Key, IV, Crypt).
 
@@ -113,8 +113,8 @@ decrypt_data(<<IV:16/binary, Crypt/binary>>, Key) ->
 gen_key(ExpirationTime, ServerKey)->
     crypto:md5_mac(ServerKey, [ExpirationTime]).
 
--spec gen_hmac(iolist(), iolist(), iolist(), iolist()) -> binary().
-gen_hmac(ExpirationTime, Data, SessionKey, Key)->
+-spec gen_hmac(iolist(), binary(), iolist(), binary()) -> binary().
+gen_hmac(ExpirationTime, Data, SessionKey, Key) ->
     crypto:sha_mac(Key, [ExpirationTime, Data, SessionKey]).
 
 
