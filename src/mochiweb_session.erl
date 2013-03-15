@@ -33,7 +33,8 @@ generate_session_data(ExpirationTime, Data, FSessionKey, ServerKey)
     Key = gen_key(ExpTime, ServerKey),
     Hmac = gen_hmac(ExpTime, BData, FSessionKey(ExpTime), Key),
     EData = encrypt_data(BData, Key),
-    base64:encode(<<ExpirationTime:32/integer, Hmac/binary, EData/binary>>).
+    mochiweb_base64url:encode(
+      <<ExpirationTime:32/integer, Hmac/binary, EData/binary>>).
 
 %% @doc Convenience wrapper for generate_session_data that returns a
 %% mochiweb cookie with "id" as the key, a max_age of 20000 seconds,
@@ -64,7 +65,7 @@ generate_session_cookie(ExpirationTime, Data, FSessionKey, ServerKey)
 check_session_cookie(ECookie, ExpirationTime, FSessionKey, ServerKey)
   when is_binary(ECookie), is_integer(ExpirationTime),
        is_function(FSessionKey) ->
-    case base64:decode(ECookie) of
+    case mochiweb_base64url:decode(ECookie) of
         <<ExpirationTime1:32/integer, BHmac:20/binary, EData/binary>> ->
             ETString = integer_to_list(ExpirationTime1),
             Key = gen_key(ETString, ServerKey),

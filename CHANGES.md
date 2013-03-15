@@ -5,6 +5,8 @@ Version 2.5.0 released 2013-03-04
 * New mochiweb_session module for managing session cookies.
   NOTE: this module is only supported on R15B02 and later!
   https://github.com/mochi/mochiweb/pull/94
+* New mochiweb_base64url module for base64url encoding
+  (URL and Filename safe alphabet, see RFC 4648).
   
 Version 2.4.2 released 2013-02-05
 
