@@ -7,6 +7,8 @@ Version 2.5.0 released 2013-03-04
   https://github.com/mochi/mochiweb/pull/94
 * New mochiweb_base64url module for base64url encoding
   (URL and Filename safe alphabet, see RFC 4648).
+* Fix rebar.config in mochiwebapp_skel to use {branch, "master"}
+  https://github.com/mochi/mochiweb/issues/105
   
 Version 2.4.2 released 2013-02-05
 
