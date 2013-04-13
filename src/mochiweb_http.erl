@@ -50,6 +50,16 @@ loop(Socket, Body) ->
     ok = mochiweb_socket:setopts(Socket, [{packet, http}]),
     request(Socket, Body).
 
+-ifndef(gen_tcp_fix).
+-define(R15B_GEN_TCP_FIX, {tcp_error,_,emsgsize} ->
+                 % R15B02 returns this then closes the socket, so close and exit
+                 mochiweb_socket:close(Socket),
+                 exit(normal);
+       ).
+-else.
+-define(R15B_GEN_TCP_FIX,).
+-endif.
+
 request(Socket, Body) ->
     ok = mochiweb_socket:setopts(Socket, [{active, once}]),
     receive
@@ -66,10 +76,7 @@ request(Socket, Body) ->
         {ssl_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp_error,_,emsgsize} ->
-            % R15B02 returns this then closes the socket, so close and exit
-            mochiweb_socket:close(Socket),
-            exit(normal);
+        ?R15B_GEN_TCP_FIX
         _Other ->
             handle_invalid_request(Socket)
     after ?REQUEST_RECV_TIMEOUT ->
@@ -99,10 +106,7 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp_error,_,emsgsize} ->
-            % R15B02 returns this then closes the socket, so close and exit
-            mochiweb_socket:close(Socket),
-            exit(normal);
+        ?R15B_GEN_TCP_FIX
         _Other ->
             handle_invalid_request(Socket, Request, Headers)
     after ?HEADERS_RECV_TIMEOUT ->
