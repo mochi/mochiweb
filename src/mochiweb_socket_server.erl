@@ -166,6 +166,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog, nodelay=No
                 {packet, 0},
                 {backlog, Backlog},
                 {recbuf, ?RECBUF_SIZE},
+                {exit_on_close, false},
                 {active, false},
                 {nodelay, NoDelay}],
     Opts = case Ip of
