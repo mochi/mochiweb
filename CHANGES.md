@@ -1,3 +1,8 @@
+Version 2.6.0 released 2013-04-15
+
+* Enable R15B gen_tcp workaround only on R15B
+  https://github.com/mochi/mochiweb/pull/107
+
 Version 2.5.0 released 2013-03-04
 
 * Replace now() with os:timestamp() in acceptor (optimization)

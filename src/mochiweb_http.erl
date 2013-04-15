@@ -50,7 +50,7 @@ loop(Socket, Body) ->
     ok = mochiweb_socket:setopts(Socket, [{packet, http}]),
     request(Socket, Body).
 
--ifndef(gen_tcp_fix).
+-ifdef(gen_tcp_r15b_workaround).
 -define(R15B_GEN_TCP_FIX, {tcp_error,_,emsgsize} ->
                  % R15B02 returns this then closes the socket, so close and exit
                  mochiweb_socket:close(Socket),
