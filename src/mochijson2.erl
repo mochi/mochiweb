@@ -452,10 +452,24 @@ tokenize_string(B, S=#decoder{offset=O}, Acc) ->
                 D = erlang:list_to_integer([D3,D2,D1,D0], 16),
                 [CodePoint] = xmerl_ucs:from_utf16be(<<C:16/big-unsigned-integer,
                     D:16/big-unsigned-integer>>),
-                Acc1 = lists:reverse(xmerl_ucs:to_utf8(CodePoint), Acc),
+                Utf8 = try
+                    xmerl_ucs:to_utf8(CodePoint)
+                catch X:Y ->
+                    error_logger:error_msg("Unable to convert from utf16be:~p~n~p~nCode point:~p",
+                        [{X,Y}, {C, D}, CodePoint]),
+                    []
+                end,
+                Acc1 = lists:reverse(Utf8, Acc),
                 tokenize_string(B, ?ADV_COL(S, 12), Acc1);
             true ->
-                Acc1 = lists:reverse(xmerl_ucs:to_utf8(C), Acc),
+                Utf8 = try
+                    xmerl_ucs:to_utf8(C)
+                catch X:Y ->
+                    error_logger:error_msg("Unable to do simple convert: ~p~n~p~n",
+                        [{X,Y}, C]),
+                    []
+                end,
+                Acc1 = lists:reverse(Utf8, Acc),
                 tokenize_string(B, ?ADV_COL(S, 6), Acc1)
             end;
         <<_:O/binary, C1, _/binary>> when C1 < 128 ->
