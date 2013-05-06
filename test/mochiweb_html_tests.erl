@@ -570,3 +570,11 @@ parse_unescaped_lt_test() ->
         {<<"div">>, [], [<<" << ">>, {<<"a">>, [{<<"href">>, <<"/">>}],
                                       [<<"Back">>]}]},
     mochiweb_html:parse(D2)).
+
+implicit_html_test() ->
+    %% https://github.com/mochi/mochiweb/issues/110
+    ?assertEqual(
+       {<<"html">>, [],
+        [{<<"head">>, [], []},
+         {<<"body">>, [], []}]},
+       mochiweb_html:parse("<!doctype html><head></head><body></body>")).
