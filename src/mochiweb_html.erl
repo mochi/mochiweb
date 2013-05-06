@@ -95,7 +95,7 @@ to_tokens({Tag0, Acc}) ->
     to_tokens({Tag0, [], Acc});
 to_tokens({Tag0, Attrs, Acc}) ->
     Tag = to_tag(Tag0),
-    case is_singleton(Tag) of 
+    case is_singleton(Tag) of
         true ->
             to_tokens([], [{start_tag, Tag, Attrs, true}]);
         false ->
@@ -317,7 +317,7 @@ tokenize(B, S=#decoder{offset=O}) ->
             {Tag, S1} = tokenize_literal(B, ?ADV_COL(S, 2)),
             {S2, _} = find_gt(B, S1),
             {{end_tag, Tag}, S2};
-        <<_:O/binary, "<", C, _/binary>> 
+        <<_:O/binary, "<", C, _/binary>>
                 when ?IS_WHITESPACE(C); not ?IS_LITERAL_SAFE(C) ->
             %% This isn't really strict HTML
             {{data, Data, _Whitespace}, S1} = tokenize_data(B, ?INC_COL(S)),
@@ -581,9 +581,9 @@ find_qgt(Bin, S=#decoder{offset=O}) ->
         <<_:O/binary, "?>", _/binary>> ->
             ?ADV_COL(S, 2);
         <<_:O/binary, ">", _/binary>> ->
-			?ADV_COL(S, 1);
+                        ?ADV_COL(S, 1);
         <<_:O/binary, "/>", _/binary>> ->
-			?ADV_COL(S, 2);
+                        ?ADV_COL(S, 2);
         %% tokenize_attributes takes care of this state:
         %% <<_:O/binary, C, _/binary>> ->
         %%     find_qgt(Bin, ?INC_CHAR(S, C));
@@ -1244,7 +1244,7 @@ parse_quoted_attr_test() ->
         {<<"html">>,[],[
             { <<"a">>, [ { <<"href">>, <<"#">> }, {<<"onclick">>, <<"javascript: test(1,\ntrue);">>} ], [] }
         ]},
-        mochiweb_html:parse(D3)),     
+        mochiweb_html:parse(D3)),
     ok.
 
 parse_missing_attr_name_test() ->
@@ -1255,24 +1255,24 @@ parse_missing_attr_name_test() ->
     ok.
 
 parse_broken_pi_test() ->
-	D0 = <<"<html><?xml:namespace prefix = o ns = \"urn:schemas-microsoft-com:office:office\" /></html>">>,
-	?assertEqual(
-		{<<"html">>, [], [
-			{ pi, <<"xml:namespace">>, [ { <<"prefix">>, <<"o">> },
-			                             { <<"ns">>, <<"urn:schemas-microsoft-com:office:office">> } ] }
-		] },
-		mochiweb_html:parse(D0)),
-	ok.
+        D0 = <<"<html><?xml:namespace prefix = o ns = \"urn:schemas-microsoft-com:office:office\" /></html>">>,
+        ?assertEqual(
+                {<<"html">>, [], [
+                        { pi, <<"xml:namespace">>, [ { <<"prefix">>, <<"o">> },
+                                                     { <<"ns">>, <<"urn:schemas-microsoft-com:office:office">> } ] }
+                ] },
+                mochiweb_html:parse(D0)),
+        ok.
 
 parse_funny_singletons_test() ->
-	D0 = <<"<html><input><input>x</input></input></html>">>,
-	?assertEqual(
-		{<<"html">>, [], [
-			{ <<"input">>, [], [] },
-			{ <<"input">>, [], [ <<"x">> ] }
-		] },
-		mochiweb_html:parse(D0)),
-	ok.
+        D0 = <<"<html><input><input>x</input></input></html>">>,
+        ?assertEqual(
+                {<<"html">>, [], [
+                        { <<"input">>, [], [] },
+                        { <<"input">>, [], [ <<"x">> ] }
+                ] },
+                mochiweb_html:parse(D0)),
+        ok.
 
 to_html_singleton_test() ->
     D0 = <<"<link />">>,
@@ -1319,13 +1319,13 @@ parse_amp_test_() ->
 parse_unescaped_lt_test() ->
     D1 = <<"<div> < < <a href=\"/\">Back</a></div>">>,
     ?assertEqual(
-        {<<"div">>, [], [<<" < < ">>, {<<"a">>, [{<<"href">>, <<"/">>}], 
+        {<<"div">>, [], [<<" < < ">>, {<<"a">>, [{<<"href">>, <<"/">>}],
                                        [<<"Back">>]}]},
         mochiweb_html:parse(D1)),
 
     D2 = <<"<div> << <a href=\"/\">Back</a></div>">>,
     ?assertEqual(
-        {<<"div">>, [], [<<" << ">>, {<<"a">>, [{<<"href">>, <<"/">>}], 
+        {<<"div">>, [], [<<" << ">>, {<<"a">>, [{<<"href">>, <<"/">>}],
                                       [<<"Back">>]}]},
     mochiweb_html:parse(D2)).
 
