@@ -571,6 +571,15 @@ parse_unescaped_lt_test() ->
                                       [<<"Back">>]}]},
     mochiweb_html:parse(D2)).
 
+html5_doctype_test() ->
+    ?assertEqual(
+       [{doctype,[<<"html">>]},
+        {start_tag,<<"head">>,[],false},
+        {end_tag,<<"head">>},
+        {start_tag,<<"body">>,[],false},
+        {end_tag,<<"body">>}],
+       mochiweb_html:tokens("<!doctype html><head></head><body></body>")).
+
 implicit_html_test() ->
     %% https://github.com/mochi/mochiweb/issues/110
     ?assertEqual(

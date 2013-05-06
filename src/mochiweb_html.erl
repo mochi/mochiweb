@@ -5,13 +5,14 @@
 -module(mochiweb_html).
 -export([tokens/1, parse/1, parse_tokens/1, to_tokens/1, escape/1,
          escape_attr/1, to_html/1]).
+-compile([export_all]).
 -ifdef(TEST).
 -export([destack/1, destack/2, is_singleton/1]).
 -endif.
 
 %% This is a macro to placate syntax highlighters..
--define(QUOTE, $\").
--define(SQUOTE, $\').
+-define(QUOTE, $\"). %% $\"
+-define(SQUOTE, $\'). %% $\'
 -define(ADV_COL(S, N),
         S#decoder{column=N+S#decoder.column,
                   offset=N+S#decoder.offset}).
@@ -66,17 +67,24 @@ parse(Input) ->
 %% @doc Transform the output of tokens(Doc) into a HTML tree.
 parse_tokens(Tokens) when is_list(Tokens) ->
     %% Skip over doctype, processing instructions
-    F = fun (X) ->
-                case X of
-                    {start_tag, _, _, false} ->
-                        false;
-                    _ ->
-                        true
-                end
-        end,
-    [{start_tag, Tag, Attrs, false} | Rest] = lists:dropwhile(F, Tokens),
+    [{start_tag, Tag, Attrs, false} | Rest] = find_document(Tokens, normal),
     {Tree, _} = tree(Rest, [norm({Tag, Attrs})]),
     Tree.
+
+find_document(Tokens=[{start_tag, _Tag, _Attrs, false} | _Rest], Mode) ->
+    maybe_add_html_tag(Tokens, Mode);
+find_document([{doctype, [<<"html">>]} | Rest], _Mode) ->
+    find_document(Rest, html5);
+find_document([_T | Rest], Mode) ->
+    find_document(Rest, Mode);
+find_document([], _Mode) ->
+    [].
+
+maybe_add_html_tag(Tokens=[{start_tag, Tag, _Attrs, false} | _], html5)
+  when Tag =/= <<"html">> ->
+    [{start_tag, <<"html">>, [], false} | Tokens];
+maybe_add_html_tag(Tokens, _Mode) ->
+    Tokens.
 
 %% @spec tokens(StringOrBinary) -> [html_token()]
 %% @doc Transform the input UTF-8 HTML into a token stream.
@@ -302,6 +310,8 @@ tokenize(B, S=#decoder{offset=O}) ->
     case B of
         <<_:O/binary, "<!--", _/binary>> ->
             tokenize_comment(B, ?ADV_COL(S, 4));
+        <<_:O/binary, "<!doctype", _/binary>> ->
+            tokenize_doctype(B, ?ADV_COL(S, 10));
         <<_:O/binary, "<!DOCTYPE", _/binary>> ->
             tokenize_doctype(B, ?ADV_COL(S, 10));
         <<_:O/binary, "<![CDATA[", _/binary>> ->
