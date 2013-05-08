@@ -1,3 +1,10 @@
+Version 2.7.0 released XXXX-XX-XX
+
+* `mochiweb_html:parse_tokens/1` (and `parse/1`) will now create a
+  html element to wrap documents that have a HTML5 doctype
+  (`<!doctype html>`) but no html element 
+  https://github.com/mochi/mochiweb/issues/110
+
 Version 2.6.0 released 2013-04-15
 
 * Enable R15B gen_tcp workaround only on R15B
