@@ -1,5 +1,7 @@
 Version 2.7.0 released XXXX-XX-XX
 
+* `mochiweb_socket_server:stop/1` is now a synchronous
+  call instead of an asynchronous cast
 * `mochiweb_html:parse_tokens/1` (and `parse/1`) will now create a
   html element to wrap documents that have a HTML5 doctype
   (`<!doctype html>`) but no html element 
