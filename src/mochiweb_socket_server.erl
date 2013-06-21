@@ -137,6 +137,7 @@ start_server(F, State=#mochiweb_socket_server{ssl=Ssl, name=Name}) ->
 
 prep_ssl(true) ->
     ok = mochiweb:ensure_started(crypto),
+    ok = mochiweb:ensure_started(asn1),
     ok = mochiweb:ensure_started(public_key),
     ok = mochiweb:ensure_started(ssl);
 prep_ssl(false) ->
