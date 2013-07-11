@@ -56,6 +56,23 @@ new_request({Socket, {Method, '*'=Uri, Version}, Headers}) ->
                          Method,
                          Uri,
                          Version,
+                         mochiweb_headers:make(Headers));
+%% Request URI is a scheme
+%% Erlang decode_package will return this for requests like `CONNECT example:port`
+new_request({Socket, {Method, {scheme, Hostname, Port}, Version}, Headers}) ->
+    Uri = Hostname ++ ":" ++ Port,
+    mochiweb_request:new(Socket,
+                         Method,
+                         Uri,
+                         Version,
+                         mochiweb_headers:make(Headers));
+%% Request is an HTTP string
+%% Erlang decode_package will return this for requests like `GET example`
+new_request({Socket, {Method, HttpString, Version}, Headers}) when is_list(HttpString) ->
+    mochiweb_request:new(Socket,
+                         Method,
+                         HttpString,
+                         Version,
                          mochiweb_headers:make(Headers)).
 
 %% @spec new_response({Request, integer(), Headers}) -> MochiWebResponse
