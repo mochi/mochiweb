@@ -1,5 +1,8 @@
 Version 2.7.0 released XXXX-XX-XX
 
+* Add support for all possible `erlang:decode_packet/3` responses,
+  previously these would just crash.
+  https://github.com/mochi/mochiweb/pull/114
 * Makefile fixed to make `make test` work before `make all`
   https://github.com/mochi/mochiweb/pull/116
 * Usage of the crypto module made R16B01+ compatible

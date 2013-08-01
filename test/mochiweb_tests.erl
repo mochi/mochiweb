@@ -83,8 +83,34 @@ hundred_128_https_POST_test_() -> % note the underscore
     {timeout, ?LARGE_TIMEOUT,
      fun() -> ?assertEqual(ok, do_POST(ssl, 128, 100)) end}.
 
+single_GET_relative_test_() ->
+    [{"ssl", ?_assertEqual(ok, do_GET("derp", ssl, 1))},
+     {"plain", ?_assertEqual(ok, do_GET("derp", plain, 1))}].
+
+single_CONNECT_test_() ->
+    [{"ssl", ?_assertEqual(ok, do_CONNECT(ssl, 1))},
+     {"plain", ?_assertEqual(ok, do_CONNECT(plain, 1))}].
+
+do_CONNECT(Transport, Times) ->
+    PathPrefix = "example.com:",
+    ReplyPrefix = "You requested: ",
+    ServerFun = fun (Req) ->
+                        Reply = ReplyPrefix ++ Req:get(path),
+                        Req:ok({"text/plain", Reply})
+                end,
+    TestReqs = [begin
+                    Path = PathPrefix ++ integer_to_list(N),
+                    ExpectedReply = list_to_binary(ReplyPrefix ++ Path),
+                    #treq{path=Path, xreply=ExpectedReply}
+                end || N <- lists:seq(1, Times)],
+    ClientFun = new_client_fun('CONNECT', TestReqs),
+    ok = with_server(Transport, ServerFun, ClientFun),
+    ok.
+
 do_GET(Transport, Times) ->
-    PathPrefix = "/whatever/",
+    do_GET("/whatever/", Transport, Times).
+
+do_GET(PathPrefix, Transport, Times) ->
     ReplyPrefix = "You requested: ",
     ServerFun = fun (Req) ->
                         Reply = ReplyPrefix ++ Req:get(path),
@@ -98,7 +124,6 @@ do_GET(Transport, Times) ->
     ClientFun = new_client_fun('GET', TestReqs),
     ok = with_server(Transport, ServerFun, ClientFun),
     ok.
-
 do_POST(Transport, Size, Times) ->
     ServerFun = fun (Req) ->
                         Body = Req:recv_body(),
@@ -161,7 +186,9 @@ client_request(SockFun, Method,
         'GET' ->
             {ok, {http_response, {1,1}, 200, "OK"}} = SockFun(recv);
         'POST' ->
-            {ok, {http_response, {1,1}, 201, "Created"}} = SockFun(recv)
+            {ok, {http_response, {1,1}, 201, "Created"}} = SockFun(recv);
+        'CONNECT' ->
+            {ok, {http_response, {1,1}, 200, "OK"}} = SockFun(recv)
     end,
     ok = SockFun({setopts, [{packet, httph}]}),
     {ok, {http_header, _, 'Server', _, "MochiWeb" ++ _}} = SockFun(recv),
