@@ -83,13 +83,33 @@ hundred_128_https_POST_test_() -> % note the underscore
     {timeout, ?LARGE_TIMEOUT,
      fun() -> ?assertEqual(ok, do_POST(ssl, 128, 100)) end}.
 
-single_GET_relative_test_() ->
+single_GET_scheme_test_() ->
     [{"ssl", ?_assertEqual(ok, do_GET("derp", ssl, 1))},
      {"plain", ?_assertEqual(ok, do_GET("derp", plain, 1))}].
+
+single_GET_absoluteURI_test_() ->
+    Uri = "https://example.com:123/x/",
+    ServerFun = fun (Req) ->
+                        Req:ok({"text/plain", Req:get(path)})
+                end,
+    %% Note that all the scheme/host/port information is discarded from path
+    ClientFun = new_client_fun('GET', [#treq{path = Uri, xreply = <<"/x/">>}]),
+    [{atom_to_list(Transport),
+      ?_assertEqual(ok, with_server(Transport, ServerFun, ClientFun))}
+     || Transport <- [ssl, plain]].
 
 single_CONNECT_test_() ->
     [{"ssl", ?_assertEqual(ok, do_CONNECT(ssl, 1))},
      {"plain", ?_assertEqual(ok, do_CONNECT(plain, 1))}].
+
+single_GET_any_test_() ->
+    ServerFun = fun (Req) ->
+                        Req:ok({"text/plain", Req:get(path)})
+                end,
+    ClientFun = new_client_fun('GET', [#treq{path = "*", xreply = <<"*">>}]),
+    [{atom_to_list(Transport),
+      ?_assertEqual(ok, with_server(Transport, ServerFun, ClientFun))}
+     || Transport <- [ssl, plain]].
 
 do_CONNECT(Transport, Times) ->
     PathPrefix = "example.com:",

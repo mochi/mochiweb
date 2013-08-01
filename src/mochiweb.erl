@@ -32,46 +32,31 @@ all_loaded(Base) ->
         end,
     lists:foldl(F, [], code:all_loaded()).
 
+%% See the erlang:decode_packet/3 docs for the full type
+-spec uri(HttpUri :: term()) -> string().
+uri({abs_path, Uri}) ->
+    Uri;
+%% TODO:
+%% This makes it hard to implement certain kinds of proxies with mochiweb,
+%% perhaps a field could be added to the mochiweb_request record to preserve
+%% this information in raw_path.
+uri({absoluteURI, _Protocol, _Host, _Port, Uri}) ->
+    Uri;
+%% From http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
+uri('*') ->
+    "*";
+%% Erlang decode_packet will return this for requests like `CONNECT host:port`
+uri({scheme, Hostname, Port}) ->
+    Hostname ++ ":" ++ Port;
+uri(HttpString) when is_list(HttpString) ->
+    HttpString.
 
 %% @spec new_request({Socket, Request, Headers}) -> MochiWebRequest
 %% @doc Return a mochiweb_request data structure.
-new_request({Socket, {Method, {abs_path, Uri}, Version}, Headers}) ->
+new_request({Socket, {Method, HttpUri, Version}, Headers}) ->
     mochiweb_request:new(Socket,
                          Method,
-                         Uri,
-                         Version,
-                         mochiweb_headers:make(Headers));
-% this case probably doesn't "exist".
-new_request({Socket, {Method, {absoluteURI, _Protocol, _Host, _Port, Uri},
-                      Version}, Headers}) ->
-    mochiweb_request:new(Socket,
-                         Method,
-                         Uri,
-                         Version,
-                         mochiweb_headers:make(Headers));
-%% Request-URI is "*"
-%% From http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1.2
-new_request({Socket, {Method, '*'=Uri, Version}, Headers}) ->
-    mochiweb_request:new(Socket,
-                         Method,
-                         Uri,
-                         Version,
-                         mochiweb_headers:make(Headers));
-%% Request URI is a scheme
-%% Erlang decode_package will return this for requests like `CONNECT example:port`
-new_request({Socket, {Method, {scheme, Hostname, Port}, Version}, Headers}) ->
-    Uri = Hostname ++ ":" ++ Port,
-    mochiweb_request:new(Socket,
-                         Method,
-                         Uri,
-                         Version,
-                         mochiweb_headers:make(Headers));
-%% Request is an HTTP string
-%% Erlang decode_package will return this for requests like `GET example`
-new_request({Socket, {Method, HttpString, Version}, Headers}) when is_list(HttpString) ->
-    mochiweb_request:new(Socket,
-                         Method,
-                         HttpString,
+                         uri(HttpUri),
                          Version,
                          mochiweb_headers:make(Headers)).
 
