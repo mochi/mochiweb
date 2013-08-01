@@ -17,6 +17,12 @@
 -define(DEFAULTS, [{name, ?MODULE},
                    {port, 8888}]).
 
+-ifdef(gen_tcp_r15b_workaround).
+r15b_workaround() -> true.
+-else.
+r15b_workaround() -> false.
+-endif.
+
 parse_options(Options) ->
     {loop, HttpLoop} = proplists:lookup(loop, Options),
     Loop = {?MODULE, loop, [HttpLoop]},
@@ -50,16 +56,6 @@ loop(Socket, Body) ->
     ok = mochiweb_socket:setopts(Socket, [{packet, http}]),
     request(Socket, Body).
 
--ifdef(gen_tcp_r15b_workaround).
--define(R15B_GEN_TCP_FIX, {tcp_error,_,emsgsize} ->
-                 % R15B02 returns this then closes the socket, so close and exit
-                 mochiweb_socket:close(Socket),
-                 exit(normal);
-       ).
--else.
--define(R15B_GEN_TCP_FIX,).
--endif.
-
 request(Socket, Body) ->
     ok = mochiweb_socket:setopts(Socket, [{active, once}]),
     receive
@@ -76,9 +72,8 @@ request(Socket, Body) ->
         {ssl_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        ?R15B_GEN_TCP_FIX
-        _Other ->
-            handle_invalid_request(Socket)
+        Other ->
+            handle_invalid_msg_request(Other, Socket)
     after ?REQUEST_RECV_TIMEOUT ->
         mochiweb_socket:close(Socket),
         exit(normal)
@@ -106,9 +101,8 @@ headers(Socket, Request, Headers, Body, HeaderCount) ->
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        ?R15B_GEN_TCP_FIX
-        _Other ->
-            handle_invalid_request(Socket, Request, Headers)
+        Other ->
+            handle_invalid_msg_request(Other, Socket, Request, Headers)
     after ?HEADERS_RECV_TIMEOUT ->
         mochiweb_socket:close(Socket),
         exit(normal)
@@ -121,10 +115,20 @@ call_body({M, F}, Req) ->
 call_body(Body, Req) ->
     Body(Req).
 
--spec handle_invalid_request(term()) -> no_return().
-handle_invalid_request(Socket) ->
-    handle_invalid_request(Socket, {'GET', {abs_path, "/"}, {0,9}}, []),
-    exit(normal).
+-spec handle_invalid_msg_request(term(), term()) -> no_return().
+handle_invalid_msg_request(Msg, Socket) ->
+    handle_invalid_msg_request(Msg, Socket, {'GET', {abs_path, "/"}, {0,9}}, []).
+
+-spec handle_invalid_msg_request(term(), term(), term(), term()) -> no_return().
+handle_invalid_msg_request(Msg, Socket, Request, RevHeaders) ->
+    case {Msg, r15b_workaround()} of
+        {{tcp_error,_,emsgsize}, true} ->
+            %% R15B02 returns this then closes the socket, so close and exit
+            mochiweb_socket:close(Socket),
+            exit(normal);
+        _ ->
+            handle_invalid_request(Socket, Request, RevHeaders)
+    end.
 
 -spec handle_invalid_request(term(), term(), term()) -> no_return().
 handle_invalid_request(Socket, Request, RevHeaders) ->
