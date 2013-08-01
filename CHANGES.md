@@ -1,5 +1,7 @@
-Version 2.7.0 released XXXX-XX-XX
+Version 2.7.0 released 2013-08-01
 
+* Fix 0-length range responses
+  https://github.com/mochi/mochiweb/pull/87
 * Add support for all possible `erlang:decode_packet/3` responses,
   previously these would just crash.
   https://github.com/mochi/mochiweb/pull/114
