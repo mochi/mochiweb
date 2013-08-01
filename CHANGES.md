@@ -1,5 +1,11 @@
 Version 2.7.0 released XXXX-XX-XX
 
+* Makefile fixed to make `make test` work before `make all`
+  https://github.com/mochi/mochiweb/pull/116
+* Usage of the crypto module made R16B01+ compatible
+  https://github.com/mochi/mochiweb/pull/115
+* Build fixed for R16B01
+  https://github.com/mochi/mochiweb/pull/112
 * `mochiweb_socket_server:stop/1` is now a synchronous
   call instead of an asynchronous cast
 * `mochiweb_html:parse_tokens/1` (and `parse/1`) will now create a
