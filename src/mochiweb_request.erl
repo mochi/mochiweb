@@ -672,7 +672,12 @@ range_parts({file, IoDevice}, Ranges) ->
     LocNums = lists:foldr(F, [], Ranges),
     {ok, Data} = file:pread(IoDevice, LocNums),
     Bodies = lists:zipwith(fun ({Skip, Length}, PartialBody) ->
-                                   {Skip, Skip + Length - 1, PartialBody}
+                                   case Length of
+                                       0 ->
+                                           {Skip, Skip, <<>>};
+                                       _ ->
+                                           {Skip, Skip + Length - 1, PartialBody}
+                                   end
                            end,
                            LocNums, Data),
     {Bodies, Size};
