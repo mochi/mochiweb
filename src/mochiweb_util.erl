@@ -360,8 +360,8 @@ guess_mime(File) ->
     case filename:basename(File) of
         "crossdomain.xml" ->
             "text/x-cross-domain-policy";
-        _ ->
-            case mochiweb_mime:from_extension(filename:extension(File)) of
+        Name ->
+            case mochiweb_mime:from_extension(filename:extension(Name)) of
                 undefined ->
                     "text/plain";
                 Mime ->
