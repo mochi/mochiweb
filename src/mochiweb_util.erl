@@ -357,11 +357,16 @@ urlsplit_query([C | Rest], Acc) ->
 %% @spec guess_mime(string()) -> string()
 %% @doc  Guess the mime type of a file by the extension of its filename.
 guess_mime(File) ->
-    case mochiweb_mime:from_extension(filename:extension(File)) of
-        undefined ->
-            "text/plain";
-        Mime ->
-            Mime
+    case filename:basename(File) of
+        "crossdomain.xml" ->
+            "text/x-cross-domain-policy";
+        Name ->
+            case mochiweb_mime:from_extension(filename:extension(Name)) of
+                undefined ->
+                    "text/plain";
+                Mime ->
+                    Mime
+            end
     end.
 
 %% @spec parse_header(string()) -> {Type, [{K, V}]}
@@ -686,12 +691,14 @@ parse_header_test() ->
     ok.
 
 guess_mime_test() ->
-    "text/plain" = guess_mime(""),
-    "text/plain" = guess_mime(".text"),
-    "application/zip" = guess_mime(".zip"),
-    "application/zip" = guess_mime("x.zip"),
-    "text/html" = guess_mime("x.html"),
-    "application/xhtml+xml" = guess_mime("x.xhtml"),
+    ?assertEqual("text/plain", guess_mime("")),
+    ?assertEqual("text/plain", guess_mime(".text")),
+    ?assertEqual("application/zip", guess_mime(".zip")),
+    ?assertEqual("application/zip", guess_mime("x.zip")),
+    ?assertEqual("text/html", guess_mime("x.html")),
+    ?assertEqual("application/xhtml+xml", guess_mime("x.xhtml")),
+    ?assertEqual("text/x-cross-domain-policy", guess_mime("crossdomain.xml")),
+    ?assertEqual("text/x-cross-domain-policy", guess_mime("www/crossdomain.xml")),
     ok.
 
 path_split_test() ->
