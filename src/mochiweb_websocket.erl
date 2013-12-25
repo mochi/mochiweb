@@ -28,45 +28,47 @@
 -export([loop/4, upgrade_connection/1, request/4]).
 -export([after_response/4, reentry/1, send/3]).
 
--define(REQUEST_RECV_TIMEOUT, 3000000).   %% timeout waiting for request line
--define(HEADERS_RECV_TIMEOUT, 30000).    %% timeout waiting for headers
-
--define(MAX_HEADERS, 1000).
--define(DEFAULTS, [{name, ?MODULE},
-                   {port, 8888}]).
-
 loop(Socket, Body, State, WsVersion) ->
     ok = mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}]),
     proc_lib:hibernate(?MODULE, request, [Socket, Body, State, WsVersion]).
 
 upgrade_connection(Req) ->
-    % Headers for HYBI handshake
+    case make_handshake(Req) of
+        {Version, Response} ->
+            Req:respond(Response),
+            Version;
+
+        _ ->
+            mochiweb_socket:close(Req:get(socket)),
+            exit(normal)
+    end.
+   
+make_handshake(Req) ->
     SecKey  = Req:get_header_value("sec-websocket-key"),
     Sec1Key = Req:get_header_value("Sec-WebSocket-Key1"),
     Sec2Key = Req:get_header_value("Sec-WebSocket-Key2"),
     Origin = Req:get_header_value(origin),
-
     if not (SecKey == undefined) ->
-          hybi_handshake(Req, SecKey);
+          hybi_handshake(SecKey);
 
-      (not (Sec1Key == undefined)) and (not (Sec2Key == undefined)) ->
-          Body = Req:recv(8),
-          hixie_handshake(Req, Sec1Key, Sec2Key, Body, Origin);
+        (not (Sec1Key == undefined)) and (not (Sec2Key == undefined)) ->
+            Host = Req:get_header_value("Host"),
+            Path = Req:get(path),
+            Body = Req:recv(8),
+            hixie_handshake(Host, Path, Sec1Key, Sec2Key, Body, Origin);
 
        true ->
-          mochiweb_socket:close(Req:get(socket)),
-          exit(normal)
+          error
     end.
-   
 
-hybi_handshake(Req, SecKey) ->
+hybi_handshake(SecKey) ->
   Challenge = handshake_key(SecKey),
-  Req:respond({101, [{"Connection", "Upgrade"},
+  Response = {101, [{"Connection", "Upgrade"},
                      {"Upgrade", "websocket"},
-                     {"Sec-Websocket-Accept", Challenge}], ""}),
-  hybi.
+                     {"Sec-Websocket-Accept", Challenge}], ""},
+  {hybi, Response}.
 
-hixie_handshake(Req, Key1, Key2, Body, Origin) ->
+hixie_handshake(Host, Path, Key1, Key2, Body, Origin) ->
   Ikey1 = [D || D <- Key1, $0 =< D, D =< $9],
   Ikey2 = [D || D <- Key2, $0 =< D, D =< $9],
   Blank1 = length([D || D <- Key1, D =:= 32]),
@@ -76,18 +78,14 @@ hixie_handshake(Req, Key1, Key2, Body, Origin) ->
   Ckey = <<Part1:4/big-unsigned-integer-unit:8, Part2:4/big-unsigned-integer-unit:8, Body/binary>>,
   Challenge = erlang:md5(Ckey),
 
-  Location = lists:concat(["ws://", 
-                           Req:get_header_value("Host"),
-                           Req:get(path)]),
+  Location = lists:concat(["ws://", Host, Path]),
 
-  Req:respond({101, [{"Upgrade", "WebSocket"},
+  Response = {101, [{"Upgrade", "WebSocket"},
                      {"Connection", "Upgrade"},
                      {"Sec-WebSocket-Origin", Origin},
                      {"Sec-WebSocket-Location", Location}],
-                    Challenge}),
-  hixie.
-
-
+                    Challenge},
+  {hixie, Response}.
 
 send(Socket, Payload, hybi) ->
     Len = payload_length(iolist_size(Payload)),
@@ -121,6 +119,7 @@ request(Socket, Body, State, WsVersion) ->
                                 M:F(Socket, Payload, State, WsVersion)
                         end,
 
+                io:format("Handle: ~p~n", [WsFrames]),
                 try parse_frames(Socket, WsFrames, []) of
                     Parsed -> process_frames(Parsed, Reply, [])
                 catch
@@ -302,3 +301,11 @@ handle_frame(<<255, Rest/binary>>, Buffer) ->
   {Buffer, Rest};
 handle_frame(<<H, T/binary>>, Buffer) ->
   handle_frame(T, <<Buffer/binary, H>>).
+
+%%
+%% Tests
+%%
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-compile(export_all).
+-endif.
