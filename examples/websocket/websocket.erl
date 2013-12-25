@@ -29,10 +29,10 @@
 %
 % [1]: At first you have to start HTTP server which will listen for HTTP requests
 %      and eventually upgrade connection to websocket
-% [2]: Attempt to upgrade connection to websocket. 
+% [2]: Attempt to upgrade connection to websocket.
 %      Function mochiweb_websocket:upgrade_connection/2:
 %      * first argument is mochiweb_request
-%      * second is M:F which will handle further websocket messages. 
+%      * second is M:F which will handle further websocket messages.
 %      Function return two funs:
 %      * ReentryWs/1 - use it to enter to messages handling loop (in this example ws_loop/3)
 %      * ReplyChannel/1 - use to send messages to client. May be passed to other processes
@@ -40,9 +40,9 @@
 % [4]: State that will be passed to message handling loop
 % [5]: Pass controll to messages handling loop. From this moment each message received from client
 %      can be handled...
-% [6]: ...here as Payload. State is variable intended for holiding your custom state. ReplyChannel 
-%      is the same function as in [3]. 
-%      Notice! Payload is list of messages received from client. Websocket framing mechanism 
+% [6]: ...here as Payload. State is variable intended for holiding your custom state. ReplyChannel
+%      is the same function as in [3].
+%      Notice! Payload is list of messages received from client. Websocket framing mechanism
 %      concatenates messages which are sent one after another in short time.
 % [7]: Print payload received from client and send it back
 % [8]: Message handling function must return new state value
@@ -51,9 +51,9 @@ start_link() ->
     Loop = fun (Req) ->
             ?MODULE:loop(Req)
         end,
-    
+
     mochiweb_http:start_link([
-                              {name,  client_access}, 
+                              {name,  client_access},
                               {loop, Loop},
                               {port, 8080}
                              ]).
