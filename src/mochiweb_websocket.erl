@@ -47,7 +47,7 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
         {tcp, _, WsFrames} ->
             {M, F} = Body,
             case parse_frames(WsVersion, WsFrames, Socket) of
-                close -> 
+                close ->
                     mochiweb_socket:close(Socket),
                     exit(normal);
 
@@ -92,7 +92,7 @@ upgrade_connection(Req, Body) ->
             mochiweb_socket:close(Req:get(socket)),
             exit(normal)
     end.
-   
+
 make_handshake(Req) ->
     SecKey  = Req:get_header_value("sec-websocket-key"),
     Sec1Key = Req:get_header_value("Sec-WebSocket-Key1"),
@@ -170,11 +170,11 @@ process_frames([{Opcode, Payload} | Rest], Acc) ->
 parse_hybi_frames(_, <<>>, Acc) ->
     lists:reverse(Acc);
 
-parse_hybi_frames(S, <<_Fin:1, 
-               _Rsv:3, 
-               Opcode:4, 
-               _Mask:1, 
-               PayloadLen:7, 
+parse_hybi_frames(S, <<_Fin:1,
+               _Rsv:3,
+               Opcode:4,
+               _Mask:1,
+               PayloadLen:7,
                MaskKey:4/binary,
                Payload:PayloadLen/binary-unit:8,
                Rest/binary>>,
@@ -183,11 +183,11 @@ parse_hybi_frames(S, <<_Fin:1,
     Payload2 = hybi_unmask(Payload, MaskKey, <<>>),
     parse_hybi_frames(S, Rest, [{Opcode, Payload2} | Acc]);
 
-parse_hybi_frames(S, <<_Fin:1, 
-               _Rsv:3, 
-               Opcode:4, 
-               _Mask:1, 
-               126:7, 
+parse_hybi_frames(S, <<_Fin:1,
+               _Rsv:3,
+               Opcode:4,
+               _Mask:1,
+               126:7,
                PayloadLen:16,
                MaskKey:4/binary,
                Payload:PayloadLen/binary-unit:8,
@@ -197,16 +197,16 @@ parse_hybi_frames(S, <<_Fin:1,
     Payload2 = hybi_unmask(Payload, MaskKey, <<>>),
     parse_hybi_frames(S, Rest, [{Opcode, Payload2} | Acc]);
 
-parse_hybi_frames(Socket, <<_Fin:1, 
-               _Rsv:3, 
-               _Opcode:4, 
-               _Mask:1, 
-               126:7, 
+parse_hybi_frames(Socket, <<_Fin:1,
+               _Rsv:3,
+               _Opcode:4,
+               _Mask:1,
+               126:7,
                _PayloadLen:16,
                _MaskKey:4/binary,
                _/binary-unit:8>> = PartFrame,
              Acc) ->
-    
+
     ok = mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}]),
     receive
         {tcp_closed, _} ->
@@ -221,23 +221,23 @@ parse_hybi_frames(Socket, <<_Fin:1,
 
         {tcp, _, Continuation} ->
           parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>, Acc);
-            
+
         _ ->
             mochiweb_socket:close(Socket),
             exit(normal)
     after
-      5000 -> 
+      5000 ->
         mochiweb_socket:close(Socket),
         exit(normal)
     end;
 
 parse_hybi_frames(S, <<_Fin:1,
-               _Rsv:3, 
-               Opcode:4, 
-               _Mask:1, 
-               127:7, 
-               0:1, 
-               PayloadLen:63, 
+               _Rsv:3,
+               Opcode:4,
+               _Mask:1,
+               127:7,
+               0:1,
+               PayloadLen:63,
                MaskKey:4/binary,
                Payload:PayloadLen/binary-unit:8,
                Rest/binary>>,
