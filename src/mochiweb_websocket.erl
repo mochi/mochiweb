@@ -104,16 +104,14 @@ make_handshake(Req) ->
     Sec1Key = Req:get_header_value("Sec-WebSocket-Key1"),
     Sec2Key = Req:get_header_value("Sec-WebSocket-Key2"),
     Origin = Req:get_header_value(origin),
-    if not (SecKey == undefined) ->
-          hybi_handshake(SecKey);
-
-        (not (Sec1Key == undefined)) and (not (Sec2Key == undefined)) ->
+    if SecKey =/= undefined ->
+            hybi_handshake(SecKey);
+       Sec1Key =/= undefined andalso Sec2Key =/= undefined ->
             Host = Req:get_header_value("Host"),
             Path = Req:get(path),
             Body = Req:recv(8),
             Scheme = scheme(Req),
             hixie_handshake(Scheme, Host, Path, Sec1Key, Sec2Key, Body, Origin);
-
        true ->
           error
     end.
