@@ -1,3 +1,11 @@
+Version 2.8.0 released 2013-12-XX
+
+* Websocket support
+  https://github.com/mochi/mochiweb/pull/120
+* Force files named "crossdomain.xml" to have MIME type
+  text/x-cross-domain-policy.
+  https://github.com/mochi/mochiweb/pull/118
+
 Version 2.7.0 released 2013-08-01
 
 * Fix 0-length range responses
