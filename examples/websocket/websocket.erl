@@ -41,7 +41,9 @@
 % [5]: Pass controll to messages handling loop. From this moment each message received from client
 %      can be handled...
 % [6]: ...here as Payload. State is variable intended for holiding your custom state. ReplyChannel 
-%      is the same function as in [3].
+%      is the same function as in [3]. 
+%      Notice! Payload is list of messages received from client. Websocket framing mechanism 
+%      concatenates messages which are sent one after another in short time.
 % [7]: Print payload received from client and send it back
 % [8]: Message handling function must return new state value
 start_link() ->
