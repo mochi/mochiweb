@@ -45,7 +45,6 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
             exit(normal);
 
         {tcp, _, WsFrames} ->
-            {M, F} = Body,
             case parse_frames(WsVersion, WsFrames, Socket) of
                 close ->
                     mochiweb_socket:close(Socket),
@@ -56,7 +55,7 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
                     exit(normal);
 
                 Payload ->
-                    NewState = M:F(Payload, State, ReplyChannel),
+                    NewState = call_body(Body, Payload, State, ReplyChannel),
                     loop(Socket, Body, NewState, WsVersion, ReplyChannel)
             end;
 
@@ -64,6 +63,13 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
             mochiweb_socket:close(Socket),
             exit(normal)
     end.
+
+call_body({M, F, A}, Payload, State, ReplyChannel) ->
+    erlang:apply(M, F, [Payload, State, ReplyChannel | A]);
+call_body({M, F}, Payload, State, ReplyChannel) ->
+    M:F(Payload, State, ReplyChannel);
+call_body(Body, Payload, State, ReplyChannel) ->
+    Body(Payload, State, ReplyChannel).
 
 send(Socket, Payload, hybi) ->
     Len = payload_length(iolist_size(Payload)),
