@@ -147,7 +147,7 @@ parse_frames(hybi, Frames, Socket) ->
         _:_ -> error
     end;
 
-parse_frames(hixie, Frames, Socket) ->
+parse_frames(hixie, Frames, _Socket) ->
     try parse_hixie_frames(Frames, []) of
         Payload -> Payload
     catch
