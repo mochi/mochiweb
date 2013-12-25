@@ -46,33 +46,18 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
 
         {tcp, _, WsFrames} ->
             {M, F} = Body,
-            case WsVersion of
-              hybi ->
-                Reply = fun(close) ->
-                                mochiweb_socket:close(Socket),
-                                exit(normal);
-                            (Payload) ->
-                                NewState = M:F(Payload, State, ReplyChannel),
-                                loop(Socket, Body, NewState, WsVersion, ReplyChannel)
-                        end,
+            case parse_frames(WsVersion, WsFrames, Socket) of
+                close -> 
+                    mochiweb_socket:close(Socket),
+                    exit(normal);
 
-                try parse_hybi_frames(Socket, WsFrames, []) of
-                    Parsed -> process_frames(Parsed, Reply, [])
-                catch
-                    _:_ -> Reply(close)
-                end;
+                error ->
+                    mochiweb_socket:close(Socket),
+                    exit(normal);
 
-              hixie ->
-                try parse_hixie_frames(WsFrames, []) of
-                    Payload -> 
-                        NewState = M:F(Payload, State),
-                        loop(Socket, Body, NewState, WsVersion, ReplyChannel)
-                catch
-                    _:_ ->
-                      mochiweb_socket:close(Socket),
-                      exit(normal)
-                end
-                
+                Payload ->
+                    NewState = M:F(Payload, State, ReplyChannel),
+                    loop(Socket, Body, NewState, WsVersion, ReplyChannel)
             end;
 
         _ ->
@@ -155,20 +140,31 @@ hixie_handshake(Host, Path, Key1, Key2, Body, Origin) ->
                     Challenge},
   {hixie, Response}.
 
+parse_frames(hybi, Frames, Socket) ->
+    try parse_hybi_frames(Socket, Frames, []) of
+        Parsed -> process_frames(Parsed, [])
+    catch
+        _:_ -> error
+    end;
+
+parse_frames(hixie, Frames, Socket) ->
+    try parse_hixie_frames(Frames, []) of
+        Payload -> Payload
+    catch
+        _:_ -> error
+    end.
+
 %%
 %% Websockets internal functions for RFC6455 and hybi draft
 %%
-process_frames([], Reply, Acc) ->
-    Reply(lists:reverse(Acc));
+process_frames([], Acc) ->
+    lists:reverse(Acc);
 
-process_frames([{Opcode, Payload} | Rest], Reply, Acc) ->
+process_frames([{Opcode, Payload} | Rest], Acc) ->
     case Opcode of
-        8 ->
-            Reply(lists:reverse(Acc)),
-            Reply(close);
-
+        8 -> close;
         _ ->
-            process_frames(Rest, Reply, [Payload | Acc])
+            process_frames(Rest, [Payload | Acc])
     end.
 
 parse_hybi_frames(_, <<>>, Acc) ->

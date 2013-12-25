@@ -26,8 +26,8 @@
 
 start_link() ->
     Loop = fun (Req) ->
-                       ?MODULE:loop(Req)
-           end,
+            ?MODULE:loop(Req)
+        end,
     
     mochiweb_http:start_link([
                               {name,  client_access}, 
