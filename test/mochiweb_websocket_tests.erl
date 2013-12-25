@@ -39,6 +39,7 @@ make_handshake_for_correct_client_test() ->
 
     %% Hixie handshake
     {Version2, {HttpCode2, Headers2, Body2}} = mochiweb_websocket:hixie_handshake(
+                                            "ws://",
                                             "localhost", "/",
                                             "33j284    9  z63 e 9 7",
                                             "TF'3|6D12659H 7 70",

@@ -111,7 +111,8 @@ make_handshake(Req) ->
             Host = Req:get_header_value("Host"),
             Path = Req:get(path),
             Body = Req:recv(8),
-            hixie_handshake(Host, Path, Sec1Key, Sec2Key, Body, Origin);
+            Scheme = scheme(Req),
+            hixie_handshake(Scheme, Host, Path, Sec1Key, Sec2Key, Body, Origin);
 
        true ->
           error
@@ -127,7 +128,15 @@ hybi_handshake(SecKey) ->
                       {"Sec-Websocket-Accept", Challenge}], ""},
     {hybi, Response}.
 
-hixie_handshake(Host, Path, Key1, Key2, Body, Origin) ->
+scheme(Req) ->
+    case mochiweb_request:get(scheme, Req) of
+        http ->
+            "ws://";
+        https ->
+            "wss://"
+    end.
+
+hixie_handshake(Scheme, Host, Path, Key1, Key2, Body, Origin) ->
   Ikey1 = [D || D <- Key1, $0 =< D, D =< $9],
   Ikey2 = [D || D <- Key2, $0 =< D, D =< $9],
   Blank1 = length([D || D <- Key1, D =:= 32]),
@@ -137,7 +146,7 @@ hixie_handshake(Host, Path, Key1, Key2, Body, Origin) ->
   Ckey = <<Part1:4/big-unsigned-integer-unit:8, Part2:4/big-unsigned-integer-unit:8, Body/binary>>,
   Challenge = erlang:md5(Ckey),
 
-  Location = lists:concat(["ws://", Host, Path]),
+  Location = lists:concat([Scheme, Host, Path]),
 
   Response = {101, [{"Upgrade", "WebSocket"},
                      {"Connection", "Upgrade"},
