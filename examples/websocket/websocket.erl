@@ -22,7 +22,7 @@
 % OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 % THE SOFTWARE.
 
--export([start_link/0, ws_loop/4, loop/1]).
+-export([start_link/0, ws_loop/3, loop/1]).
 
 start_link() ->
     Loop = fun (Req) ->
@@ -35,15 +35,14 @@ start_link() ->
                               {port, 8080}
                              ]).
 
-ws_loop(Socket, Payload, Sid, WsVersion) ->
-    ReentryWs = mochiweb_websocket:reentry({?MODULE, ws_loop}),
+ws_loop(Payload, State, ReplyChannel) ->
     io:format("Received data: ~p~n", [Payload]),
-    ReentryWs(Socket, Sid, WsVersion).
+    Received = list_to_binary(Payload),
+    ReplyChannel(<<"Received ", Received/binary>>),
+    State.
 
 loop(Req) ->
-    ReentryWs = mochiweb_websocket:reentry({?MODULE, ws_loop}),
-    WsVersion = mochiweb_websocket:upgrade_connection(Req),
-
-    ReplySocket = Req:get(socket),
-
-    ReentryWs(Req:get(socket), [], WsVersion).
+    {ReentryWs, ReplyChannel} = mochiweb_websocket:upgrade_connection(Req, {?MODULE, ws_loop}),
+    ReplyChannel(<<"Hello">>),
+    InitialState = [],
+    ReentryWs(InitialState).

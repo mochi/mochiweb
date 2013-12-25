@@ -25,18 +25,83 @@
 
 %% @doc Websockets module for Mochiweb. Based on Misultin websockets module.
 
--export([loop/4, upgrade_connection/1, request/4]).
--export([after_response/4, reentry/1, send/3]).
+-export([loop/5, upgrade_connection/2, request/5]).
+-export([send/3]).
 
-loop(Socket, Body, State, WsVersion) ->
+loop(Socket, Body, State, WsVersion, ReplyChannel) ->
     ok = mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}]),
-    proc_lib:hibernate(?MODULE, request, [Socket, Body, State, WsVersion]).
+    proc_lib:hibernate(?MODULE, request, [Socket, Body, State, WsVersion, ReplyChannel]).
 
-upgrade_connection(Req) ->
+request(Socket, Body, State, WsVersion, ReplyChannel) ->
+    receive
+        {tcp_closed, _} ->
+            mochiweb_socket:close(Socket),
+            exit(normal);
+        {ssl_closed, _} ->
+            mochiweb_socket:close(Socket),
+            exit(normal);
+        {tcp_error, _, _} ->
+            mochiweb_socket:close(Socket),
+            exit(normal);
+
+        {tcp, _, WsFrames} ->
+            {M, F} = Body,
+            case WsVersion of
+              hybi ->
+                Reply = fun(close) ->
+                                mochiweb_socket:close(Socket),
+                                exit(normal);
+                            (Payload) ->
+                                NewState = M:F(Payload, State, ReplyChannel),
+                                loop(Socket, Body, NewState, WsVersion, ReplyChannel)
+                        end,
+
+                try parse_hybi_frames(Socket, WsFrames, []) of
+                    Parsed -> process_frames(Parsed, Reply, [])
+                catch
+                    _:_ -> Reply(close)
+                end;
+
+              hixie ->
+                try parse_hixie_frames(WsFrames, []) of
+                    Payload -> 
+                        NewState = M:F(Payload, State),
+                        loop(Socket, Body, NewState, WsVersion, ReplyChannel)
+                catch
+                    _:_ ->
+                      mochiweb_socket:close(Socket),
+                      exit(normal)
+                end
+                
+            end;
+
+        _ ->
+            mochiweb_socket:close(Socket),
+            exit(normal)
+    end.
+
+send(Socket, Payload, hybi) ->
+    Len = payload_length(iolist_size(Payload)),
+    Data = <<1:1, 0:3, 1:4, 0:1, Len/bits, Payload/binary>>,
+    mochiweb_socket:send(Socket, Data);
+
+send(Socket, Payload, hixie) ->
+    Data = <<0, Payload/binary, 255>>,
+    mochiweb_socket:send(Socket, Data).
+
+upgrade_connection(Req, Body) ->
     case make_handshake(Req) of
         {Version, Response} ->
             Req:respond(Response),
-            Version;
+
+            Socket = Req:get(socket),
+            ReplyChannel = fun(Payload) ->
+                ?MODULE:send(Socket, Payload, Version)
+            end,
+            Reentry = fun (State) ->
+                ?MODULE:loop(Socket, Body, State, Version, ReplyChannel)
+            end,
+            {Reentry, ReplyChannel};
 
         _ ->
             mochiweb_socket:close(Req:get(socket)),
@@ -62,11 +127,14 @@ make_handshake(Req) ->
     end.
 
 hybi_handshake(SecKey) ->
-  Challenge = handshake_key(SecKey),
-  Response = {101, [{"Connection", "Upgrade"},
-                     {"Upgrade", "websocket"},
-                     {"Sec-Websocket-Accept", Challenge}], ""},
-  {hybi, Response}.
+    BinKey = list_to_binary(SecKey),
+    Bin = <<BinKey/binary, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11">>,
+    Challenge = base64:encode(crypto:hash(sha, Bin)),
+
+    Response = {101, [{"Connection", "Upgrade"},
+                      {"Upgrade", "websocket"},
+                      {"Sec-Websocket-Accept", Challenge}], ""},
+    {hybi, Response}.
 
 hixie_handshake(Host, Path, Key1, Key2, Body, Origin) ->
   Ikey1 = [D || D <- Key1, $0 =< D, D =< $9],
@@ -87,60 +155,9 @@ hixie_handshake(Host, Path, Key1, Key2, Body, Origin) ->
                     Challenge},
   {hixie, Response}.
 
-send(Socket, Payload, hybi) ->
-    Len = payload_length(iolist_size(Payload)),
-    Data = <<1:1, 0:3, 1:4, 0:1, Len/bits, Payload/binary>>,
-    mochiweb_socket:send(Socket, Data);
-
-send(Socket, Payload, hixie) ->
-    Data = <<0, Payload/binary, 255>>,
-    mochiweb_socket:send(Socket, Data).
-
-request(Socket, Body, State, WsVersion) ->
-    receive
-        {tcp_closed, _} ->
-            mochiweb_socket:close(Socket),
-            exit(normal);
-        {ssl_closed, _} ->
-            mochiweb_socket:close(Socket),
-            exit(normal);
-        {tcp_error, _, _} ->
-            mochiweb_socket:close(Socket),
-            exit(normal);
-
-        {tcp, _, WsFrames} ->
-            {M, F} = Body,
-            case WsVersion of
-              hybi ->
-                Reply = fun(close) ->
-                                mochiweb_socket:close(Socket),
-                                exit(normal);
-                            (Payload) ->
-                                M:F(Socket, Payload, State, WsVersion)
-                        end,
-
-                io:format("Handle: ~p~n", [WsFrames]),
-                try parse_frames(Socket, WsFrames, []) of
-                    Parsed -> process_frames(Parsed, Reply, [])
-                catch
-                    _:_ -> Reply(close)
-                end;
-
-              hixie ->
-                try handle_frames(WsFrames, []) of
-                    Payload -> M:F(Socket, Payload, State, WsVersion)
-                catch
-                    _:_ ->
-                      mochiweb_socket:close(Socket),
-                      exit(normal)
-                end
-                
-            end;
-
-        _ ->
-            handle_invalid_request(Socket)
-    end.
-
+%%
+%% Websockets internal functions for RFC6455 and hybi draft
+%%
 process_frames([], Reply, Acc) ->
     Reply(lists:reverse(Acc));
 
@@ -154,33 +171,10 @@ process_frames([{Opcode, Payload} | Rest], Reply, Acc) ->
             process_frames(Rest, Reply, [Payload | Acc])
     end.
 
-reentry(Body) ->
-    fun (Socket, State, WsVersion) ->
-            ?MODULE:after_response(Body, Socket, State, WsVersion)
-    end.
-
--spec handle_invalid_request(term()) -> no_return().
-handle_invalid_request(Socket) ->
-    mochiweb_socket:close(Socket),
-    exit(normal).
-
-after_response(Body, Socket, State, WsVersion) ->
-    ?MODULE:loop(Socket, Body, State, WsVersion).
-
-%%
-%% Websockets internal functions for RFC6455 (hybi)
-%%
-
-% RFC6455 Handshake
-handshake_key(Key) ->
-    BinKey = list_to_binary(Key),
-    Bin = <<BinKey/binary, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11">>,
-    base64:encode(crypto:hash(sha, Bin)).
-
-parse_frames(_, <<>>, Acc) ->
+parse_hybi_frames(_, <<>>, Acc) ->
     lists:reverse(Acc);
 
-parse_frames(S, <<_Fin:1, 
+parse_hybi_frames(S, <<_Fin:1, 
                _Rsv:3, 
                Opcode:4, 
                _Mask:1, 
@@ -190,10 +184,10 @@ parse_frames(S, <<_Fin:1,
                Rest/binary>>,
              Acc) when PayloadLen < 126 ->
 
-    Payload2 = extract_payload(MaskKey, Payload),
-    parse_frames(S, Rest, [{Opcode, Payload2} | Acc]);
+    Payload2 = hybi_unmask(Payload, MaskKey, <<>>),
+    parse_hybi_frames(S, Rest, [{Opcode, Payload2} | Acc]);
 
-parse_frames(S, <<_Fin:1, 
+parse_hybi_frames(S, <<_Fin:1, 
                _Rsv:3, 
                Opcode:4, 
                _Mask:1, 
@@ -204,10 +198,10 @@ parse_frames(S, <<_Fin:1,
                Rest/binary>>,
              Acc) ->
 
-    Payload2 = extract_payload(MaskKey, Payload),
-    parse_frames(S, Rest, [{Opcode, Payload2} | Acc]);
+    Payload2 = hybi_unmask(Payload, MaskKey, <<>>),
+    parse_hybi_frames(S, Rest, [{Opcode, Payload2} | Acc]);
 
-parse_frames(Socket, <<_Fin:1, 
+parse_hybi_frames(Socket, <<_Fin:1, 
                _Rsv:3, 
                _Opcode:4, 
                _Mask:1, 
@@ -230,7 +224,7 @@ parse_frames(Socket, <<_Fin:1,
             exit(normal);
 
         {tcp, _, Continuation} ->
-          parse_frames(Socket, <<PartFrame/binary, Continuation/binary>>, Acc);
+          parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>, Acc);
             
         _ ->
             mochiweb_socket:close(Socket),
@@ -241,7 +235,7 @@ parse_frames(Socket, <<_Fin:1,
         exit(normal)
     end;
 
-parse_frames(S, <<_Fin:1,
+parse_hybi_frames(S, <<_Fin:1,
                _Rsv:3, 
                Opcode:4, 
                _Mask:1, 
@@ -253,30 +247,27 @@ parse_frames(S, <<_Fin:1,
                Rest/binary>>,
              Acc) ->
 
-    Payload2 = extract_payload(MaskKey, Payload),
-    parse_frames(S, Rest, [{Opcode, Payload2} | Acc]).
-
-extract_payload(MaskKey, Payload) ->
-    websocket_unmask(Payload, MaskKey, <<>>).
+    Payload2 = hybi_unmask(Payload, MaskKey, <<>>),
+    parse_hybi_frames(S, Rest, [{Opcode, Payload2} | Acc]).
 
 % Unmasks RFC 6455 message
-websocket_unmask(<<O:32, Rest/bits>>, MaskKey, Acc) ->
+hybi_unmask(<<O:32, Rest/bits>>, MaskKey, Acc) ->
     <<MaskKey2:32>> = MaskKey,
     T = O bxor MaskKey2,
-    websocket_unmask(Rest, MaskKey, <<Acc/binary, T:32>>);
-websocket_unmask(<<O:24>>, MaskKey, Acc) ->
+    hybi_unmask(Rest, MaskKey, <<Acc/binary, T:32>>);
+hybi_unmask(<<O:24>>, MaskKey, Acc) ->
     <<MaskKey2:24, _:8>> = MaskKey,
     T = O bxor MaskKey2,
     <<Acc/binary, T:24>>;
-websocket_unmask(<<O:16>>, MaskKey, Acc) ->
+hybi_unmask(<<O:16>>, MaskKey, Acc) ->
     <<MaskKey2:16, _:16>> = MaskKey,
     T = O bxor MaskKey2,
     <<Acc/binary, T:16>>;
-websocket_unmask(<<O:8>>, MaskKey, Acc) ->
+hybi_unmask(<<O:8>>, MaskKey, Acc) ->
     <<MaskKey2:8, _:24>> = MaskKey,
     T = O bxor MaskKey2,
     <<Acc/binary, T:8>>;
-websocket_unmask(<<>>, _MaskKey, Acc) ->
+hybi_unmask(<<>>, _MaskKey, Acc) ->
     Acc.
 
 payload_length(N) ->
@@ -290,17 +281,16 @@ payload_length(N) ->
 %%
 %% Websockets internal functions for hixie-76 websocket version
 %%
-
-handle_frames(<<>>, Frames) ->
+parse_hixie_frames(<<>>, Frames) ->
   lists:reverse(Frames);
-handle_frames(<<0, T/binary>>, Frames) ->
-  {Frame, Rest} = handle_frame(T, <<>>),
-  handle_frames(Rest, [Frame | Frames]).
+parse_hixie_frames(<<0, T/binary>>, Frames) ->
+  {Frame, Rest} = parse_hixie(T, <<>>),
+  parse_hixie_frames(Rest, [Frame | Frames]).
 
-handle_frame(<<255, Rest/binary>>, Buffer) ->
+parse_hixie(<<255, Rest/binary>>, Buffer) ->
   {Buffer, Rest};
-handle_frame(<<H, T/binary>>, Buffer) ->
-  handle_frame(T, <<Buffer/binary, H>>).
+parse_hixie(<<H, T/binary>>, Buffer) ->
+  parse_hixie(T, <<Buffer/binary, H>>).
 
 %%
 %% Tests

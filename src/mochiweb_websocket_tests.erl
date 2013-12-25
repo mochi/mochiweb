@@ -51,20 +51,20 @@ make_handshake_for_correct_client_test() ->
     ?assertEqual(<<230,144,237,94,84,214,41,69,244,150,134,167,221,103,239,246>>, Body2).
 
 hybi_frames_decode_test() ->
-    Resp1 = mochiweb_websocket:parse_frames(nil, <<129,131,118,21,153,58,16,122,246>>, []),
+    Resp1 = mochiweb_websocket:parse_hybi_frames(nil, <<129,131,118,21,153,58,16,122,246>>, []),
     ?assertEqual([{1, <<"foo">>}], Resp1),
 
-    Resp2 = mochiweb_websocket:parse_frames(nil, <<129,131,1,225,201,42,103,142,166,129,131,93,222,214,66,63,191,164>>, []),
+    Resp2 = mochiweb_websocket:parse_hybi_frames(nil, <<129,131,1,225,201,42,103,142,166,129,131,93,222,214,66,63,191,164>>, []),
     ?assertEqual([{1, <<"foo">>}, {1, <<"bar">>}], Resp2).
 
 hixie_frames_decode_test() ->
-    Resp1 = mochiweb_websocket:handle_frames(<<>>, []),
+    Resp1 = mochiweb_websocket:parse_hixie_frames(<<>>, []),
     ?assertEqual([], Resp1),
 
-    Resp2 = mochiweb_websocket:handle_frames(<<0,102,111,111,255>>, []),
+    Resp2 = mochiweb_websocket:parse_hixie_frames(<<0,102,111,111,255>>, []),
     ?assertEqual([<<"foo">>], Resp2),
 
-    Resp3 = mochiweb_websocket:handle_frames(<<0,102,111,111,255,0,98,97,114,255>>, []),
+    Resp3 = mochiweb_websocket:parse_hixie_frames(<<0,102,111,111,255,0,98,97,114,255>>, []),
     ?assertEqual([<<"foo">>, <<"bar">>], Resp3).
 
 -endif.
