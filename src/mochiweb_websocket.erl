@@ -69,27 +69,23 @@ call_body(Body, Payload, State, ReplyChannel) ->
     Body(Payload, State, ReplyChannel).
 
 send(Socket, Payload, hybi) ->
-    Len = payload_length(iolist_size(Payload)),
-    Data = <<1:1, 0:3, 1:4, 0:1, Len/bits, Payload/binary>>,
-    mochiweb_socket:send(Socket, Data);
+    Prefix = <<1:1, 0:3, 1:4, (payload_length(iolist_size(Payload)))/binary>>,
+    mochiweb_socket:send(Socket, [Prefix, Payload]);
 send(Socket, Payload, hixie) ->
-    Data = <<0, Payload/binary, 255>>,
-    mochiweb_socket:send(Socket, Data).
+    mochiweb_socket:send(Socket, [0, Payload, 255]).
 
 upgrade_connection(Req, Body) ->
     case make_handshake(Req) of
         {Version, Response} ->
             Req:respond(Response),
-
             Socket = Req:get(socket),
-            ReplyChannel = fun(Payload) ->
+            ReplyChannel = fun (Payload) ->
                 ?MODULE:send(Socket, Payload, Version)
             end,
             Reentry = fun (State) ->
                 ?MODULE:loop(Socket, Body, State, Version, ReplyChannel)
             end,
             {Reentry, ReplyChannel};
-
         _ ->
             mochiweb_socket:close(Req:get(socket)),
             exit(normal)
@@ -207,7 +203,6 @@ parse_hybi_frames(Socket, <<_Fin:1,
                            _MaskKey:4/binary,
                            _/binary-unit:8>> = PartFrame,
                   Acc) ->
-
     ok = mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}]),
     receive
         {tcp_closed, _} ->
@@ -226,9 +221,9 @@ parse_hybi_frames(Socket, <<_Fin:1,
             mochiweb_socket:close(Socket),
             exit(normal)
     after
-      5000 ->
-        mochiweb_socket:close(Socket),
-        exit(normal)
+        5000 ->
+            mochiweb_socket:close(Socket),
+            exit(normal)
     end;
 parse_hybi_frames(S, <<_Fin:1,
                       _Rsv:3,
@@ -262,9 +257,9 @@ hybi_unmask(<<>>, _MaskKey, Acc) ->
 
 payload_length(N) ->
     case N of
-        N when N =< 125 -> << N:7 >>;
-        N when N =< 16#ffff -> << 126:7, N:16 >>;
-        N when N =< 16#7fffffffffffffff -> << 127:7, N:64 >>
+        N when N =< 125 -> << N >>;
+        N when N =< 16#ffff -> << 126, N:16 >>;
+        N when N =< 16#7fffffffffffffff -> << 127, N:64 >>
     end.
 
 
