@@ -111,7 +111,8 @@ broadcast_server(Pids) ->
                 {'DOWN', MRef, process, Pid, _Reason} ->
                     broadcast_down(Pid, MRef, Pids);
                 Msg ->
-                    io:format("Unknown message: ~p~n", [Msg])
+                    io:format("Unknown message: ~p~n", [Msg]),
+                    Pids
             end,
     erlang:hibernate(?MODULE, broadcast_server, [Pids1]).
 
