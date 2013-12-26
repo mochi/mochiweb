@@ -24,7 +24,8 @@
 %% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 %% THE SOFTWARE.
 
--export([start/0, start_link/0, ws_loop/3, loop/1]).
+-export([start/0, start_link/0, ws_loop/3, loop/2]).
+-export([broadcast_server/1]).
 
 %%
 %% Mochiweb websocket example
@@ -52,42 +53,95 @@
 %% [7]: Print payload received from client and send it back
 %% [8]: Message handling function must return new state value
 start() ->
-    application:start(sasl),
-    start_link(),
-    erlang:hibernate(?MODULE, start, []).
+    spawn(
+      fun () ->
+              application:start(sasl),
+              start_link(),
+              receive
+                  stop -> ok
+              end
+      end).
 
 start_link() ->
     %% [1]
     io:format("Listening at http://127.0.0.1:8080/~n"),
+    Broadcaster = spawn_link(?MODULE, broadcast_server, [dict:new()]),
     mochiweb_http:start_link([
                               {name, client_access},
-                              {loop, fun ?MODULE:loop/1},
+                              {loop, {?MODULE, loop, [Broadcaster]}},
                               {port, 8080}
                              ]).
 
-ws_loop(Payload, State, ReplyChannel) ->
+ws_loop(Payload, Broadcaster, _ReplyChannel) ->
     %% [6]
 
     %% [7]
     io:format("Received data: ~p~n", [Payload]),
     Received = list_to_binary(Payload),
-    ReplyChannel(<<"Received ", Received/binary>>),
+    Broadcaster ! {broadcast, self(), Received},
 
     %% [8]
-    State.
+    Broadcaster.
 
-loop(Req) ->
+loop(Req, Broadcaster) ->
     H = mochiweb_request:get_header_value("Upgrade", Req),
-    loop(Req, H =/= undefined andalso string:to_lower(H) =:= "websocket").
+    loop(Req,
+         Broadcaster,
+         H =/= undefined andalso string:to_lower(H) =:= "websocket").
 
-loop(Req, false) ->
+loop(Req, _Broadcaster, false) ->
     mochiweb_request:serve_file("index.html", "./", Req);
-loop(Req, true) ->
+loop(Req, Broadcaster, true) ->
     {ReentryWs, ReplyChannel} = mochiweb_websocket:upgrade_connection(
                                   Req, fun ?MODULE:ws_loop/3),
     %% [3]
-    ReplyChannel(<<"Hello">>),
+    Broadcaster ! {register, self(), ReplyChannel},
     %% [4]
-    InitialState = [],
     %% [5]
-    ReentryWs(InitialState).
+    ReentryWs(Broadcaster).
+
+
+%% This server keeps track of connected pids
+broadcast_server(Pids) ->
+    Pids1 = receive
+                {register, Pid, Channel} ->
+                    broadcast_register(Pid, Channel, Pids);
+                {broadcast, Pid, Message} ->
+                    broadcast_sendall(Pid, Message, Pids);
+                {'DOWN', MRef, process, Pid, _Reason} ->
+                    broadcast_down(Pid, MRef, Pids);
+                Msg ->
+                    io:format("Unknown message: ~p~n", [Msg])
+            end,
+    erlang:hibernate(?MODULE, broadcast_server, [Pids1]).
+
+broadcast_register(Pid, Channel, Pids) ->
+    MRef = erlang:monitor(process, Pid),
+    broadcast_sendall(
+      Pid, "connected", dict:store(Pid, {Channel, MRef}, Pids)).
+
+broadcast_down(Pid, MRef, Pids) ->
+    Pids1 = case dict:find(Pid, Pids) of
+                {ok, {_, MRef}} ->
+                    dict:erase(Pid, Pids);
+                _ ->
+                    Pids
+            end,
+    broadcast_sendall(Pid, "disconnected", Pids1).
+
+broadcast_sendall(Pid, Msg, Pids) ->
+    M = iolist_to_binary([pid_to_list(Pid), ": ", Msg]),
+    dict:fold(
+      fun (K, {Reply, MRef}, Acc) ->
+              try
+                  begin
+                      Reply(M),
+                      dict:store(K, {Reply, MRef}, Acc)
+                  end
+              catch
+                  _:_ ->
+                      Acc
+              end
+      end,
+      dict:new(),
+      Pids).
