@@ -7,3 +7,5 @@
 /TEST-*.xml
 /deps
 *.swp
+*.beam
+*.dump
