@@ -1,4 +1,9 @@
-Version 2.8.0 released 2013-12-XX
+Version 2.8.1 released XXXX-XX-XX
+
+* Increased timeout in test suite for FreeBSD
+  https://github.com/mochi/mochiweb/pull/121
+
+Version 2.8.0 released 2014-01-01
 
 * Websocket support
   https://github.com/mochi/mochiweb/pull/120
