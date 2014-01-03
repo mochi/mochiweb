@@ -63,17 +63,21 @@ single_2k_http_POST_test() ->
 single_2k_https_POST_test() ->
     do_POST(ssl, 2048, 1).
 
-single_100k_http_POST_test() ->
-    do_POST(plain, 102400, 1).
+single_100k_http_POST_test_() -> % note the underscore
+    {timeout, ?LARGE_TIMEOUT,
+     fun() -> ?assertEqual(ok, do_POST(plain, 102400, 1)) end}.
 
-single_100k_https_POST_test() ->
-    do_POST(ssl, 102400, 1).
+single_100k_https_POST_test_() -> % note the underscore
+    {timeout, ?LARGE_TIMEOUT,
+     fun() -> ?assertEqual(ok, do_POST(ssl, 102400, 1)) end}.
 
 multiple_100k_http_POST_test() ->
-    do_POST(plain, 102400, 3).
+    {timeout, ?LARGE_TIMEOUT,
+     fun() -> ?assertEqual(ok, do_POST(plain, 102400, 3)) end}.
 
 multiple_100K_https_POST_test() ->
-    do_POST(ssl, 102400, 3).
+    {timeout, ?LARGE_TIMEOUT,
+     fun() -> ?assertEqual(ok, do_POST(ssl, 102400, 3)) end}.
 
 hundred_128_http_POST_test_() -> % note the underscore
     {timeout, ?LARGE_TIMEOUT,
