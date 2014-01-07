@@ -1,8 +1,6 @@
 PREFIX:=../
 DEST:=$(PREFIX)$(PROJECT)
-DEPS_DIR:=/deps/
-DEPS:=$(PREFIX)$(PROJECT)$(DEPS_DIR)
-MOCHIWEB_DIR:=$(shell pwd)
+
 REBAR=./rebar
 
 .PHONY: all edoc test clean build_plt dialyzer app
@@ -29,5 +27,4 @@ dialyzer:
 
 app:
 	@$(REBAR) create template=mochiwebapp dest=$(DEST) appid=$(PROJECT)
-	mkdir $(DEPS)
-	ln -s $(MOCHIWEB_DIR) $(DEPS)mochiweb
+
