@@ -5,7 +5,7 @@
 
 -module(mochiweb_http).
 -author('bob@mochimedia.com').
--export([start/1, start_link/1, stop/0, stop/1]).
+-export([start/1, start_link/1, stop/0, stop/1, start/2]).
 -export([loop/2]).
 -export([after_response/2, reentry/1]).
 -export([parse_range_request/1, range_skip_length/2]).
@@ -36,8 +36,9 @@ stop(Name) ->
     mochiweb_socket_server:stop(Name).
 
 %% @spec start(Options) -> ServerRet
-%%     Options = [option()]
-%%     Option = {name, atom()} | {ip, string() | tuple()} | {backlog, integer()}
+%%    Options = [option()]
+%%    Option = {name, atom()} | | {loop, fun(Req)} | {port, integer()} | {ip, string()
+%%              | tuple()} | {backlog, integer()}
 %%              | {nodelay, boolean()} | {acceptor_pool_size, integer()}
 %%              | {ssl, boolean()} | {profile_fun, undefined | (Props) -> ok}
 %%              | {link, false}
@@ -48,6 +49,17 @@ stop(Name) ->
 %% @end
 start(Options) ->
     mochiweb_socket_server:start(parse_options(Options)).
+
+%% @spec start(Options, ListenSocket) -> ServerRet
+%%    Options = [option()]
+%%    Option = {name, atom()} | {loop, fun(Req)} | {acceptor_pool_size, integer()}
+%%              | {profile_fun, undefined | (Props) -> ok} | {link, false}
+%%    ListenSocket = {ssl, Socket} | Socket
+%% @doc start a server listen on an pre-opened socket. The port option is not needed any more. The opened socket can be fetched by call mochiweb_socket_server:get(Name, listen)
+%% @end
+start(Options, ListenSocket) ->
+  mochiweb_socket_server:start([{listen, ListenSocket} | parse_options(Options)]).
+
 
 start_link(Options) ->
     mochiweb_socket_server:start_link(parse_options(Options)).
