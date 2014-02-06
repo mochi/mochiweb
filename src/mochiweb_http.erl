@@ -158,7 +158,8 @@ parse_range_request("bytes=0-") ->
 parse_range_request(RawRange) when is_list(RawRange) ->
     try
         "bytes=" ++ RangeString = RawRange,
-        Ranges = string:tokens(RangeString, ","),
+        RangeTokens = [string:strip(R) || R <- string:tokens(RangeString, ",")],
+        Ranges = [R || R <- RangeTokens, string:len(R) > 0],
         lists:map(fun ("-" ++ V)  ->
                           {none, list_to_integer(V)};
                       (R) ->
@@ -220,6 +221,19 @@ range_test() ->
     ?assertEqual(
        [{20, none}, {50, 100}, {none, 200}],
        parse_range_request("bytes=20-,50-100,-200")),
+
+    %% valid, multiple range with whitespace
+    ?assertEqual(
+       [{20, 30}, {50, 100}, {110, 200}],
+       parse_range_request("bytes=20-30, 50-100 , 110-200")),
+
+    %% valid, multiple range with extra commas
+    ?assertEqual(
+       [{20, 30}, {50, 100}, {110, 200}],
+       parse_range_request("bytes=20-30,,50-100,110-200")),
+    ?assertEqual(
+       [{20, 30}, {50, 100}, {110, 200}],
+       parse_range_request("bytes=20-30, ,50-100,,,110-200")),
 
     %% no ranges
     ?assertEqual([], parse_range_request("bytes=")),
