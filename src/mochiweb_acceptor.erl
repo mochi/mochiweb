@@ -10,19 +10,19 @@
 
 -export([start_link/3, init/3]).
 
-start_link(Server, Listen, Loop) ->
-    proc_lib:spawn_link(?MODULE, init, [Server, Listen, Loop]).
+start_link(Server, ListenSocket, Loop) ->
+    proc_lib:spawn_link(?MODULE, init, [Server, ListenSocket, Loop]).
 
-init(Server, Listen, Loop) ->
+init(Server, ListenSocket, Loop) ->
     T1 = os:timestamp(),
-    case catch mochiweb_socket:accept(Listen) of
+    case catch mochiweb_socket:accept(ListenSocket) of
         {ok, Socket} ->
             gen_server:cast(Server, {accepted, self(), timer:now_diff(os:timestamp(), T1)}),
             call_loop(Loop, Socket);
         {error, closed} ->
             exit(normal);
         {error, timeout} ->
-            init(Server, Listen, Loop);
+            init(Server, ListenSocket, Loop);
         {error, esslaccept} ->
             exit(normal);
         Other ->

@@ -17,11 +17,11 @@
 -record(mochiweb_socket_server,
         {port,
          loop,
-         name=undefined,
+         name,
          %% NOTE: This is currently ignored.
          max=2048,
          ip=any,
-         listen=null,
+         listen,
          nodelay=false,
          backlog=128,
          active_sockets=0,
@@ -29,7 +29,7 @@
          ssl=false,
          ssl_opts=[{ssl_imp, new}],
          acceptor_pool=sets:new(),
-         profile_fun=undefined}).
+         profile_fun}).
 
 -define(is_old_state(State), not is_record(State, mochiweb_socket_server)).
 
@@ -123,7 +123,11 @@ parse_options([{ssl_opts, SslOpts} | Rest], State) when is_list(SslOpts) ->
     SslOpts1 = [{ssl_imp, new} | proplists:delete(ssl_imp, SslOpts)],
     parse_options(Rest, State#mochiweb_socket_server{ssl_opts=SslOpts1});
 parse_options([{profile_fun, ProfileFun} | Rest], State) when is_function(ProfileFun) ->
-    parse_options(Rest, State#mochiweb_socket_server{profile_fun=ProfileFun}).
+    parse_options(Rest, State#mochiweb_socket_server{profile_fun=ProfileFun});
+parse_options([{listen, {ssl, _ListenSocket} = SSLSocket} | Rest], State) ->
+    parse_options(Rest, State#mochiweb_socket_server{listen=SSLSocket});
+parse_options([{listen, ListenSocket} | Rest], State) ->
+    parse_options(Rest, State#mochiweb_socket_server{listen=ListenSocket}).
 
 
 start_server(F, State=#mochiweb_socket_server{ssl=Ssl, name=Name}) ->
@@ -156,56 +160,65 @@ ipv6_supported() ->
             false
     end.
 
-init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog, nodelay=NoDelay}) ->
+init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog, nodelay=NoDelay, listen=ListenSocket}) ->
     process_flag(trap_exit, true),
-    BaseOpts = [binary,
-                {reuseaddr, true},
-                {packet, 0},
-                {backlog, Backlog},
-                {recbuf, ?RECBUF_SIZE},
-                {exit_on_close, false},
-                {active, false},
-                {nodelay, NoDelay}],
-    Opts = case Ip of
-        any ->
-            case ipv6_supported() of % IPv4, and IPv6 if supported
-                true -> [inet, inet6 | BaseOpts];
-                _ -> BaseOpts
-            end;
-        {_, _, _, _} -> % IPv4
-            [inet, {ip, Ip} | BaseOpts];
-        {_, _, _, _, _, _, _, _} -> % IPv6
-            [inet6, {ip, Ip} | BaseOpts]
-    end,
-    listen(Port, Opts, State).
+  case ListenSocket of
+    undefined ->
+      BaseOpts = [binary,
+                  {reuseaddr, true},
+                  {packet, 0},
+                  {backlog, Backlog},
+                  {recbuf, ?RECBUF_SIZE},
+                  {exit_on_close, false},
+                  {active, false},
+                  {nodelay, NoDelay}],
+      Opts = case Ip of
+          any ->
+              case ipv6_supported() of % IPv4, and IPv6 if supported
+                  true -> [inet, inet6 | BaseOpts];
+                  _ -> BaseOpts
+              end;
+          {_, _, _, _} -> % IPv4
+              [inet, {ip, Ip} | BaseOpts];
+          {_, _, _, _, _, _, _, _} -> % IPv6
+              [inet6, {ip, Ip} | BaseOpts]
+      end,
+      listen(Port, Opts, State);
+    _ ->
+      {ok, ListenPort} = mochiweb_socket:port(ListenSocket),
+      do_init(State#mochiweb_socket_server{port=ListenPort})
+    end.
 
-new_acceptor_pool(Listen,
-                  State=#mochiweb_socket_server{acceptor_pool=Pool,
-                                                acceptor_pool_size=Size,
-                                                loop=Loop}) ->
+new_acceptor_pool(ListenSocket, Loop, Pool, PoolSize) ->
     F = fun (_, S) ->
-                Pid = mochiweb_acceptor:start_link(self(), Listen, Loop),
+                Pid = mochiweb_acceptor:start_link(self(), ListenSocket, Loop),
                 sets:add_element(Pid, S)
         end,
-    Pool1 = lists:foldl(F, Pool, lists:seq(1, Size)),
-    State#mochiweb_socket_server{acceptor_pool=Pool1}.
+    lists:foldl(F, Pool, lists:seq(1, PoolSize)).
+
 
 listen(Port, Opts, State=#mochiweb_socket_server{ssl=Ssl, ssl_opts=SslOpts}) ->
     case mochiweb_socket:listen(Ssl, Port, Opts, SslOpts) of
-        {ok, Listen} ->
-            {ok, ListenPort} = mochiweb_socket:port(Listen),
-            {ok, new_acceptor_pool(
-                   Listen,
-                   State#mochiweb_socket_server{listen=Listen,
-                                                port=ListenPort})};
+        {ok, ListenSocket} ->
+            {ok, ListenPort} = mochiweb_socket:port(ListenSocket),
+            do_init(State#mochiweb_socket_server{listen=ListenSocket, port=ListenPort});
         {error, Reason} ->
             {stop, Reason}
     end.
 
-do_get(port, #mochiweb_socket_server{port=Port}) ->
-    Port;
+do_init(#mochiweb_socket_server{
+    listen=ListenSocket,
+    acceptor_pool=Pool,
+    acceptor_pool_size=PoolSize,
+    loop=Loop} = State) ->
+  {ok, State#mochiweb_socket_server{acceptor_pool=new_acceptor_pool(ListenSocket, Loop, Pool, PoolSize)}}.
+
+do_get(port, #mochiweb_socket_server{listen=Port}) ->
+  {ok, Port};
+do_get(listen, #mochiweb_socket_server{listen=ListenSocket}) ->
+  {ok, ListenSocket};
 do_get(active_sockets, #mochiweb_socket_server{active_sockets=ActiveSockets}) ->
-    ActiveSockets.
+  {ok, ActiveSockets}.
 
 
 state_to_proplist(#mochiweb_socket_server{name=Name,
