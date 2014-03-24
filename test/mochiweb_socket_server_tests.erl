@@ -76,11 +76,13 @@ test_basic_accept(Max, PoolSize, NumClients, ReportTo) ->
                   {send, Data, Tester}, {recv, size(Data), Timeout, Tester},
                   {close_sock}, {send_msg, done, Tester}],
     start_client_conns(Port, NumClients, fun client_fun/2, ClientCmds, Tester),
-    % Wait a bit for the connections to complete.
-    timer:sleep(2500),
+
+    EventCount = min(NumClients, max(Max, PoolSize)),
+
     ConnectLoop =
         fun (Loop, Connected, Accepted, Errors) ->
-                case (length(Connected) + Errors >= NumClients) of
+                case (length(Accepted) + Errors >= EventCount
+                        andalso length(Connected) + Errors >= NumClients) of
                     true -> {Connected, Accepted};
                     false ->
                         receive
@@ -113,29 +115,21 @@ test_basic_accept(Max, PoolSize, NumClients, ReportTo) ->
         end,
     ok = WaitLoop(WaitLoop, []),
 
-    % Wait a little for the server side connections to get their
-    % socket close notifications.
-    timer:sleep(1500),
-
-    ActiveAtEnd = mochiweb_socket_server:get(Server, active_sockets),
-    WaitingAtEnd = mochiweb_socket_server:get(Server, waiting_acceptors),
     mochiweb_socket_server:stop(Server),
 
     ReportTo ! {result, {length(Accepted),
-                         ActiveAfterConnect, WaitingAfterConnect,
-                         ActiveAtEnd, WaitingAtEnd}}.
+                         ActiveAfterConnect, WaitingAfterConnect}}.
 
 normal_acceptor_test_fun() ->
     %        {Max, PoolSize, NumClients,
     %         {ExpectedAccepts,
-    %          ExpectedActiveAfterConnect, ExpectedWaitingAfterConnect,
-    %          ExpectedActiveAtEnd, ExpectedWaitingAtEnd}}
-    Tests = [{3, 1, 1,   {1,   1, 1,   0, 1}},
-             {3, 1, 2,   {2,   2, 1,   0, 1}},
-             {3, 1, 3,   {3,   3, 0,   0, 1}},
-             {3, 3, 3,   {3,   3, 0,   0, 3}},
-             {1, 3, 3,   {3,   3, 0,   0, 3}}, % Max is overridden to PoolSize
-             {3, 2, 10,  {3,   3, 0,   0, 2}}
+    %          ExpectedActiveAfterConnect, ExpectedWaitingAfterConnect}
+    Tests = [{3, 1, 1,   {1,   1, 1}},
+             {3, 1, 2,   {2,   2, 1}},
+             {3, 1, 3,   {3,   3, 0}},
+             {3, 3, 3,   {3,   3, 0}},
+             {1, 3, 3,   {3,   3, 0}}, % Max is overridden to PoolSize
+             {3, 2, 6,  {3,   3, 0}}
             ],
     [fun () ->
              Self = self(),
