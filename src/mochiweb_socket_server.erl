@@ -296,16 +296,16 @@ recycle_acceptor(Pid, State=#mochiweb_socket_server{
                     State#mochiweb_socket_server{acceptor_pool=Pool1}
             end;
         false ->
-            Pool1 =
-                case sets:size(Pool) < PoolSize of
-                    true ->
-                        Acceptor = mochiweb_acceptor:start_link(self(), Listen, Loop),
-                        sets:add_element(Acceptor, Pool);
-                    false ->
-                        Pool
-                end,
-            State#mochiweb_socket_server{active_sockets=ActiveSockets - 1,
-                                         acceptor_pool=Pool1}
+            case sets:size(Pool) < PoolSize of
+                true ->
+                    Acceptor = mochiweb_acceptor:start_link(self(), Listen, Loop),
+                    Pool1 = sets:add_element(Acceptor, Pool),
+                    State#mochiweb_socket_server{active_sockets=ActiveSockets,
+                                                 acceptor_pool=Pool1};
+                false ->
+                    State#mochiweb_socket_server{active_sockets=ActiveSockets - 1,
+                                                 acceptor_pool=Pool}
+            end
     end.
 
 handle_info(Msg, State) when ?is_old_state(State) ->
