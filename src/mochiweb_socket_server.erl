@@ -18,7 +18,6 @@
         {port,
          loop,
          name=undefined,
-         %% NOTE: This is currently ignored.
          max=2048,
          ip=any,
          listen=null,
@@ -74,7 +73,16 @@ parse_options(State=#mochiweb_socket_server{}) ->
 parse_options(Options) ->
     parse_options(Options, #mochiweb_socket_server{}).
 
-parse_options([], State) ->
+parse_options([], State=#mochiweb_socket_server{acceptor_pool_size=PoolSize,
+                                                max=Max}) ->
+    case Max < PoolSize of
+        true ->
+            error_logger:info_report([{warning, "max is set lower than acceptor_pool_size"},
+                                      {max, Max},
+                                      {acceptor_pool_size, PoolSize}]);
+        false ->
+            ok
+    end,
     State;
 parse_options([{name, L} | Rest], State) when is_list(L) ->
     Name = {local, list_to_atom(L)},
@@ -113,8 +121,6 @@ parse_options([{acceptor_pool_size, Max} | Rest], State) ->
     parse_options(Rest,
                   State#mochiweb_socket_server{acceptor_pool_size=MaxInt});
 parse_options([{max, Max} | Rest], State) ->
-    error_logger:info_report([{warning, "TODO: max is currently unsupported"},
-                              {max, Max}]),
     MaxInt = ensure_int(Max),
     parse_options(Rest, State#mochiweb_socket_server{max=MaxInt});
 parse_options([{ssl, Ssl} | Rest], State) when is_boolean(Ssl) ->
@@ -204,6 +210,8 @@ listen(Port, Opts, State=#mochiweb_socket_server{ssl=Ssl, ssl_opts=SslOpts}) ->
 
 do_get(port, #mochiweb_socket_server{port=Port}) ->
     Port;
+do_get(waiting_acceptors, #mochiweb_socket_server{acceptor_pool=Pool}) ->
+    sets:size(Pool);
 do_get(active_sockets, #mochiweb_socket_server{active_sockets=ActiveSockets}) ->
     ActiveSockets.
 
@@ -271,16 +279,33 @@ code_change(_OldVsn, State, _Extra) ->
 
 recycle_acceptor(Pid, State=#mochiweb_socket_server{
                         acceptor_pool=Pool,
+                        acceptor_pool_size=PoolSize,
                         listen=Listen,
                         loop=Loop,
+                        max=Max,
                         active_sockets=ActiveSockets}) ->
     case sets:is_element(Pid, Pool) of
         true ->
-            Acceptor = mochiweb_acceptor:start_link(self(), Listen, Loop),
-            Pool1 = sets:add_element(Acceptor, sets:del_element(Pid, Pool)),
-            State#mochiweb_socket_server{acceptor_pool=Pool1};
+            Pool1 = sets:del_element(Pid, Pool),
+            case ActiveSockets + sets:size(Pool1) < Max of
+                true ->
+                    Acceptor = mochiweb_acceptor:start_link(self(), Listen, Loop),
+                    Pool2 = sets:add_element(Acceptor, Pool1),
+                    State#mochiweb_socket_server{acceptor_pool=Pool2};
+                false ->
+                    State#mochiweb_socket_server{acceptor_pool=Pool1}
+            end;
         false ->
-            State#mochiweb_socket_server{active_sockets=ActiveSockets - 1}
+            case sets:size(Pool) < PoolSize of
+                true ->
+                    Acceptor = mochiweb_acceptor:start_link(self(), Listen, Loop),
+                    Pool1 = sets:add_element(Acceptor, Pool),
+                    State#mochiweb_socket_server{active_sockets=ActiveSockets,
+                                                 acceptor_pool=Pool1};
+                false ->
+                    State#mochiweb_socket_server{active_sockets=ActiveSockets - 1,
+                                                 acceptor_pool=Pool}
+            end
     end.
 
 handle_info(Msg, State) when ?is_old_state(State) ->
