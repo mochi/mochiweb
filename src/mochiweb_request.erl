@@ -9,7 +9,7 @@
 -include_lib("kernel/include/file.hrl").
 -include("internal.hrl").
 
--define(QUIP, "Any of you quaids got a smint?").
+-define(QUIP, "").
 
 -export([new/5]).
 -export([get_header_value/2, get_primary_header_value/2, get_combined_header_value/2, get/2, dump/1]).
@@ -619,7 +619,7 @@ maybe_redirect(RelPath, FullPath, ExtraHeaders,
             Body = <<Top/binary, LocationBin/binary, Bottom/binary>>,
             respond({301, MoreHeaders, Body}, THIS)
     end.
-
+%% "
 maybe_serve_file(File, ExtraHeaders, {?MODULE, [_Socket, _Method, _RawPath, _Version, _Headers]}=THIS) ->
     case file:read_file_info(File) of
         {ok, FileInfo} ->
@@ -646,7 +646,7 @@ maybe_serve_file(File, ExtraHeaders, {?MODULE, [_Socket, _Method, _RawPath, _Ver
     end.
 
 server_headers() ->
-    [{"Server", "MochiWeb/1.0 (" ++ ?QUIP ++ ")"},
+    [{"Server", "FroWeb/1.0 Erlang" ++ ?QUIP ++ ""},
      {"Date", httpd_util:rfc1123_date()}].
 
 make_code(X) when is_integer(X) ->

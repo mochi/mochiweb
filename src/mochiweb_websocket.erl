@@ -35,16 +35,16 @@ loop(Socket, Body, State, WsVersion, ReplyChannel) ->
 
 request(Socket, Body, State, WsVersion, ReplyChannel) ->
     receive
-        {tcp_closed, _} ->
+        {tcp_closed, _A} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {ssl_closed, _} ->
+        {ssl_closed, _A} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp_error, _, _} ->
+        {tcp_error, _A, _B} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp, _, WsFrames} ->
+        {tcp, _A, WsFrames} ->
             case parse_frames(WsVersion, WsFrames, Socket) of
                 close ->
                     mochiweb_socket:close(Socket),
@@ -56,7 +56,19 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
                     NewState = call_body(Body, Payload, State, ReplyChannel),
                     loop(Socket, Body, NewState, WsVersion, ReplyChannel)
             end;
-        _ ->
+		{ssl,{sslsocket,new_ssl,_A}, WsFrames}->
+			case parse_frames(WsVersion, WsFrames, Socket) of
+                close ->
+                    mochiweb_socket:close(Socket),
+                    exit(normal);
+                error ->
+                    mochiweb_socket:close(Socket),
+                    exit(normal);
+                Payload ->
+                    NewState = call_body(Body, Payload, State, ReplyChannel),
+                    loop(Socket, Body, NewState, WsVersion, ReplyChannel)
+            end;
+        _A ->
             mochiweb_socket:close(Socket),
             exit(normal)
     end.
@@ -148,7 +160,7 @@ parse_frames(hybi, Frames, Socket) ->
     try parse_hybi_frames(Socket, Frames, []) of
         Parsed -> process_frames(Parsed, [])
     catch
-        _:_ -> error
+        _A:_B -> error
     end;
 parse_frames(hixie, Frames, _Socket) ->
     try parse_hixie_frames(Frames, []) of
@@ -169,6 +181,8 @@ process_frames([{Opcode, Payload} | Rest], Acc) ->
             process_frames(Rest, [Payload | Acc])
     end.
 
+	
+	
 parse_hybi_frames(_, <<>>, Acc) ->
     lists:reverse(Acc);
 parse_hybi_frames(S, <<_Fin:1,
@@ -204,20 +218,28 @@ parse_hybi_frames(Socket, <<_Fin:1,
                            _/binary-unit:8>> = PartFrame,
                   Acc) ->
     ok = mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}]),
+
     receive
-        {tcp_closed, _} ->
+        {tcp_closed, _A} ->
+			
             mochiweb_socket:close(Socket),
             exit(normal);
-        {ssl_closed, _} ->
+        {ssl_closed, _A} ->
+			
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp_error, _, _} ->
+        {tcp_error, _A, _B} ->
+			
             mochiweb_socket:close(Socket),
             exit(normal);
         {tcp, _, Continuation} ->
             parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>,
                               Acc);
-        _ ->
+		{ssl,{sslsocket,new_ssl,_A}, Continuation}->
+			parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>,
+                              Acc);
+        _A ->
+			
             mochiweb_socket:close(Socket),
             exit(normal)
     after
@@ -237,8 +259,38 @@ parse_hybi_frames(S, <<_Fin:1,
                       Rest/binary>>,
                   Acc) ->
     Payload2 = hybi_unmask(Payload, MaskKey, <<>>),
-    parse_hybi_frames(S, Rest, [{Opcode, Payload2} | Acc]).
-
+    parse_hybi_frames(S, Rest, [{Opcode, Payload2} | Acc]);
+parse_hybi_frames(Socket, <<_Fin:1,_Rsv:3,Opcode:4>> = PartFrame, Acc) ->
+	ok = mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}]),
+    receive
+        {tcp_closed, _A} ->
+			
+            mochiweb_socket:close(Socket),
+            exit(normal);
+        {ssl_closed, _A} ->
+			
+            mochiweb_socket:close(Socket),
+            exit(normal);
+        {tcp_error, _A, _B} ->
+			
+            mochiweb_socket:close(Socket),
+            exit(normal);
+        {tcp, _, Continuation} ->
+            parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>,
+                              Acc);
+		{ssl,{sslsocket,new_ssl,_A}, Continuation}->
+			parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>,
+                              Acc);
+        _A ->
+			
+            mochiweb_socket:close(Socket),
+            exit(normal)
+    after
+        5000 ->
+            mochiweb_socket:close(Socket),
+            exit(normal)
+    end.
+	
 %% Unmasks RFC 6455 message
 hybi_unmask(<<O:32, Rest/bits>>, MaskKey, Acc) ->
     <<MaskKey2:32>> = MaskKey,
