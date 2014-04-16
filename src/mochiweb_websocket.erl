@@ -56,7 +56,7 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
                     NewState = call_body(Body, Payload, State, ReplyChannel),
                     loop(Socket, Body, NewState, WsVersion, ReplyChannel)
             end;
-		{ssl,{sslsocket,new_ssl,_A}, WsFrames}->
+		{ssl,{sslsocket, _ ,_A}, WsFrames}->
 			case parse_frames(WsVersion, WsFrames, Socket) of
                 close ->
                     mochiweb_socket:close(Socket),
@@ -69,6 +69,7 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
                     loop(Socket, Body, NewState, WsVersion, ReplyChannel)
             end;
         _A ->
+			io:format("~p~n",[_A]),
             mochiweb_socket:close(Socket),
             exit(normal)
     end.
@@ -235,7 +236,7 @@ parse_hybi_frames(Socket, <<_Fin:1,
         {tcp, _, Continuation} ->
             parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>,
                               Acc);
-		{ssl,{sslsocket,new_ssl,_A}, Continuation}->
+		{ssl,{sslsocket, _ ,_A}, Continuation}->
 			parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>,
                               Acc);
         _A ->
