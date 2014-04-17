@@ -116,6 +116,7 @@ make_handshake(Req) ->
             Path = Req:get(path),
             Body = Req:recv(8),
             Scheme = scheme(Req),
+			io:format("WS: hixie_handshake"),
             hixie_handshake(Scheme, Host, Path, Sec1Key, Sec2Key, Body, Origin);
        true ->
           error
@@ -279,7 +280,7 @@ parse_hybi_frames(Socket, <<_Fin:1,_Rsv:3,Opcode:4>> = PartFrame, Acc) ->
         {tcp, _, Continuation} ->
             parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>,
                               Acc);
-		{ssl,{sslsocket,new_ssl,_A}, Continuation}->
+		{ssl,{sslsocket,_,_A}, Continuation}->
 			parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>,
                               Acc);
         _A ->
