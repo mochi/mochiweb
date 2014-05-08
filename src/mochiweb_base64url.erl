@@ -8,13 +8,13 @@
 %% '_' is used in place of '/' (63),
 %% padding is implicit rather than explicit ('=').
 
--spec encode(iolist()) -> binary().
+-spec encode(iolist() | binary()) -> binary().
 encode(B) when is_binary(B) ->
     encode_binary(B);
 encode(L) when is_list(L) ->
     encode_binary(iolist_to_binary(L)).
 
--spec decode(iolist()) -> binary().
+-spec decode(iolist() | binary()) -> binary().
 decode(B) when is_binary(B) ->
     decode_binary(B);
 decode(L) when is_list(L) ->
