@@ -96,7 +96,7 @@ upgrade_connection(Req, Body) ->
                 ?MODULE:send(Socket, Payload, Version)
             end,
             Reentry = fun (State) ->
-                ?MODULE:loop(Socket, Body, State, Version, ReplyChannel)
+                ?MODULE:loop( Socket, Body, State, Version, ReplyChannel )
             end,
             {Reentry, ReplyChannel};
         _ ->
@@ -116,7 +116,6 @@ make_handshake(Req) ->
             Path = Req:get(path),
             Body = Req:recv(8),
             Scheme = scheme(Req),
-			io:format("WS: hixie_handshake"),
             hixie_handshake(Scheme, Host, Path, Sec1Key, Sec2Key, Body, Origin);
        true ->
           error
