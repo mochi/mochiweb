@@ -6,7 +6,7 @@ REBAR=./rebar
 .PHONY: all edoc test clean build_plt dialyzer app
 
 all:
-	@$(REBAR) get-deps compile
+	@$(REBAR) -r get-deps compile
 
 edoc:
 	@$(REBAR) doc
@@ -19,12 +19,5 @@ test:
 clean:
 	@$(REBAR) clean
 
-build_plt:
-	@$(REBAR) build-plt
-
-dialyzer:
-	@$(REBAR) dialyze
-
 app:
-	@$(REBAR) create template=mochiwebapp dest=$(DEST) appid=$(PROJECT)
-
+	@$(REBAR) -r create template=mochiwebapp dest=$(DEST) appid=$(PROJECT)

@@ -44,9 +44,8 @@ loop(Req, DocRoot) ->
                       {type, Type}, {what, What},
                       {trace, erlang:get_stacktrace()}],
             error_logger:error_report(Report),
-            %% NOTE: mustache templates need \\ because they are not awesome.
             Req:respond({500, [{"Content-Type", "text/plain"}],
-                         "request failed, sorry\\n"})
+                         "request failed, sorry\n"})
     end.
 
 %% Internal API

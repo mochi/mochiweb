@@ -6,6 +6,7 @@
 .DS_Store
 /TEST-*.xml
 /deps
+/.rebar
 *.swp
 *.beam
 *.dump
