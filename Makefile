@@ -6,7 +6,7 @@ REBAR=./rebar
 .PHONY: all edoc test clean build_plt dialyzer app
 
 all:
-	@$(REBAR) -r get-deps compile
+	@$(REBAR) prepare-deps
 
 edoc:
 	@$(REBAR) doc
@@ -14,7 +14,7 @@ edoc:
 test:
 	@rm -rf .eunit
 	@mkdir -p .eunit
-	@$(REBAR) skip_deps=true eunit
+	@$(REBAR) eunit
 
 clean:
 	@$(REBAR) clean
