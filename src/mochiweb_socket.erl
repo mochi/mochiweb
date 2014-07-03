@@ -15,7 +15,8 @@
 listen(Ssl, Port, Opts, SslOpts) ->
     case Ssl of
         true ->
-            case ssl:listen(Port, Opts ++ SslOpts) of
+            Opts1 = add_unbroken_ciphers_default(Opts ++ SslOpts),
+            case ssl:listen(Port, Opts1) of
                 {ok, ListenSocket} ->
                     {ok, {ssl, ListenSocket}};
                 {error, _} = Err ->
@@ -23,6 +24,20 @@ listen(Ssl, Port, Opts, SslOpts) ->
             end;
         false ->
             gen_tcp:listen(Port, Opts)
+    end.
+
+add_unbroken_ciphers_default(Opts) ->
+    Ciphers = filter_broken_cipher_suites(proplists:get_value(ciphers, Opts, ssl:cipher_suites())),
+    [{ciphers, Ciphers} | proplists:delete(ciphers, Opts)].
+
+filter_broken_cipher_suites(Ciphers) ->
+	case proplists:get_value(ssl_app, ssl:versions()) of
+		"5.3" ++ _ ->
+            lists:filter(fun(Suite) ->
+                                 string:left(atom_to_list(element(1, Suite)), 4) =/= "ecdh"
+                         end, Ciphers);
+        _ ->
+            Ciphers
     end.
 
 accept({ssl, ListenSocket}) ->
