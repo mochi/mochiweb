@@ -51,10 +51,15 @@ uri({scheme, Hostname, Port}) ->
 uri(HttpString) when is_list(HttpString) ->
     HttpString.
 
-%% @spec new_request({Socket, Request, Headers}) -> MochiWebRequest
+%% @spec new_request( {Socket, Request, Headers}
+%%                  | {Socket, Opts, Request, Headers} ) -> MochiWebRequest
 %% @doc Return a mochiweb_request data structure.
 new_request({Socket, {Method, HttpUri, Version}, Headers}) ->
+    new_request({Socket, [], {Method, HttpUri, Version}, Headers});
+
+new_request({Socket, Opts, {Method, HttpUri, Version}, Headers}) ->
     mochiweb_request:new(Socket,
+                         Opts,
                          Method,
                          uri(HttpUri),
                          Version,

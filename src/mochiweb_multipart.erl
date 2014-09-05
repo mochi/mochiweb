@@ -374,7 +374,7 @@ parse3(Transport) ->
               body_end,
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
-    ServerFun = fun (Socket) ->
+    ServerFun = fun (Socket, _Opts) ->
                         ok = mochiweb_socket:send(Socket, BinContent),
                         exit(normal)
                 end,
@@ -410,7 +410,7 @@ parse2(Transport) ->
               body_end,
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
-    ServerFun = fun (Socket) ->
+    ServerFun = fun (Socket, _Opts) ->
                         ok = mochiweb_socket:send(Socket, BinContent),
                         exit(normal)
                 end,
@@ -447,7 +447,7 @@ do_parse_form(Transport) ->
                  "--AaB03x--",
                  ""], "\r\n"),
     BinContent = iolist_to_binary(Content),
-    ServerFun = fun (Socket) ->
+    ServerFun = fun (Socket, _Opts) ->
                         ok = mochiweb_socket:send(Socket, BinContent),
                         exit(normal)
                 end,
@@ -500,7 +500,7 @@ do_parse(Transport) ->
               body_end,
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
-    ServerFun = fun (Socket) ->
+    ServerFun = fun (Socket, _Opts) ->
                         ok = mochiweb_socket:send(Socket, BinContent),
                         exit(normal)
                 end,
@@ -552,7 +552,7 @@ parse_partial_body_boundary(Transport) ->
               body_end,
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
-    ServerFun = fun (Socket) ->
+    ServerFun = fun (Socket, _Opts) ->
                         ok = mochiweb_socket:send(Socket, BinContent),
                         exit(normal)
                 end,
@@ -605,7 +605,7 @@ parse_large_header(Transport) ->
               body_end,
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
-    ServerFun = fun (Socket) ->
+    ServerFun = fun (Socket, _Opts) ->
                         ok = mochiweb_socket:send(Socket, BinContent),
                         exit(normal)
                 end,
@@ -681,7 +681,7 @@ flash_parse(Transport) ->
               body_end,
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
-    ServerFun = fun (Socket) ->
+    ServerFun = fun (Socket, _Opts) ->
                         ok = mochiweb_socket:send(Socket, BinContent),
                         exit(normal)
                 end,
@@ -729,7 +729,7 @@ flash_parse2(Transport) ->
               body_end,
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
-    ServerFun = fun (Socket) ->
+    ServerFun = fun (Socket, _Opts) ->
                         ok = mochiweb_socket:send(Socket, BinContent),
                         exit(normal)
                 end,
@@ -856,7 +856,7 @@ multipart_parsing_benchmark() ->
               body_end,
               eof],
     TestCallback = fun (Next) -> test_callback(Next, Expect) end,
-    ServerFun = fun (Socket) ->
+    ServerFun = fun (Socket, _Opts) ->
                         ok = mochiweb_socket:send(Socket, BinContent),
                         exit(normal)
                 end,

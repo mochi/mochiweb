@@ -63,7 +63,7 @@ test_basic_accept(Max, PoolSize, NumClients, ReportTo) ->
 
     ServerOpts = [{max, Max}, {acceptor_pool_size, PoolSize}],
     ServerLoop =
-        fun (Socket) ->
+        fun (Socket, _Opts) ->
                 Tester ! {server_accepted, self()},
                 mochiweb_socket:setopts(Socket, [{packet, 1}]),
                 echo_loop(Socket)
