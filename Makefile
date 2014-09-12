@@ -8,7 +8,7 @@ REBAR=./rebar
 all:
 	@$(REBAR) prepare-deps
 
-edoc:
+edoc: all
 	@$(REBAR) doc
 
 test:
