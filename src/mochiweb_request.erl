@@ -264,22 +264,15 @@ stream_body(MaxChunkSize, ChunkFun, FunState, MaxBodyLength,
 %%      ResponseHeaders. The server will set header defaults such as Server
 %%      and Date if not present in ResponseHeaders.
 start_response({Code, ResponseHeaders}, {?MODULE, [_Socket, _Method, _RawPath, _Version, _Headers]}=THIS) ->
-    HResponse = mochiweb_headers:make(ResponseHeaders),
-    HResponse1 = mochiweb_headers:default_from_list(server_headers(),
-                                                    HResponse),
-    start_raw_response({Code, HResponse1}, THIS).
+    start_raw_response({Code, ResponseHeaders}, THIS).
 
 %% @spec start_raw_response({integer(), headers()}, request()) -> response()
 %% @doc Start the HTTP response by sending the Code HTTP response and
 %%      ResponseHeaders.
-start_raw_response({Code, ResponseHeaders}, {?MODULE, [_Socket, _Method, _RawPath, Version, _Headers]}=THIS) ->
-    F = fun ({K, V}, Acc) ->
-                [mochiweb_util:make_io(K), <<": ">>, V, <<"\r\n">> | Acc]
-        end,
-    End = lists:foldl(F, [<<"\r\n">>],
-                      mochiweb_headers:to_list(ResponseHeaders)),
-    send([make_version(Version), make_code(Code), <<"\r\n">> | End], THIS),
-    mochiweb:new_response({THIS, Code, ResponseHeaders}).
+start_raw_response({Code, ResponseHeaders}, {?MODULE, [_Socket, _Method, _RawPath, _Version, _Headers]}=THIS) ->
+    {Header, Response} = format_response_header({Code, ResponseHeaders}, THIS),
+    send(Header, THIS),
+    Response.
 
 
 %% @spec start_response_length({integer(), ioheaders(), integer()}, request()) -> response()
@@ -292,6 +285,26 @@ start_response_length({Code, ResponseHeaders, Length},
     HResponse = mochiweb_headers:make(ResponseHeaders),
     HResponse1 = mochiweb_headers:enter("Content-Length", Length, HResponse),
     start_response({Code, HResponse1}, THIS).
+
+%% @spec format_response_header({integer(), ioheaders()} | {integer(), ioheaders(), integer()}, request()) -> iolist()
+%% @doc Format the HTTP response header, including the Code HTTP response and
+%%      ResponseHeaders including an optional Content-Length of Length. The server
+%%      will set header defaults such as Server
+%%      and Date if not present in ResponseHeaders.
+format_response_header({Code, ResponseHeaders}, {?MODULE, [_Socket, _Method, _RawPath, Version, _Headers]}=THIS) ->
+    HResponse = mochiweb_headers:make(ResponseHeaders),
+    HResponse1 = mochiweb_headers:default_from_list(server_headers(), HResponse),
+    F = fun ({K, V}, Acc) ->
+                [mochiweb_util:make_io(K), <<": ">>, V, <<"\r\n">> | Acc]
+        end,
+    End = lists:foldl(F, [<<"\r\n">>], mochiweb_headers:to_list(HResponse1)),
+    Response = mochiweb:new_response({THIS, Code, HResponse1}),
+    {[make_version(Version), make_code(Code), <<"\r\n">> | End], Response};
+format_response_header({Code, ResponseHeaders, Length},
+                       {?MODULE, [_Socket, _Method, _RawPath, _Version, _Headers]}=THIS) ->
+    HResponse = mochiweb_headers:make(ResponseHeaders),
+    HResponse1 = mochiweb_headers:enter("Content-Length", Length, HResponse),
+    format_response_header({Code, HResponse1}, THIS).
 
 %% @spec respond({integer(), ioheaders(), iodata() | chunked | {file, IoDevice}}, request()) -> response()
 %% @doc Start the HTTP response with start_response, and send Body to the
@@ -334,12 +347,10 @@ respond({Code, ResponseHeaders, chunked}, {?MODULE, [_Socket, Method, _RawPath, 
                  end,
     start_response({Code, HResponse1}, THIS);
 respond({Code, ResponseHeaders, Body}, {?MODULE, [_Socket, Method, _RawPath, _Version, _Headers]}=THIS) ->
-    Response = start_response_length({Code, ResponseHeaders, iolist_size(Body)}, THIS),
+    {Header, Response} = format_response_header({Code, ResponseHeaders, iolist_size(Body)}, THIS),
     case Method of
-        'HEAD' ->
-            ok;
-        _ ->
-            send(Body, THIS)
+        'HEAD' -> send(Header, THIS);
+        _      -> send([Header, Body], THIS)
     end,
     Response.
 
