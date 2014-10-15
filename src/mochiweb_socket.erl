@@ -16,7 +16,8 @@ listen(Ssl, Port, Opts, SslOpts) ->
     case Ssl of
         true ->
             Opts1 = add_unbroken_ciphers_default(Opts ++ SslOpts),
-            case ssl:listen(Port, Opts1) of
+            Opts2 = add_safe_protocol_versions(Opts1),
+            case ssl:listen(Port, Opts2) of
                 {ok, ListenSocket} ->
                     {ok, {ssl, ListenSocket}};
                 {error, _} = Err ->
@@ -27,7 +28,8 @@ listen(Ssl, Port, Opts, SslOpts) ->
     end.
 
 add_unbroken_ciphers_default(Opts) ->
-    Ciphers = filter_broken_cipher_suites(proplists:get_value(ciphers, Opts, ssl:cipher_suites())),
+    Default = filter_unsecure_cipher_suites(ssl:cipher_suites()),
+    Ciphers = filter_broken_cipher_suites(proplists:get_value(ciphers, Opts, Default)),
     [{ciphers, Ciphers} | proplists:delete(ciphers, Opts)].
 
 filter_broken_cipher_suites(Ciphers) ->
@@ -39,6 +41,31 @@ filter_broken_cipher_suites(Ciphers) ->
         _ ->
             Ciphers
     end.
+
+filter_unsecure_cipher_suites(Ciphers) ->
+    lists:filter(fun
+                    ({_,des_cbc,_}) -> false;
+                    ({_,_,md5}) -> false;
+                    (_) -> true
+                 end,
+                 Ciphers).
+
+add_safe_protocol_versions(Opts) ->
+    case proplists:is_defined(versions, Opts) of
+        true ->
+            Opts;
+        false ->
+            Versions = filter_unsafe_protcol_versions(proplists:get_value(available, ssl:versions())),
+            [{versions, Versions} | Opts]
+    end.
+
+filter_unsafe_protcol_versions(Versions) ->
+    lists:filter(fun
+                    (sslv3) -> false;
+                    (_) -> true
+                 end,
+                 Versions).
+
 
 accept({ssl, ListenSocket}) ->
     % There's a bug in ssl:transport_accept/2 at the moment, which is the
