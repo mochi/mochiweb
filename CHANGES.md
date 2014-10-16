@@ -1,3 +1,14 @@
+Version 2.9.2 released 2014-10-16
+
+* Add timeouts to SSL connect to prevent DoS by opening a connection
+  and not doing anything.
+  https://github.com/mochi/mochiweb/pull/140
+* Prevent using ECDH cipher in R16B because it is broken
+  https://github.com/mochi/mochiweb/pull/140
+* For default SSL connections, remove usage of sslv3 and not-so-secure
+  ciphers.
+  https://github.com/mochi/mochiweb/pull/140
+
 Version 2.9.1 released 2014-09-29
 
 * Fix Makefile rule for building docs
