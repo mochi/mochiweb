@@ -8,11 +8,16 @@
          setopts/2, type/1]).
 
 -define(ACCEPT_TIMEOUT, 2000).
+-define(SSL_TIMEOUT, 10000).
+-define(SSL_HANDSHAKE_TIMEOUT, 20000).
+
 
 listen(Ssl, Port, Opts, SslOpts) ->
     case Ssl of
         true ->
-            case ssl:listen(Port, Opts ++ SslOpts) of
+            Opts1 = add_unbroken_ciphers_default(Opts ++ SslOpts),
+            Opts2 = add_safe_protocol_versions(Opts1),
+            case ssl:listen(Port, Opts2) of
                 {ok, ListenSocket} ->
                     {ok, {ssl, ListenSocket}};
                 {error, _} = Err ->
@@ -22,12 +27,52 @@ listen(Ssl, Port, Opts, SslOpts) ->
             gen_tcp:listen(Port, Opts)
     end.
 
+add_unbroken_ciphers_default(Opts) ->
+    Default = filter_unsecure_cipher_suites(ssl:cipher_suites()),
+    Ciphers = filter_broken_cipher_suites(proplists:get_value(ciphers, Opts, Default)),
+    [{ciphers, Ciphers} | proplists:delete(ciphers, Opts)].
+
+filter_broken_cipher_suites(Ciphers) ->
+	case proplists:get_value(ssl_app, ssl:versions()) of
+		"5.3" ++ _ ->
+            lists:filter(fun(Suite) ->
+                                 string:left(atom_to_list(element(1, Suite)), 4) =/= "ecdh"
+                         end, Ciphers);
+        _ ->
+            Ciphers
+    end.
+
+filter_unsecure_cipher_suites(Ciphers) ->
+    lists:filter(fun
+                    ({_,des_cbc,_}) -> false;
+                    ({_,_,md5}) -> false;
+                    (_) -> true
+                 end,
+                 Ciphers).
+
+add_safe_protocol_versions(Opts) ->
+    case proplists:is_defined(versions, Opts) of
+        true ->
+            Opts;
+        false ->
+            Versions = filter_unsafe_protcol_versions(proplists:get_value(available, ssl:versions())),
+            [{versions, Versions} | Opts]
+    end.
+
+filter_unsafe_protcol_versions(Versions) ->
+    lists:filter(fun
+                    (sslv3) -> false;
+                    (_) -> true
+                 end,
+                 Versions).
+
+
 accept({ssl, ListenSocket}) ->
     % There's a bug in ssl:transport_accept/2 at the moment, which is the
     % reason for the try...catch block. Should be fixed in OTP R14.
-    try ssl:transport_accept(ListenSocket) of
+    try ssl:transport_accept(ListenSocket, ?SSL_TIMEOUT) of
         {ok, Socket} ->
-            case ssl:ssl_accept(Socket) of
+            case ssl:ssl_accept(Socket, ?SSL_HANDSHAKE_TIMEOUT) of
                 ok ->
                     {ok, {ssl, Socket}};
                 {error, _} = Err ->
