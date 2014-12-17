@@ -1,3 +1,9 @@
+Version 2.10.0 released 2014-12-17
+
+* Added new `recbuf` option to mochiweb_http to allow the receive
+  buffer to be configured.
+  https://github.com/mochi/mochiweb/pull/134
+
 Version 2.9.2 released 2014-10-16
 
 * Add timeouts to SSL connect to prevent DoS by opening a connection
