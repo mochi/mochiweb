@@ -1,3 +1,10 @@
+Version 2.10.1 released 2015-01-11
+
+* Fixes issue with SSL and mochiweb_websocket. Note that
+  mochiweb_websocket is still experimental and the API
+  is subject to change in future versions.
+  https://github.com/mochi/mochiweb/pull/144
+
 Version 2.10.0 released 2014-12-17
 
 * Added new `recbuf` option to mochiweb_http to allow the receive
