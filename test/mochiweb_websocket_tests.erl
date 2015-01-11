@@ -82,3 +82,70 @@ hixie_frames_decode_test() ->
        mochiweb_websocket:parse_hixie_frames(
          <<0,102,111,111,255,0,98,97,114,255>>,
          [])).
+
+end_to_end_test_factory(ServerTransport) ->
+    mochiweb_test_util:with_server(
+      ServerTransport,
+      fun end_to_end_server/1,
+      fun (Transport, Port) ->
+              end_to_end_client(mochiweb_test_util:sock_fun(Transport, Port))
+      end).
+
+end_to_end_server(Req) ->
+    ?assertEqual("Upgrade", Req:get_header_value("connection")),
+    ?assertEqual("websocket", Req:get_header_value("upgrade")),
+    {ReentryWs, _ReplyChannel} = mochiweb_websocket:upgrade_connection(
+                                   Req,
+                                   fun end_to_end_ws_loop/3),
+    ReentryWs(ok).
+
+end_to_end_ws_loop(_Payload, State, _ReplyChannel) ->
+    State.
+
+end_to_end_client(S) ->
+    UpgradeReq = string:join(
+                   ["GET / HTTP/1.1",
+                    "Host: localhost",
+                    "Upgrade: websocket",
+                    "Connection: Upgrade",
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+                    "",
+                    ""], "\r\n"),
+    ok = S({send, UpgradeReq}),
+    {ok, {http_response, {1,1}, 101, _}} = S(recv),
+    ok = S({setopts, [{packet, httph}]}),
+    D = read_expected_headers(
+          S,
+          gb_from_list(
+            [{'Upgrade', "websocket"},
+             {'Connection', "Upgrade"},
+             {'Content-Length', "0"},
+             {"Sec-Websocket-Accept", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="}])),
+    ?assertEqual([], gb_trees:to_list(D)),
+    ok = S({setopts, [{packet, raw}]}),
+    ok.
+
+gb_from_list(L) ->
+    lists:foldl(
+      fun ({K, V}, D) -> gb_trees:insert(K, V, D) end,
+      gb_trees:empty(),
+      L).
+
+read_expected_headers(S, D) ->
+    case S(recv) of
+        {ok, http_eoh} ->
+            D;
+        {ok, {http_header, _, K, _, V}} ->
+            case gb_trees:lookup(K, D) of
+                {value, V1} ->
+                    ?assertEqual({K, V}, {K, V1}),
+                    read_expected_headers(S, gb_trees:delete(K, D));
+                none ->
+                    read_expected_headers(S, D)
+            end
+    end.
+
+end_to_end_test_() ->
+    [{"http", ?_assertEqual(ok, end_to_end_test_factory(plain))}
+    ,{"https", ?_assertEqual(ok, end_to_end_test_factory(ssl))}
+    ].

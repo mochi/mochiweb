@@ -1,5 +1,5 @@
 -module(mochiweb_test_util).
--export([with_server/3, client_request/4]).
+-export([with_server/3, client_request/4, sock_fun/2]).
 -include("mochiweb_test_util.hrl").
 
 ssl_cert_opts() ->
@@ -23,9 +23,9 @@ with_server(Transport, ServerFun, ClientFun) ->
     mochiweb_http:stop(Server),
     Res.
 
-client_request(Transport, Port, Method, TestReqs) ->
+sock_fun(Transport, Port) ->
     Opts = [binary, {active, false}, {packet, http}],
-    SockFun = case Transport of
+    case Transport of
         plain ->
             {ok, Socket} = gen_tcp:connect("127.0.0.1", Port, Opts),
             fun (recv) ->
@@ -48,8 +48,10 @@ client_request(Transport, Port, Method, TestReqs) ->
                 ({setopts, L}) ->
                     ssl:setopts(Socket, L)
             end
-    end,
-    client_request(SockFun, Method, TestReqs).
+    end.
+
+client_request(Transport, Port, Method, TestReqs) ->
+    client_request(sock_fun(Transport, Port), Method, TestReqs).
 
 client_request(SockFun, _Method, []) ->
     {the_end, {error, closed}} = {the_end, SockFun(recv)},
