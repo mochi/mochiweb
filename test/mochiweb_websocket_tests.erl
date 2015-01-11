@@ -169,7 +169,8 @@ read_expected_headers(S, D) ->
             end
     end.
 
-end_to_end_test_() ->
-    [{"http", ?_assertEqual(ok, end_to_end_test_factory(plain))}
-    ,{"https", ?_assertEqual(ok, end_to_end_test_factory(ssl))}
-    ].
+end_to_end_http_test() ->
+    end_to_end_test_factory(plain).
+
+end_to_end_https_test() ->
+    end_to_end_test_factory(ssl).
