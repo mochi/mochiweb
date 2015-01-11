@@ -47,7 +47,7 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
         {tcp_error, _, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp, _, WsFrames} ->
+        {Proto, _, WsFrames} when Proto =:= tcp orelse Proto =:= ssl ->
             case parse_frames(WsVersion, WsFrames, Socket) of
                 close ->
                     mochiweb_socket:close(Socket),
@@ -217,7 +217,7 @@ parse_hybi_frames(Socket, <<_Fin:1,
         {tcp_error, _, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp, _, Continuation} ->
+        {Proto, _, Continuation} when Proto =:= tcp orelse Proto =:= ssl ->
             parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>,
                               Acc);
         _ ->
