@@ -99,10 +99,13 @@ end_to_end_server(Req) ->
                                    fun end_to_end_ws_loop/3),
     ReentryWs(ok).
 
-end_to_end_ws_loop(_Payload, State, _ReplyChannel) ->
+end_to_end_ws_loop(Payload, State, ReplyChannel) ->
+    %% Echo server
+    lists:foreach(ReplyChannel, Payload),
     State.
 
 end_to_end_client(S) ->
+    %% Key and Accept per https://tools.ietf.org/html/rfc6455
     UpgradeReq = string:join(
                    ["GET / HTTP/1.1",
                     "Host: localhost",
@@ -123,6 +126,27 @@ end_to_end_client(S) ->
              {"Sec-Websocket-Accept", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="}])),
     ?assertEqual([], gb_trees:to_list(D)),
     ok = S({setopts, [{packet, raw}]}),
+    %% The first message sent over telegraph :)
+    SmallMessage = <<"What hath God wrought?">>,
+    ok = S({send,
+       << 1:1, %% Fin
+          0:1, %% Rsv1
+          0:1, %% Rsv2
+          0:1, %% Rsv3
+          2:4, %% Opcode, 1 = text frame
+          1:1, %% Mask on
+          (byte_size(SmallMessage)):7, %% Length, <125 case
+          0:32, %% Mask (trivial)
+          SmallMessage/binary >>}),
+    {ok, WsFrames} = S(recv),
+    << 1:1, %% Fin
+       0:1, %% Rsv1
+       0:1, %% Rsv2
+       0:1, %% Rsv3
+       1:4, %% Opcode, text frame (all mochiweb suports for now)
+       MsgSize:8, %% Expecting small size
+       SmallMessage/binary >> = WsFrames,
+    ?assertEqual(MsgSize, byte_size(SmallMessage)),
     ok.
 
 gb_from_list(L) ->

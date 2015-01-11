@@ -35,7 +35,9 @@ sock_fun(Transport, Port) ->
                 ({send, Data}) ->
                     gen_tcp:send(Socket, Data);
                 ({setopts, L}) ->
-                    inet:setopts(Socket, L)
+                    inet:setopts(Socket, L);
+                (get) ->
+                    Socket
             end;
         ssl ->
             {ok, Socket} = ssl:connect("127.0.0.1", Port, [{ssl_imp, new} | Opts]),
@@ -46,7 +48,9 @@ sock_fun(Transport, Port) ->
                 ({send, Data}) ->
                     ssl:send(Socket, Data);
                 ({setopts, L}) ->
-                    ssl:setopts(Socket, L)
+                    ssl:setopts(Socket, L);
+                (get) ->
+                    {ssl, Socket}
             end
     end.
 
