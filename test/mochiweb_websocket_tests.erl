@@ -82,3 +82,95 @@ hixie_frames_decode_test() ->
        mochiweb_websocket:parse_hixie_frames(
          <<0,102,111,111,255,0,98,97,114,255>>,
          [])).
+
+end_to_end_test_factory(ServerTransport) ->
+    mochiweb_test_util:with_server(
+      ServerTransport,
+      fun end_to_end_server/1,
+      fun (Transport, Port) ->
+              end_to_end_client(mochiweb_test_util:sock_fun(Transport, Port))
+      end).
+
+end_to_end_server(Req) ->
+    ?assertEqual("Upgrade", Req:get_header_value("connection")),
+    ?assertEqual("websocket", Req:get_header_value("upgrade")),
+    {ReentryWs, _ReplyChannel} = mochiweb_websocket:upgrade_connection(
+                                   Req,
+                                   fun end_to_end_ws_loop/3),
+    ReentryWs(ok).
+
+end_to_end_ws_loop(Payload, State, ReplyChannel) ->
+    %% Echo server
+    lists:foreach(ReplyChannel, Payload),
+    State.
+
+end_to_end_client(S) ->
+    %% Key and Accept per https://tools.ietf.org/html/rfc6455
+    UpgradeReq = string:join(
+                   ["GET / HTTP/1.1",
+                    "Host: localhost",
+                    "Upgrade: websocket",
+                    "Connection: Upgrade",
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+                    "",
+                    ""], "\r\n"),
+    ok = S({send, UpgradeReq}),
+    {ok, {http_response, {1,1}, 101, _}} = S(recv),
+    ok = S({setopts, [{packet, httph}]}),
+    D = read_expected_headers(
+          S,
+          gb_from_list(
+            [{'Upgrade', "websocket"},
+             {'Connection', "Upgrade"},
+             {'Content-Length', "0"},
+             {"Sec-Websocket-Accept", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="}])),
+    ?assertEqual([], gb_trees:to_list(D)),
+    ok = S({setopts, [{packet, raw}]}),
+    %% The first message sent over telegraph :)
+    SmallMessage = <<"What hath God wrought?">>,
+    ok = S({send,
+       << 1:1, %% Fin
+          0:1, %% Rsv1
+          0:1, %% Rsv2
+          0:1, %% Rsv3
+          2:4, %% Opcode, 1 = text frame
+          1:1, %% Mask on
+          (byte_size(SmallMessage)):7, %% Length, <125 case
+          0:32, %% Mask (trivial)
+          SmallMessage/binary >>}),
+    {ok, WsFrames} = S(recv),
+    << 1:1, %% Fin
+       0:1, %% Rsv1
+       0:1, %% Rsv2
+       0:1, %% Rsv3
+       1:4, %% Opcode, text frame (all mochiweb suports for now)
+       MsgSize:8, %% Expecting small size
+       SmallMessage/binary >> = WsFrames,
+    ?assertEqual(MsgSize, byte_size(SmallMessage)),
+    ok.
+
+gb_from_list(L) ->
+    lists:foldl(
+      fun ({K, V}, D) -> gb_trees:insert(K, V, D) end,
+      gb_trees:empty(),
+      L).
+
+read_expected_headers(S, D) ->
+    case S(recv) of
+        {ok, http_eoh} ->
+            D;
+        {ok, {http_header, _, K, _, V}} ->
+            case gb_trees:lookup(K, D) of
+                {value, V1} ->
+                    ?assertEqual({K, V}, {K, V1}),
+                    read_expected_headers(S, gb_trees:delete(K, D));
+                none ->
+                    read_expected_headers(S, D)
+            end
+    end.
+
+end_to_end_http_test() ->
+    end_to_end_test_factory(plain).
+
+end_to_end_https_test() ->
+    end_to_end_test_factory(ssl).

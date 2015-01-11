@@ -27,6 +27,9 @@
 
 -export([loop/5, upgrade_connection/2, request/5]).
 -export([send/3]).
+-ifdef(TEST).
+-compile(export_all).
+-endif.
 
 loop(Socket, Body, State, WsVersion, ReplyChannel) ->
     ok = mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}]),
@@ -44,7 +47,7 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
         {tcp_error, _, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp, _, WsFrames} ->
+        {Proto, _, WsFrames} when Proto =:= tcp orelse Proto =:= ssl ->
             case parse_frames(WsVersion, WsFrames, Socket) of
                 close ->
                     mochiweb_socket:close(Socket),
@@ -214,7 +217,7 @@ parse_hybi_frames(Socket, <<_Fin:1,
         {tcp_error, _, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
-        {tcp, _, Continuation} ->
+        {Proto, _, Continuation} when Proto =:= tcp orelse Proto =:= ssl ->
             parse_hybi_frames(Socket, <<PartFrame/binary, Continuation/binary>>,
                               Acc);
         _ ->
@@ -276,11 +279,3 @@ parse_hixie(<<255, Rest/binary>>, Buffer) ->
   {Buffer, Rest};
 parse_hixie(<<H, T/binary>>, Buffer) ->
   parse_hixie(T, <<Buffer/binary, H>>).
-
-%%
-%% Tests
-%%
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
--compile(export_all).
--endif.
