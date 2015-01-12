@@ -4,7 +4,9 @@
 
 -module(mochiweb_socket).
 
--export([listen/4, accept/1, recv/3, send/2, close/1, port/1, peername/1,
+-export([listen/4,
+         accept/1, transport_accept/1, finish_accept/1,
+         recv/3, send/2, close/1, port/1, peername/1,
          setopts/2, getopts/2, type/1]).
 
 -define(ACCEPT_TIMEOUT, 2000).
@@ -66,26 +68,34 @@ filter_unsafe_protcol_versions(Versions) ->
                  end,
                  Versions).
 
-
-accept({ssl, ListenSocket}) ->
-    % There's a bug in ssl:transport_accept/2 at the moment, which is the
-    % reason for the try...catch block. Should be fixed in OTP R14.
-    try ssl:transport_accept(ListenSocket, ?SSL_TIMEOUT) of
+%% Provided for backwards compatibility only
+accept(ListenSocket) ->
+    case transport_accept(ListenSocket) of
         {ok, Socket} ->
-            case ssl:ssl_accept(Socket, ?SSL_HANDSHAKE_TIMEOUT) of
-                ok ->
-                    {ok, {ssl, Socket}};
-                {error, _} = Err ->
-                    Err
-            end;
+            finish_accept(Socket);
         {error, _} = Err ->
             Err
-    catch
-        error:{badmatch, {error, Reason}} ->
-            {error, Reason}
+    end.
+
+transport_accept({ssl, ListenSocket}) ->
+    case ssl:transport_accept(ListenSocket, ?SSL_TIMEOUT) of
+        {ok, Socket} ->
+            {ok, {ssl, Socket}};
+        {error, _} = Err ->
+            Err
     end;
-accept(ListenSocket) ->
+transport_accept(ListenSocket) ->
     gen_tcp:accept(ListenSocket, ?ACCEPT_TIMEOUT).
+
+finish_accept({ssl, Socket}) ->
+    case ssl:ssl_accept(Socket, ?SSL_HANDSHAKE_TIMEOUT) of
+        ok ->
+            {ok, {ssl, Socket}};
+        {error, _} = Err ->
+            Err
+    end;
+finish_accept(Socket) ->
+    {ok, Socket}.
 
 recv({ssl, Socket}, Length, Timeout) ->
     ssl:recv(Socket, Length, Timeout);
