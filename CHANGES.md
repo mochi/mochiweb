@@ -1,3 +1,12 @@
+Version 2.11.0 released 2015-01-12
+
+* Perform SSL handshake after releasing acceptor back into the pool,
+  and slow accept rate when file descriptors are not available,
+  to mitigate a potential DoS attack. Adds new mochiweb_socket
+  functions transport_accept/1 and finish_accept/1 which should be
+  used in preference to the now deprecated accept/1 function.
+  https://github.com/mochi/mochiweb/issues/138
+
 Version 2.10.1 released 2015-01-11
 
 * Fixes issue with SSL and mochiweb_websocket. Note that
