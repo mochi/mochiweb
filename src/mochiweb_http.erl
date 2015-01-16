@@ -153,8 +153,6 @@ after_response(Body, Req) ->
             ?MODULE:loop(Socket, mochiweb_request:get(opts, Req), Body)
     end.
 
-parse_range_request("bytes=0-") ->
-    undefined;
 parse_range_request(RawRange) when is_list(RawRange) ->
     try
         "bytes=" ++ RangeString = RawRange,
@@ -186,7 +184,7 @@ range_skip_length(Spec, Size) ->
             {R, Size - R};
         {_OutOfRange, none} ->
             invalid_range;
-        {Start, End} when 0 =< Start, Start =< End, End < Size ->
+        {Start, End} when 0 =< Start, Start < Size, Start =< End ->
             {Start, End - Start + 1};
         {Start, End} when 0 =< Start, Start =< End, End >= Size ->
             {Start, Size - Start};
@@ -207,7 +205,7 @@ range_test() ->
     ?assertEqual([{none, 20}], parse_range_request("bytes=-20")),
 
     %% trivial single range
-    ?assertEqual(undefined, parse_range_request("bytes=0-")),
+    ?assertEqual([{0, none}], parse_range_request("bytes=0-")),
 
     %% invalid, single ranges
     ?assertEqual(fail, parse_range_request("")),
@@ -254,6 +252,7 @@ range_skip_length_test() ->
     ?assertEqual({BodySize, 0}, range_skip_length({none, 0}, BodySize)),
     ?assertEqual({0, BodySize}, range_skip_length({none, BodySize}, BodySize)),
     ?assertEqual({0, BodySize}, range_skip_length({0, none}, BodySize)),
+    ?assertEqual({0, BodySize}, range_skip_length({0, BodySize + 1}, BodySize)),
     BodySizeLess1 = BodySize - 1,
     ?assertEqual({BodySizeLess1, 1},
                  range_skip_length({BodySize - 1, none}, BodySize)),
@@ -281,6 +280,8 @@ range_skip_length_test() ->
                  range_skip_length({-1, none}, BodySize)),
     ?assertEqual(invalid_range,
                  range_skip_length({BodySize, none}, BodySize)),
+    ?assertEqual(invalid_range,
+                 range_skip_length({BodySize + 1, BodySize + 5}, BodySize)),
     ok.
 
 -endif.
