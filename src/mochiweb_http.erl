@@ -184,11 +184,9 @@ range_skip_length(Spec, Size) ->
             {R, Size - R};
         {_OutOfRange, none} ->
             invalid_range;
-        {Start, End} when 0 =< Start, Start < Size, Start =< End ->
-            {Start, End - Start + 1};
-        {Start, End} when 0 =< Start, Start =< End, End >= Size ->
-            {Start, Size - Start};
-        {_OutOfRange, _End} ->
+        {Start, End} when Start >= 0, Start < Size, Start =< End ->
+            {Start, erlang:min(End + 1, Size) - Start};
+        {_InvalidStart, _InvalidEnd} ->
             invalid_range
     end.
 

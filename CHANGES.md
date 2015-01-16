@@ -1,3 +1,8 @@
+Version 2.11.2 released 2015-01-16
+
+* Fix regression introduced in #147
+  https://github.com/mochi/mochiweb/pull/147
+
 Version 2.11.1 released 2015-01-16
 
 * Accept range end position which exceededs the resource size
