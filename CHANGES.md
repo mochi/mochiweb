@@ -1,3 +1,10 @@
+Version 2.12.0 released 2015-01-16
+
+* Send "Connection: close" header when the server is going to close
+  a Keep-Alive connection, usually due to unread data from the
+  client
+  https://github.com/mochi/mochiweb/issues/146
+
 Version 2.11.2 released 2015-01-16
 
 * Fix regression introduced in #147

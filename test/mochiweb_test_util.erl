@@ -1,6 +1,8 @@
 -module(mochiweb_test_util).
--export([with_server/3, client_request/4, sock_fun/2]).
+-export([with_server/3, client_request/4, sock_fun/2,
+         read_server_headers/1, drain_reply/3]).
 -include("mochiweb_test_util.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
 ssl_cert_opts() ->
     EbinDir = filename:dirname(code:which(?MODULE)),
@@ -66,6 +68,7 @@ client_request(SockFun, Method,
                client_headers(Body, Rest =:= []),
                "\r\n",
                Body],
+    ok = SockFun({setopts, [{packet, http}]}),
     ok = SockFun({send, Request}),
     case Method of
         'GET' ->
@@ -75,17 +78,29 @@ client_request(SockFun, Method,
         'CONNECT' ->
             {ok, {http_response, {1,1}, 200, "OK"}} = SockFun(recv)
     end,
-    ok = SockFun({setopts, [{packet, httph}]}),
-    {ok, {http_header, _, 'Server', _, "MochiWeb" ++ _}} = SockFun(recv),
-    {ok, {http_header, _, 'Date', _, _}} = SockFun(recv),
-    {ok, {http_header, _, 'Content-Type', _, _}} = SockFun(recv),
-    {ok, {http_header, _, 'Content-Length', _, ConLenStr}} = SockFun(recv),
-    ContentLength = list_to_integer(ConLenStr),
-    {ok, http_eoh} = SockFun(recv),
-    ok = SockFun({setopts, [{packet, raw}]}),
+    Headers = read_server_headers(SockFun),
+    ?assertMatch("MochiWeb" ++ _, mochiweb_headers:get_value("Server", Headers)),
+    ?assert(mochiweb_headers:get_value("Date", Headers) =/= undefined),
+    ?assert(mochiweb_headers:get_value("Content-Type", Headers) =/= undefined),
+    ContentLength = list_to_integer(mochiweb_headers:get_value("Content-Length", Headers)),
     {payload, ExReply} = {payload, drain_reply(SockFun, ContentLength, <<>>)},
-    ok = SockFun({setopts, [{packet, http}]}),
     client_request(SockFun, Method, Rest).
+
+read_server_headers(SockFun) ->
+    ok = SockFun({setopts, [{packet, httph}]}),
+    Headers = read_server_headers(SockFun, mochiweb_headers:empty()),
+    ok = SockFun({setopts, [{packet, raw}]}),
+    Headers.
+
+read_server_headers(SockFun, Headers) ->
+    case SockFun(recv) of
+        {ok, http_eoh} ->
+            Headers;
+        {ok, {http_header, _, Header, _, Value}} ->
+            read_server_headers(
+              SockFun,
+              mochiweb_headers:insert(Header, Value, Headers))
+    end.
 
 client_headers(Body, IsLastRequest) ->
     ["Host: localhost\r\n",

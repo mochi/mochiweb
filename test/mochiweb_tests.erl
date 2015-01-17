@@ -150,3 +150,54 @@ new_client_fun(Method, TestReqs) ->
             mochiweb_test_util:client_request(Transport, Port, Method, TestReqs)
     end.
 
+close_on_unread_data_test() ->
+    ok = with_server(
+           plain,
+           fun mochiweb_request:not_found/1,
+           fun close_on_unread_data_client/2).
+
+close_on_unread_data_client(Transport, Port) ->
+    SockFun = mochiweb_test_util:sock_fun(Transport, Port),
+    %% A normal GET request should not trigger this behavior
+    Request0 = string:join(
+                 ["GET / HTTP/1.1",
+                  "Host: localhost",
+                  "",
+                  ""],
+                 "\r\n"),
+    ok = SockFun({setopts, [{packet, http}]}),
+    ok = SockFun({send, Request0}),
+    ?assertMatch(
+       {ok, {http_response, {1, 1}, 404, _}},
+       SockFun(recv)),
+    Headers0 = mochiweb_test_util:read_server_headers(SockFun),
+    ?assertEqual(
+       undefined,
+       mochiweb_headers:get_value("Connection", Headers0)),
+    Len0 = list_to_integer(
+             mochiweb_headers:get_value("Content-Length", Headers0)),
+    _Body0 = mochiweb_test_util:drain_reply(SockFun, Len0, <<>>),
+    %% Re-use same socket
+    Request = string:join(
+                ["POST / HTTP/1.1",
+                 "Host: localhost",
+                 "Content-Type: application/json",
+                 "Content-Length: 2",
+                 "",
+                 "{}"],
+                "\r\n"),
+    ok = SockFun({setopts, [{packet, http}]}),
+    ok = SockFun({send, Request}),
+    ?assertMatch(
+       {ok, {http_response, {1, 1}, 404, _}},
+       SockFun(recv)),
+    Headers = mochiweb_test_util:read_server_headers(SockFun),
+    %% Expect to see a Connection: close header when we know the
+    %% server will close the connection re #146
+    ?assertEqual(
+       "close",
+       mochiweb_headers:get_value("Connection", Headers)),
+    Len = list_to_integer(mochiweb_headers:get_value("Content-Length", Headers)),
+    _Body = mochiweb_test_util:drain_reply(SockFun, Len, <<>>),
+    ?assertEqual({error, closed}, SockFun(recv)),
+    ok.

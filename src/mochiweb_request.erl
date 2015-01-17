@@ -302,11 +302,17 @@ start_response_length({Code, ResponseHeaders, Length},
 format_response_header({Code, ResponseHeaders}, {?MODULE, [_Socket, _Opts, _Method, _RawPath, Version, _Headers]}=THIS) ->
     HResponse = mochiweb_headers:make(ResponseHeaders),
     HResponse1 = mochiweb_headers:default_from_list(server_headers(), HResponse),
+    HResponse2 = case should_close(THIS) of
+                     true ->
+                         mochiweb_headers:enter("Connection", "close", HResponse1);
+                     false ->
+                         HResponse1
+                 end,
     F = fun ({K, V}, Acc) ->
                 [mochiweb_util:make_io(K), <<": ">>, V, <<"\r\n">> | Acc]
         end,
-    End = lists:foldl(F, [<<"\r\n">>], mochiweb_headers:to_list(HResponse1)),
-    Response = mochiweb:new_response({THIS, Code, HResponse1}),
+    End = lists:foldl(F, [<<"\r\n">>], mochiweb_headers:to_list(HResponse2)),
+    Response = mochiweb:new_response({THIS, Code, HResponse2}),
     {[make_version(Version), make_code(Code), <<"\r\n">> | End], Response};
 format_response_header({Code, ResponseHeaders, Length},
                        {?MODULE, [_Socket, _Opts, _Method, _RawPath, _Version, _Headers]}=THIS) ->

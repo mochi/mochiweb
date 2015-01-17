@@ -116,16 +116,12 @@ end_to_end_client(S) ->
                     ""], "\r\n"),
     ok = S({send, UpgradeReq}),
     {ok, {http_response, {1,1}, 101, _}} = S(recv),
-    ok = S({setopts, [{packet, httph}]}),
-    D = read_expected_headers(
-          S,
-          gb_from_list(
-            [{'Upgrade', "websocket"},
-             {'Connection', "Upgrade"},
-             {'Content-Length', "0"},
-             {"Sec-Websocket-Accept", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="}])),
-    ?assertEqual([], gb_trees:to_list(D)),
-    ok = S({setopts, [{packet, raw}]}),
+    read_expected_headers(
+      S,
+      [{'Upgrade', "websocket"},
+       {'Connection', "Upgrade"},
+       {'Content-Length', "0"},
+       {"Sec-Websocket-Accept", "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="}]),
     %% The first message sent over telegraph :)
     SmallMessage = <<"What hath God wrought?">>,
     ok = S({send,
@@ -149,25 +145,13 @@ end_to_end_client(S) ->
     ?assertEqual(MsgSize, byte_size(SmallMessage)),
     ok.
 
-gb_from_list(L) ->
-    lists:foldl(
-      fun ({K, V}, D) -> gb_trees:insert(K, V, D) end,
-      gb_trees:empty(),
-      L).
-
 read_expected_headers(S, D) ->
-    case S(recv) of
-        {ok, http_eoh} ->
-            D;
-        {ok, {http_header, _, K, _, V}} ->
-            case gb_trees:lookup(K, D) of
-                {value, V1} ->
-                    ?assertEqual({K, V}, {K, V1}),
-                    read_expected_headers(S, gb_trees:delete(K, D));
-                none ->
-                    read_expected_headers(S, D)
-            end
-    end.
+    Headers = mochiweb_test_util:read_server_headers(S),
+    lists:foreach(
+      fun ({K, V}) ->
+              ?assertEqual(V, mochiweb_headers:get_value(K, Headers))
+      end,
+      D).
 
 end_to_end_http_test() ->
     end_to_end_test_factory(plain).
