@@ -1,3 +1,9 @@
+Version 2.12.1 released 2015-XX-XX
+
+* Added full MIT license preludes to each source file to make it
+  easier for mochiweb's code to be used piecemeal
+  https://github.com/mochi/mochiweb/pull/148
+
 Version 2.12.0 released 2015-01-16
 
 * Send "Connection: close" header when the server is going to close
