@@ -118,6 +118,15 @@ parse_options([{backlog, Backlog} | Rest], State) ->
 parse_options([{nodelay, NoDelay} | Rest], State) ->
     parse_options(Rest, State#mochiweb_socket_server{nodelay=NoDelay});
 parse_options([{recbuf, RecBuf} | Rest], State) when is_integer(RecBuf) ->
+    %% XXX: `recbuf' value which is passed to `gen_tcp'
+    %% and value reported by `inet:getopts(P, [recbuf])' may
+    %% differ. They depends on underlying OS. From linux mans:
+    %%
+    %% The kernel doubles this value (to allow space for
+    %% bookkeeping overhead) when it is set using setsockopt(2),
+    %% and this doubled value is returned by getsockopt(2).
+    %%
+    %% See: man 7 socket | grep SO_RCVBUF
     parse_options(Rest, State#mochiweb_socket_server{recbuf=RecBuf});
 parse_options([{acceptor_pool_size, Max} | Rest], State) ->
     MaxInt = ensure_int(Max),
@@ -190,40 +199,25 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog,
     end,
     listen(Port, Opts, State).
 
-new_acceptor_pool(Listen,
-                  State=#mochiweb_socket_server{acceptor_pool=Pool,
-                                                acceptor_pool_size=Size,
-                                                recbuf=RecBuf,
-                                                loop=Loop}) ->
-    LoopOpts = [{recbuf, RecBuf}],
-    F = fun (_, S) ->
-                Pid = mochiweb_acceptor:start_link(
-                    self(), Listen, Loop, LoopOpts
-                ),
-                sets:add_element(Pid, S)
-        end,
-    Pool1 = lists:foldl(F, Pool, lists:seq(1, Size)),
-    State#mochiweb_socket_server{acceptor_pool=Pool1}.
+new_acceptor_pool(State=#mochiweb_socket_server{acceptor_pool_size=Size}) ->
+    lists:foldl(fun (_, S) -> new_acceptor(S) end, State, lists:seq(1, Size)).
 
-listen(Port, Opts, State=#mochiweb_socket_server{ssl=Ssl, ssl_opts=SslOpts,
-                                                 recbuf=RecBuf}) ->
+new_acceptor(State=#mochiweb_socket_server{acceptor_pool=Pool,
+                                           recbuf=RecBuf,
+                                           loop=Loop,
+                                           listen=Listen}) ->
+    LoopOpts = [{recbuf, RecBuf}],
+    Pid = mochiweb_acceptor:start_link(self(), Listen, Loop, LoopOpts),
+    State#mochiweb_socket_server{
+      acceptor_pool=sets:add_element(Pid, Pool)}.
+
+listen(Port, Opts, State=#mochiweb_socket_server{ssl=Ssl, ssl_opts=SslOpts}) ->
     case mochiweb_socket:listen(Ssl, Port, Opts, SslOpts) of
         {ok, Listen} ->
-            %% XXX: `recbuf' value which is passed to `gen_tcp'
-            %% and value reported by `inet:getopts(P, [recbuf])' may
-            %% differ. They depends on underlying OS. From linux mans:
-            %%
-            %% The kernel doubles this value (to allow space for
-            %% bookkeeping overhead) when it is set using setsockopt(2),
-            %% and this doubled value is returned by getsockopt(2).
-            %%
-            %% See: man 7 socket | grep SO_RCVBUF
             {ok, ListenPort} = mochiweb_socket:port(Listen),
-            {ok, new_acceptor_pool(
-                   Listen,
-                   State#mochiweb_socket_server{listen=Listen,
-                                                port=ListenPort,
-                                                recbuf=RecBuf})};
+            {ok, new_acceptor_pool(State#mochiweb_socket_server{
+                                     listen=Listen,
+                                     port=ListenPort})};
         {error, Reason} ->
             {stop, Reason}
     end.
@@ -300,38 +294,30 @@ code_change(_OldVsn, State, _Extra) ->
 recycle_acceptor(Pid, State=#mochiweb_socket_server{
                         acceptor_pool=Pool,
                         acceptor_pool_size=PoolSize,
-                        listen=Listen,
-                        loop=Loop,
                         max=Max,
-                        recbuf=RecBuf,
                         active_sockets=ActiveSockets}) ->
-    LoopOpts = [{recbuf, RecBuf}],
-    case sets:is_element(Pid, Pool) of
-        true ->
-            Pool1 = sets:del_element(Pid, Pool),
-            case ActiveSockets + sets:size(Pool1) < Max of
-                true ->
-                    Acceptor = mochiweb_acceptor:start_link(
-                        self(), Listen, Loop, LoopOpts
-                    ),
-                    Pool2 = sets:add_element(Acceptor, Pool1),
-                    State#mochiweb_socket_server{acceptor_pool=Pool2};
-                false ->
-                    State#mochiweb_socket_server{acceptor_pool=Pool1}
-            end;
-        false ->
-            case sets:size(Pool) < PoolSize of
-                true ->
-                    Acceptor = mochiweb_acceptor:start_link(
-                        self(), Listen, Loop, LoopOpts
-                    ),
-                    Pool1 = sets:add_element(Acceptor, Pool),
-                    State#mochiweb_socket_server{active_sockets=ActiveSockets,
-                                                 acceptor_pool=Pool1};
-                false ->
-                    State#mochiweb_socket_server{active_sockets=ActiveSockets - 1,
-                                                 acceptor_pool=Pool}
-            end
+    %% A socket is considered to be active from immediately after it
+    %% has been accepted (see the {accepted, Pid, Timing} cast above).
+    %% This function will be called when an acceptor is transitioning
+    %% to an active socket, or when either type of Pid dies. An acceptor
+    %% Pid will always be in the acceptor_pool set, and an active socket
+    %% will be in that set during the transition but not afterwards.
+    Pool1 = sets:del_element(Pid, Pool),
+    NewSize = sets:size(Pool1),
+    ActiveSockets1 = case NewSize =:= sets:size(Pool) of
+                         %% Pid has died and it is not in the acceptor set,
+                         %% it must be an active socket.
+                         true -> max(0, ActiveSockets - 1);
+                         false -> ActiveSockets
+                     end,
+    State1 = State#mochiweb_socket_server{
+               acceptor_pool=Pool1,
+               active_sockets=ActiveSockets1},
+    %% Spawn a new acceptor only if it will not overrun the maximum socket
+    %% count or the maximum pool size.
+    case NewSize + ActiveSockets1 < Max andalso NewSize < PoolSize of
+        true -> new_acceptor(State1);
+        false -> State1
     end.
 
 handle_info(Msg, State) when ?is_old_state(State) ->
