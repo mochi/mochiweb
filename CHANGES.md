@@ -1,5 +1,7 @@
-Version 2.12.1 released 2015-XX-XX
+Version 2.12.1 released 2015-02-01
 
+* Fix active_socket accounting
+  https://github.com/mochi/mochiweb/issues/149
 * Added full MIT license preludes to each source file to make it
   easier for mochiweb's code to be used piecemeal
   https://github.com/mochi/mochiweb/pull/148
