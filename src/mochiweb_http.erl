@@ -75,7 +75,13 @@ loop(Socket, Opts, Body) ->
     request(Socket, Opts, Body).
 
 request(Socket, Opts, Body) ->
-    ok = mochiweb_socket:setopts(Socket, [{active, once}]),
+    case  mochiweb_socket:setopts(Socket, [{active, once}]) of
+		{error,_} ->
+			mochiweb_socket:close(Socket),
+			exit(normal);
+		ok -> 
+			ok
+	end,
     receive
         {Protocol, _, {http_request, Method, Path, Version}} when Protocol == http orelse Protocol == ssl ->
             ok = mochiweb_socket:setopts(Socket, [{packet, httph}]),
