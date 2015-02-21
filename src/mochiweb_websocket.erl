@@ -32,7 +32,7 @@
 -endif.
 
 loop(Socket, Body, State, WsVersion, ReplyChannel) ->
-    ok = mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}]),
+    ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}])),
     proc_lib:hibernate(?MODULE, request,
                        [Socket, Body, State, WsVersion, ReplyChannel]).
 
@@ -206,7 +206,7 @@ parse_hybi_frames(Socket, <<_Fin:1,
                            _MaskKey:4/binary,
                            _/binary-unit:8>> = PartFrame,
                   Acc) ->
-    ok = mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}]),
+    ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, 0}, {active, once}])),
     receive
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),

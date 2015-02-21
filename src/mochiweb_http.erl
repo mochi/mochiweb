@@ -71,14 +71,14 @@ start_link(Options) ->
     mochiweb_socket_server:start_link(parse_options(Options)).
 
 loop(Socket, Opts, Body) ->
-    ok = mochiweb_socket:setopts(Socket, [{packet, http}]),
+    ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, http}])),
     request(Socket, Opts, Body).
 
 request(Socket, Opts, Body) ->
-    ok = mochiweb_socket:setopts(Socket, [{active, once}]),
+    ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{active, once}])),
     receive
         {Protocol, _, {http_request, Method, Path, Version}} when Protocol == http orelse Protocol == ssl ->
-            ok = mochiweb_socket:setopts(Socket, [{packet, httph}]),
+            ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, httph}])),
             headers(Socket, Opts, {Method, Path, Version}, [], Body, 0);
         {Protocol, _, {http_error, "\r\n"}} when Protocol == http orelse Protocol == ssl ->
             request(Socket, Opts, Body);
@@ -104,10 +104,10 @@ reentry(Body) ->
 
 headers(Socket, Opts, Request, Headers, _Body, ?MAX_HEADERS) ->
     %% Too many headers sent, bad request.
-    ok = mochiweb_socket:setopts(Socket, [{packet, raw}]),
+    ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, raw}])),
     handle_invalid_request(Socket, Opts, Request, Headers);
 headers(Socket, Opts, Request, Headers, Body, HeaderCount) ->
-    ok = mochiweb_socket:setopts(Socket, [{active, once}]),
+    ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{active, once}])),
     receive
         {Protocol, _, http_eoh} when Protocol == http orelse Protocol == ssl ->
             Req = new_request(Socket, Opts, Request, Headers),
@@ -156,7 +156,7 @@ handle_invalid_request(Socket, Opts, Request, RevHeaders) ->
     exit(normal).
 
 new_request(Socket, Opts, Request, RevHeaders) ->
-    ok = mochiweb_socket:setopts(Socket, [{packet, raw}]),
+    ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, raw}])),
     mochiweb:new_request({Socket, Opts, Request, lists:reverse(RevHeaders)}).
 
 after_response(Body, Req) ->

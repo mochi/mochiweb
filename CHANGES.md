@@ -1,3 +1,8 @@
+Version 2.12.2 released 2015-02-21
+
+* Close connections quietly when setopts fails with a closed socket.
+  https://github.com/mochi/mochiweb/pull/152
+
 Version 2.12.1 released 2015-02-01
 
 * Fix active_socket accounting

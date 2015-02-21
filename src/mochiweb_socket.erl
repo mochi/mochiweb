@@ -7,7 +7,7 @@
 -export([listen/4,
          accept/1, transport_accept/1, finish_accept/1,
          recv/3, send/2, close/1, port/1, peername/1,
-         setopts/2, getopts/2, type/1]).
+         setopts/2, getopts/2, type/1, exit_if_closed/1]).
 
 -define(ACCEPT_TIMEOUT, 2000).
 -define(SSL_TIMEOUT, 10000).
@@ -142,3 +142,7 @@ type({ssl, _}) ->
 type(_) ->
     plain.
 
+exit_if_closed({error, closed}) ->
+    exit(normal);
+exit_if_closed(Res) ->
+    Res.
