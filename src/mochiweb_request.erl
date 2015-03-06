@@ -31,7 +31,7 @@
 
 -export([new/5, new/6]).
 -export([get_header_value/2, get_primary_header_value/2, get_combined_header_value/2, get/2, dump/1]).
--export([send/2, recv/2, recv/3, recv_body/1, recv_body/2, stream_body/4]).
+-export([send/2, recv/2, recv/3, recv_body/1, recv_body/2, stream_body/4, stream_body/5]).
 -export([start_response/2, start_response_length/2, start_raw_response/2]).
 -export([respond/2, ok/2]).
 -export([not_found/1, not_found/2]).
