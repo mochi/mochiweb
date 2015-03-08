@@ -280,7 +280,7 @@ stream_body(MaxChunkSize, ChunkFun, FunState, MaxBodyLength,
             MaxBodyLength when is_integer(MaxBodyLength), MaxBodyLength < Length ->
                 exit({body_too_large, content_length});
             _ ->
-                stream_unchunked_body(Length, ChunkFun, FunState, THIS)
+                stream_unchunked_body(MaxChunkSize,Length, ChunkFun, FunState, THIS)
             end
     end.
 
@@ -544,20 +544,20 @@ stream_chunked_body(MaxChunkSize, Fun, FunState,
             stream_chunked_body(MaxChunkSize, Fun, NewState, THIS)
     end.
 
-stream_unchunked_body(0, Fun, FunState, {?MODULE, [_Socket, _Opts, _Method, _RawPath, _Version, _Headers]}) ->
+stream_unchunked_body(_MaxChunkSize, 0, Fun, FunState, {?MODULE, [_Socket, _Opts, _Method, _RawPath, _Version, _Headers]}) ->
     Fun({0, <<>>}, FunState);
-stream_unchunked_body(Length, Fun, FunState,
+stream_unchunked_body(MaxChunkSize, Length, Fun, FunState,
                       {?MODULE, [_Socket, Opts, _Method, _RawPath, _Version, _Headers]}=THIS) when Length > 0 ->
-    RecBuf = mochilists:get_value(recbuf, Opts, ?RECBUF_SIZE),
-    PktSize = case Length > RecBuf of
-        true ->
-            RecBuf;
-        false ->
-            Length
+    RecBuf = case mochilists:get_value(recbuf, Opts, ?RECBUF_SIZE) of
+        undefined -> %os controlled buffer size
+            MaxChunkSize;
+        Val  ->
+            Val
     end,
+    PktSize=min(Length,RecBuf),
     Bin = recv(PktSize, THIS),
     NewState = Fun({PktSize, Bin}, FunState),
-    stream_unchunked_body(Length - PktSize, Fun, NewState, THIS).
+    stream_unchunked_body(MaxChunkSize, Length - PktSize, Fun, NewState, THIS).
 
 %% @spec read_chunk_length(request()) -> integer()
 %% @doc Read the length of the next HTTP chunk.
