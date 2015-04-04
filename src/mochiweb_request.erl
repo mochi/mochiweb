@@ -439,7 +439,7 @@ ok({ContentType, ResponseHeaders, Body}, {?MODULE, [_Socket, _Opts, _Method, _Ra
 should_close({?MODULE, [_Socket, _Opts, _Method, _RawPath, Version, _Headers]}=THIS) ->
     ForceClose = erlang:get(?SAVE_FORCE_CLOSE) =/= undefined,
     DidNotRecv = erlang:get(?SAVE_RECV) =:= undefined,
-    ForceClose orelse Version < {1, 0}
+    (ForceClose orelse Version < {1, 0}
         %% Connection: close
         orelse is_close(get_header_value("connection", THIS))
         %% HTTP 1.0 requires Connection: Keep-Alive
@@ -450,7 +450,8 @@ should_close({?MODULE, [_Socket, _Opts, _Method, _RawPath, Version, _Headers]}=T
                 andalso get_combined_header_value("content-length", THIS) =/= undefined
                 andalso list_to_integer(get_combined_header_value("content-length", THIS)) > 0)
         orelse (DidNotRecv
-                andalso get_header_value("transfer-encoding", THIS) =:= "chunked").
+                andalso get_header_value("transfer-encoding", THIS) =:= "chunked")) 
+        andalso get_header_value("expect", THIS) =:= undefined.
 
 is_close("close") ->
     true;
