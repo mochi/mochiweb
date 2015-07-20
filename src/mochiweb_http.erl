@@ -48,9 +48,11 @@ parse_options(Options) ->
     mochilists:set_defaults(?DEFAULTS, Options1).
 
 stop() ->
+    mochiweb_clock:stop(),
     mochiweb_socket_server:stop(?MODULE).
 
 stop(Name) ->
+    mochiweb_clock:stop(),
     mochiweb_socket_server:stop(Name).
 
 %% @spec start(Options) -> ServerRet
@@ -65,9 +67,11 @@ stop(Name) ->
 %%      The proplist is as follows: [{name, Name}, {port, Port}, {active_sockets, ActiveSockets}, {timing, Timing}].
 %% @end
 start(Options) ->
+    {ok, _Pid} = mochiweb_clock:start(),
     mochiweb_socket_server:start(parse_options(Options)).
 
 start_link(Options) ->
+    {ok, _Pid} = mochiweb_clock:start_link(),
     mochiweb_socket_server:start_link(parse_options(Options)).
 
 loop(Socket, Opts, Body) ->

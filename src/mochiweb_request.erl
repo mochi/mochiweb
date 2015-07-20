@@ -691,7 +691,7 @@ maybe_serve_file(File, ExtraHeaders, {?MODULE, [_Socket, _Opts, _Method, _RawPat
 
 server_headers() ->
     [{"Server", "MochiWeb/1.0 (" ++ ?QUIP ++ ")"},
-     {"Date", httpd_util:rfc1123_date()}].
+     {"Date", mochiweb_clock:rfc1123()}].
 
 make_code(X) when is_integer(X) ->
     [integer_to_list(X), [" " | httpd_util:reason_phrase(X)]];
