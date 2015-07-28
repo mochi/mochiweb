@@ -25,5 +25,3 @@ app:
 bench: app
 	@echo "Writing $(DEST)/$(PROJECT).sh"
 	@cp support/bench.sh $(DEST)/bench.sh
-	@perl -p -i -e "s/-s reloader/-s reloader\n    -detached/g" $(DEST)/start-dev.sh
-	@perl -p -i -e "s/-s reloader/-s reloader \\\/g" $(DEST)/start-dev.sh
