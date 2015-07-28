@@ -54,7 +54,7 @@ stop() ->
 
 -spec rfc1123() -> string().
 rfc1123() ->
-    case ets:lookup(lala, rfc1123) of
+    case ets:lookup(?MODULE, rfc1123) of
         [{rfc1123, Date}] ->
             Date;
         [] ->
@@ -65,7 +65,7 @@ rfc1123() ->
 
 -spec init([]) -> {ok, #state{}}.
 init([]) ->
-    lala = ets:new(lala, [named_table, protected]),
+    ?MODULE = ets:new(?MODULE, [named_table, protected]),
     handle_info(update_date, #state{}),
     timer:send_interval(1000, update_date),
     {ok, #state{}}.
@@ -86,7 +86,7 @@ handle_cast(_Msg, State) ->
 -spec handle_info(any(), State) -> {noreply, State} when State::#state{}.
 handle_info(update_date, State) ->
     Date = httpd_util:rfc1123_date(),
-    ets:insert(lala, {rfc1123, Date}),
+    ets:insert(?MODULE, {rfc1123, Date}),
     {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
