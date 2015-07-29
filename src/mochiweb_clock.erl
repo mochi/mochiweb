@@ -58,7 +58,7 @@ rfc1123() ->
         [{rfc1123, Date}] ->
             Date;
         [] ->
-            <<"">>
+            ""
     end.
 
 %% gen_server.
