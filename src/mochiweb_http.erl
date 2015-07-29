@@ -67,12 +67,20 @@ stop(Name) ->
 %%      The proplist is as follows: [{name, Name}, {port, Port}, {active_sockets, ActiveSockets}, {timing, Timing}].
 %% @end
 start(Options) ->
-    {ok, _Pid} = mochiweb_clock:start(),
+    ok = ensure_started(mochiweb_clock),
     mochiweb_socket_server:start(parse_options(Options)).
 
 start_link(Options) ->
-    {ok, _Pid} = mochiweb_clock:start_link(),
+    ok = ensure_started(mochiweb_clock),
     mochiweb_socket_server:start_link(parse_options(Options)).
+
+ensure_started(M) ->
+    case erlang:apply(M, start, []) of
+        {ok, _Pid} ->
+            ok;
+        {error, {already_started, _PID}} ->
+            ok
+    end.
 
 loop(Socket, Opts, Body) ->
     ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, http}])),
