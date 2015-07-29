@@ -65,7 +65,7 @@ rfc1123() ->
 
 -spec init([]) -> {ok, #state{}}.
 init([]) ->
-    ?MODULE = ets:new(?MODULE, [named_table, protected]),
+    ?MODULE = ets:new(?MODULE, [named_table, protected, {read_concurrency, true}]),
     handle_info(update_date, #state{}),
     timer:send_interval(1000, update_date),
     {ok, #state{}}.
