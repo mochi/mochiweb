@@ -46,7 +46,7 @@ start_link() ->
 
 -spec start() -> {ok, pid()}.
 start() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+    gen_server:start({local, ?MODULE}, ?MODULE, [], []).
 
 -spec stop() -> stopped.
 stop() ->
