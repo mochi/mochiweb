@@ -73,7 +73,7 @@ start_link(Options) ->
     mochiweb_socket_server:start_link(parse_options(Options)).
 
 ensure_started(M) ->
-    case erlang:apply(M, start, []) of
+    case M:start() of
         {ok, _Pid} ->
             ok;
         {error, {already_started, _PID}} ->
