@@ -76,7 +76,7 @@ ensure_started(M) ->
     case M:start() of
         {ok, _Pid} ->
             ok;
-        {error, {already_started, _PID}} ->
+        {error, {already_started, _Pid}} ->
             ok
     end.
 
