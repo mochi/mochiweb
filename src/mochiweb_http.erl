@@ -48,11 +48,9 @@ parse_options(Options) ->
     mochilists:set_defaults(?DEFAULTS, Options1).
 
 stop() ->
-    mochiweb_clock:stop(),
     mochiweb_socket_server:stop(?MODULE).
 
 stop(Name) ->
-    mochiweb_clock:stop(),
     mochiweb_socket_server:stop(Name).
 
 %% @spec start(Options) -> ServerRet
