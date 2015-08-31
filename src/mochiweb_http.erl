@@ -65,10 +65,20 @@ stop(Name) ->
 %%      The proplist is as follows: [{name, Name}, {port, Port}, {active_sockets, ActiveSockets}, {timing, Timing}].
 %% @end
 start(Options) ->
+    ok = ensure_started(mochiweb_clock),
     mochiweb_socket_server:start(parse_options(Options)).
 
 start_link(Options) ->
+    ok = ensure_started(mochiweb_clock),
     mochiweb_socket_server:start_link(parse_options(Options)).
+
+ensure_started(M) ->
+    case M:start() of
+        {ok, _Pid} ->
+            ok;
+        {error, {already_started, _Pid}} ->
+            ok
+    end.
 
 loop(Socket, Opts, Body) ->
     ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, http}])),
