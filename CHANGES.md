@@ -1,3 +1,9 @@
+Version 2.13.0 released XXXX-XX-XX
+
+* Improve response times by caching a formatted date once per second
+  for the response headers with a mochiweb_clock service
+  https://github.com/mochi/mochiweb/pull/158
+
 Version 2.12.2 released 2015-02-21
 
 * Close connections quietly when setopts fails with a closed socket.
