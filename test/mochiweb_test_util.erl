@@ -63,7 +63,7 @@ client_request(SockFun, _Method, []) ->
     {the_end, {error, closed}} = {the_end, SockFun(recv)},
     ok;
 client_request(SockFun, Method,
-               [#treq{path=Path, body=Body, xreply=ExReply} | Rest]) ->
+               [#treq{path=Path, body=Body, xreply=ExReply, xheaders=ExHeaders} | Rest]) ->
     Request = [atom_to_list(Method), " ", Path, " HTTP/1.1\r\n",
                client_headers(Body, Rest =:= []),
                "\r\n",
@@ -83,6 +83,14 @@ client_request(SockFun, Method,
     ?assert(mochiweb_headers:get_value("Date", Headers) =/= undefined),
     ?assert(mochiweb_headers:get_value("Content-Type", Headers) =/= undefined),
     ContentLength = list_to_integer(mochiweb_headers:get_value("Content-Length", Headers)),
+    EHeaders = mochiweb_headers:make(ExHeaders),
+    lists:foreach(
+      fun (K) ->
+              ?assertEqual(mochiweb_headers:get_value(K, EHeaders),
+                           mochiweb_headers:get_value(K, Headers))
+      end,
+      %% Assumes implementation details of the headers
+      gb_trees:keys(EHeaders)),
     {payload, ExReply} = {payload, drain_reply(SockFun, ContentLength, <<>>)},
     client_request(SockFun, Method, Rest).
 

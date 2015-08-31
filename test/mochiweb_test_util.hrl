@@ -1,1 +1,1 @@
--record(treq, {path, body= <<>>, xreply= <<>>}).
+-record(treq, {path, body= <<>>, xreply= <<>>, xheaders= []}).

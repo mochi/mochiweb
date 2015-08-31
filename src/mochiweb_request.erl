@@ -326,12 +326,10 @@ format_response_header({Code, ResponseHeaders}, {?MODULE, [_Socket, _Opts, _Meth
                      false ->
                          HResponse1
                  end,
-    F = fun ({K, V}, Acc) ->
-                [mochiweb_util:make_io(K), <<": ">>, V, <<"\r\n">> | Acc]
-        end,
-    End = lists:foldl(F, [<<"\r\n">>], mochiweb_headers:to_list(HResponse2)),
+    End = [[mochiweb_util:make_io(K), <<": ">>, V, <<"\r\n">>]
+           || {K, V} <- mochiweb_headers:to_list(HResponse2)],
     Response = mochiweb:new_response({THIS, Code, HResponse2}),
-    {[make_version(Version), make_code(Code), <<"\r\n">> | End], Response};
+    {[make_version(Version), make_code(Code), <<"\r\n">> | [End, <<"\r\n">>]], Response};
 format_response_header({Code, ResponseHeaders, Length},
                        {?MODULE, [_Socket, _Opts, _Method, _RawPath, _Version, _Headers]}=THIS) ->
     HResponse = mochiweb_headers:make(ResponseHeaders),

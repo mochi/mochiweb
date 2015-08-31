@@ -96,6 +96,23 @@ single_GET_any_test_() ->
       ?_assertEqual(ok, with_server(Transport, ServerFun, ClientFun))}
      || Transport <- [ssl, plain]].
 
+
+cookie_header_test() ->
+    ReplyPrefix = "You requested: ",
+    ExHeaders = [{"Set-Cookie", "foo=bar"},
+                 {"Set-Cookie", "foo=baz"}],
+    ServerFun = fun (Req) ->
+                        Reply = ReplyPrefix ++ Req:get(path),
+                        Req:ok({"text/plain", ExHeaders, Reply})
+                end,
+    Path = "cookie_header",
+    ExpectedReply = list_to_binary(ReplyPrefix ++ Path),
+    TestReqs = [#treq{path=Path, xreply=ExpectedReply, xheaders=ExHeaders}],
+    ClientFun = new_client_fun('GET', TestReqs),
+    ok = with_server(plain, ServerFun, ClientFun),
+    ok.
+
+
 do_CONNECT(Transport, Times) ->
     PathPrefix = "example.com:",
     ReplyPrefix = "You requested: ",
