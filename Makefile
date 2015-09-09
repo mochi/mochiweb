@@ -21,3 +21,7 @@ clean:
 
 app:
 	@$(REBAR) -r create template=mochiwebapp dest=$(DEST) appid=$(PROJECT)
+
+bench: app
+	@echo "Writing $(DEST)/$(PROJECT).sh"
+	@cp support/bench.sh $(DEST)/bench.sh

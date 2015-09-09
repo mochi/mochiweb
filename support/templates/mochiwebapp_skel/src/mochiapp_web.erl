@@ -26,6 +26,9 @@ loop(Req, DocRoot) ->
         case Req:get(method) of
             Method when Method =:= 'GET'; Method =:= 'HEAD' ->
                 case Path of
+                  "hello_world" ->
+                    Req:respond({200, [{"Content-Type", "text/plain"}],
+                    "Hello world!\n"});
                     _ ->
                         Req:serve_file(Path, DocRoot)
                 end;
