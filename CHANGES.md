@@ -1,6 +1,9 @@
 Version 2.13.0 released XXXX-XX-XX
 
-* Ensure correct ordering of Set-Cookie headers, first in first out.
+* Avoid swallowing messages that are not related to the socket
+  during request parsing
+  https://github.com/mochi/mochiweb/pull/161
+* Ensure correct ordering of Set-Cookie headers: first in, first out
   https://github.com/mochi/mochiweb/issues/162
 * Improve response times by caching a formatted date once per second
   for the response headers with a mochiweb_clock service
