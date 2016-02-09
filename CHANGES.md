@@ -1,5 +1,8 @@
-Version 2.13.0 released XXXX-XX-XX
+Version 2.13.0 released 2016-02-08
 
+* Support parsing of UTF-16 surrogate pairs encoded as character
+  references in mochiweb_html
+  https://github.com/mochi/mochiweb/issues/164
 * Avoid swallowing messages that are not related to the socket
   during request parsing
   https://github.com/mochi/mochiweb/pull/161

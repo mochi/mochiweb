@@ -126,6 +126,12 @@ tokens_test() ->
        mochiweb_html:tokens(<<"not html < at all">>)),
     ok.
 
+surrogate_test() ->
+    %% https://github.com/mochi/mochiweb/issues/164
+    ?assertEqual(
+       [{data,<<240,159,152,138>>,false}],
+       mochiweb_html:tokens(<<"&#55357;&#56842;">>)).
+
 parse_test() ->
     D0 = <<"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">
 <html>
