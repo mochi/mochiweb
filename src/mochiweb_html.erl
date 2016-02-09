@@ -639,13 +639,42 @@ find_gt(Bin, S=#decoder{offset=O}, HasSlash) ->
 
 tokenize_charref(Bin, S=#decoder{offset=O}) ->
     try
-        tokenize_charref(Bin, S, O)
+        case tokenize_charref_raw(Bin, S, O) of
+            {C1, S1=#decoder{offset=O1}} when C1 >= 16#D800 andalso C1 =< 16#DFFF ->
+                %% Surrogate pair
+                tokeninize_charref_surrogate_pair(Bin, S1, C1);
+            {Unichar, S1} when is_integer(Unichar) ->
+                {{data, mochiutf8:codepoint_to_bytes(Unichar), false},
+                 S1};
+            {Unichars, S1} when is_list(Unichars) ->
+                {{data, unicode:characters_to_binary(Unichars), false},
+                 S1}
+        end
     catch
         throw:invalid_charref ->
             {{data, <<"&">>, false}, S}
     end.
 
-tokenize_charref(Bin, S=#decoder{offset=O}, Start) ->
+tokeninize_charref_surrogate_pair(Bin, S=#decoder{offset=O}, C1) ->
+    case Bin of
+        <<_:O/binary, $&, _/binary>> ->
+            case tokenize_charref_raw(Bin, ?INC_COL(S), O + 1) of
+                {C2, S1} when C2 >= 16#D800 andalso C1 =< 16#DFFF ->
+                    {{data,
+                      unicode:characters_to_binary(
+                        <<C1:16, C2:16>>,
+                        utf16,
+                        utf8),
+                      false},
+                     S1};
+                _ ->
+                    throw(invalid_charref)
+            end;
+        _ ->
+            throw(invalid_charref)
+    end.
+
+tokenize_charref_raw(Bin, S=#decoder{offset=O}, Start) ->
     case Bin of
         <<_:O/binary>> ->
             throw(invalid_charref);
@@ -658,17 +687,9 @@ tokenize_charref(Bin, S=#decoder{offset=O}, Start) ->
         <<_:O/binary, $;, _/binary>> ->
             Len = O - Start,
             <<_:Start/binary, Raw:Len/binary, _/binary>> = Bin,
-            Data = case mochiweb_charref:charref(Raw) of
-                       undefined ->
-                           throw(invalid_charref);
-                       Unichar when is_integer(Unichar) ->
-                           mochiutf8:codepoint_to_bytes(Unichar);
-                       Unichars when is_list(Unichars) ->
-                           unicode:characters_to_binary(Unichars)
-                   end,
-            {{data, Data, false}, ?INC_COL(S)};
+            {mochiweb_charref:charref(Raw), ?INC_COL(S)};
         _ ->
-            tokenize_charref(Bin, ?INC_COL(S), Start)
+            tokenize_charref_raw(Bin, ?INC_COL(S), Start)
     end.
 
 tokenize_doctype(Bin, S) ->
