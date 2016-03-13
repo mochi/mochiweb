@@ -1,3 +1,8 @@
+Version 2.13.1 released 2016-03-13
+
+* Fix mochiweb_html regression parsing invalid charref sequences
+  https://github.com/mochi/mochiweb/issues/167
+
 Version 2.13.0 released 2016-02-08
 
 * Support parsing of UTF-16 surrogate pairs encoded as character
@@ -114,7 +119,7 @@ Version 2.7.0 released 2013-08-01
   call instead of an asynchronous cast
 * `mochiweb_html:parse_tokens/1` (and `parse/1`) will now create a
   html element to wrap documents that have a HTML5 doctype
-  (`<!doctype html>`) but no html element 
+  (`<!doctype html>`) but no html element
   https://github.com/mochi/mochiweb/issues/110
 
 Version 2.6.0 released 2013-04-15
@@ -133,7 +138,7 @@ Version 2.5.0 released 2013-03-04
   (URL and Filename safe alphabet, see RFC 4648).
 * Fix rebar.config in mochiwebapp_skel to use {branch, "master"}
   https://github.com/mochi/mochiweb/issues/105
-  
+
 Version 2.4.2 released 2013-02-05
 
 * Fixed issue in mochiweb_response introduced in v2.4.0

@@ -640,7 +640,7 @@ find_gt(Bin, S=#decoder{offset=O}, HasSlash) ->
 tokenize_charref(Bin, S=#decoder{offset=O}) ->
     try
         case tokenize_charref_raw(Bin, S, O) of
-            {C1, S1=#decoder{offset=O1}} when C1 >= 16#D800 andalso C1 =< 16#DFFF ->
+            {C1, S1} when C1 >= 16#D800 andalso C1 =< 16#DFFF ->
                 %% Surrogate pair
                 tokeninize_charref_surrogate_pair(Bin, S1, C1);
             {Unichar, S1} when is_integer(Unichar) ->
@@ -648,7 +648,9 @@ tokenize_charref(Bin, S=#decoder{offset=O}) ->
                  S1};
             {Unichars, S1} when is_list(Unichars) ->
                 {{data, unicode:characters_to_binary(Unichars), false},
-                 S1}
+                 S1};
+            {undefined, _} ->
+                throw(invalid_charref)
         end
     catch
         throw:invalid_charref ->
