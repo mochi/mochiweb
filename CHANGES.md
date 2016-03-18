@@ -1,3 +1,9 @@
+Version 2.13.2 released 2016-03-18
+
+* Allow mochijson2 to handle code points that xmerl_ucs considered
+  invalid
+  https://github.com/mochi/mochiweb/issues/168
+
 Version 2.13.1 released 2016-03-13
 
 * Fix mochiweb_html regression parsing invalid charref sequences
