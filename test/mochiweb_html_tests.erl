@@ -601,3 +601,10 @@ implicit_html_test() ->
         [{<<"head">>, [], []},
          {<<"body">>, [], []}]},
        mochiweb_html:parse("<!doctype html><head></head><body></body>")).
+
+no_letter_no_tag_test() ->
+    ?assertEqual(
+       {<<"html">>,[],
+         [{<<"body">>,[],[<<"<3><!><*><<>>">>,{<<"body">>,[],[]}]}]},
+       mochiweb_html:parse(<<"<html><body><3><!><*><<>><body></html>">>)
+      ).

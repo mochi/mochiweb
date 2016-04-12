@@ -54,6 +54,8 @@
 
 -define(IS_WHITESPACE(C),
         (C =:= $\s orelse C =:= $\t orelse C =:= $\r orelse C =:= $\n)).
+-define(IS_LETTER(C),
+        ((C >= $A andalso C =< $Z) orelse (C >= $a andalso C =< $z))).
 -define(IS_LITERAL_SAFE(C),
         ((C >= $A andalso C =< $Z) orelse (C >= $a andalso C =< $z)
          orelse (C >= $0 andalso C =< $9))).
@@ -349,7 +351,7 @@ tokenize(B, S=#decoder{offset=O}) ->
             {S2, _} = find_gt(B, S1),
             {{end_tag, Tag}, S2};
         <<_:O/binary, "<", C, _/binary>>
-                when ?IS_WHITESPACE(C); not ?IS_LITERAL_SAFE(C) ->
+                when ?IS_WHITESPACE(C); not ?IS_LETTER(C) ->
             %% This isn't really strict HTML
             {{data, Data, _Whitespace}, S1} = tokenize_data(B, ?INC_COL(S)),
             {{data, <<$<, Data/binary>>, false}, S1};
