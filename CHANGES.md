@@ -1,3 +1,8 @@
+Version 2.14.0 released 2016-04-11
+
+* mochiweb_html now requires a letter to begin a HTML tag
+  https://github.com/mochi/mochiweb/pull/171
+
 Version 2.13.2 released 2016-03-18
 
 * Allow mochijson2 to handle code points that xmerl_ucs considered
