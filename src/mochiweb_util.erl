@@ -590,12 +590,13 @@ make_io(Io) when is_list(Io); is_binary(Io) ->
 %% @spec normalize_path(string()) -> string()
 %% @doc Remove duplicate slashes from an uri path ("//foo///bar////" becomes
 %%      "/foo/bar/").
+%%      Per RFC 3986, all but the last path segment must be non-empty.
 normalize_path(Path) ->
 	normalize_path(Path, []).
 
 normalize_path([], Acc) ->
         lists:reverse(Acc);
-normalize_path("/" ++ Path, "/" ++ _ = Acc) -> 
+normalize_path("/" ++ Path, "/" ++ _ = Acc) ->
         normalize_path(Path, Acc);
 normalize_path([C|Path], Acc) ->
         normalize_path(Path, [C|Acc]).

@@ -1,3 +1,9 @@
+Version 2.15.0 released 2016-05-08
+
+* mochiweb_request now normalizes paths such that duplicate slashes are
+  discarded (and thus all path segments except the last are non-empty).
+  https://github.com/mochi/mochiweb/pull/173
+
 Version 2.14.0 released 2016-04-11
 
 * mochiweb_html now requires a letter to begin a HTML tag
