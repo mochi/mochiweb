@@ -135,7 +135,7 @@ get(path, {?MODULE, [_Socket, _Opts, _Method, RawPath, _Version, _Headers]}) ->
     case erlang:get(?SAVE_PATH) of
         undefined ->
             {Path0, _, _} = mochiweb_util:urlsplit_path(RawPath),
-            Path = mochiweb_util:unquote(Path0),
+            Path = mochiweb_util:normalize_path(mochiweb_util:unquote(Path0)),
             put(?SAVE_PATH, Path),
             Path;
         Cached ->

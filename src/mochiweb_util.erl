@@ -14,6 +14,7 @@
 -export([safe_relative_path/1, partition/2]).
 -export([parse_qvalues/1, pick_accepted_encodings/3]).
 -export([make_io/1]).
+-export([normalize_path/1]).
 
 -define(PERCENT, 37).  % $\%
 -define(FULLSTOP, 46). % $\.
@@ -586,6 +587,20 @@ make_io(Integer) when is_integer(Integer) ->
 make_io(Io) when is_list(Io); is_binary(Io) ->
     Io.
 
+%% @spec normalize_path(string()) -> string()
+%% @doc Remove duplicate slashes from an uri path ("//foo///bar////" becomes
+%%      "/foo/bar/").
+%%      Per RFC 3986, all but the last path segment must be non-empty.
+normalize_path(Path) ->
+	normalize_path(Path, []).
+
+normalize_path([], Acc) ->
+        lists:reverse(Acc);
+normalize_path("/" ++ Path, "/" ++ _ = Acc) ->
+        normalize_path(Path, Acc);
+normalize_path([C|Path], Acc) ->
+        normalize_path(Path, [C|Acc]).
+
 %%
 %% Tests
 %%
@@ -989,5 +1004,36 @@ pick_accepted_encodings_test() ->
         "identity"
     ),
     ok.
+
+normalize_path_test() ->
+	"" = normalize_path(""),
+	"/" = normalize_path("/"),
+	"/" = normalize_path("//"),
+	"/" = normalize_path("///"),
+	"foo" = normalize_path("foo"),
+	"/foo" = normalize_path("/foo"),
+	"/foo" = normalize_path("//foo"),
+	"/foo" = normalize_path("///foo"),
+	"foo/" = normalize_path("foo/"),
+	"foo/" = normalize_path("foo//"),
+	"foo/" = normalize_path("foo///"),
+	"foo/bar" = normalize_path("foo/bar"),
+	"foo/bar" = normalize_path("foo//bar"),
+	"foo/bar" = normalize_path("foo///bar"),
+	"foo/bar" = normalize_path("foo////bar"),
+	"/foo/bar" = normalize_path("/foo/bar"),
+	"/foo/bar" = normalize_path("/foo////bar"),
+	"/foo/bar" = normalize_path("////foo/bar"),
+	"/foo/bar" = normalize_path("////foo///bar"),
+	"/foo/bar" = normalize_path("////foo////bar"),
+	"/foo/bar/" = normalize_path("/foo/bar/"),
+	"/foo/bar/" = normalize_path("////foo/bar/"),
+	"/foo/bar/" = normalize_path("/foo////bar/"),
+	"/foo/bar/" = normalize_path("/foo/bar////"),
+	"/foo/bar/" = normalize_path("///foo////bar/"),
+	"/foo/bar/" = normalize_path("////foo/bar////"),
+	"/foo/bar/" = normalize_path("/foo///bar////"),
+	"/foo/bar/" = normalize_path("////foo///bar////"),
+	ok.
 
 -endif.

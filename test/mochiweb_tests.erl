@@ -6,7 +6,7 @@ with_server(Transport, ServerFun, ClientFun) ->
     mochiweb_test_util:with_server(Transport, ServerFun, ClientFun).
 
 request_test() ->
-    R = mochiweb_request:new(z, z, "/foo/bar/baz%20wibble+quux?qs=2", z, []),
+    R = mochiweb_request:new(z, z, "//foo///bar/baz%20wibble+quux?qs=2", z, []),
     "/foo/bar/baz wibble quux" = R:get(path),
     ok.
 
