@@ -1,3 +1,8 @@
+Version 2.15.1 released 2016-06-24
+
+* Fixed deprecation warnings in Erlang/OTP 19.0
+  https://github.com/mochi/mochiweb/pull/177
+
 Version 2.15.0 released 2016-05-08
 
 * mochiweb_request now normalizes paths such that duplicate slashes are
