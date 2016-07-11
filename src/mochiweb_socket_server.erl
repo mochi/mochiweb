@@ -29,7 +29,8 @@
          ssl=false,
          ssl_opts=[{ssl_imp, new}],
          acceptor_pool=sets:new(),
-         profile_fun=undefined}).
+         profile_fun=undefined,
+         shutdown_delay=0}).
 
 -define(is_old_state(State), not is_record(State, mochiweb_socket_server)).
 
@@ -60,6 +61,8 @@ set(Name, Property, _Value) ->
                           [Name, Property]).
 
 stop(Name) when is_atom(Name) orelse is_pid(Name) ->
+    ShutdownDelay = get(Name, shutdown_delay),
+    graceful_shutdown(Name, ShutdownDelay),
     gen_server:call(Name, stop);
 stop({Scope, Name}) when Scope =:= local orelse Scope =:= global ->
     stop(Name);
@@ -145,7 +148,10 @@ parse_options([{ssl_opts, SslOpts} | Rest], State) when is_list(SslOpts) ->
     SslOpts1 = [{ssl_imp, new} | proplists:delete(ssl_imp, SslOpts)],
     parse_options(Rest, State#mochiweb_socket_server{ssl_opts=SslOpts1});
 parse_options([{profile_fun, ProfileFun} | Rest], State) when is_function(ProfileFun) ->
-    parse_options(Rest, State#mochiweb_socket_server{profile_fun=ProfileFun}).
+    parse_options(Rest, State#mochiweb_socket_server{profile_fun=ProfileFun});
+parse_options([{shutdown_delay, ShutdownDelay} | Rest], State) ->
+    ShutdownDelayInt = ensure_int(ShutdownDelay),
+    parse_options(Rest, State#mochiweb_socket_server{shutdown_delay=ShutdownDelayInt}).
 
 
 start_server(F, State=#mochiweb_socket_server{ssl=Ssl, name=Name}) ->
@@ -236,7 +242,9 @@ do_get(port, #mochiweb_socket_server{port=Port}) ->
 do_get(waiting_acceptors, #mochiweb_socket_server{acceptor_pool=Pool}) ->
     sets:size(Pool);
 do_get(active_sockets, #mochiweb_socket_server{active_sockets=ActiveSockets}) ->
-    ActiveSockets.
+    ActiveSockets;
+do_get(shutdown_delay, #mochiweb_socket_server{shutdown_delay=ShutdownDelay}) ->
+    ShutdownDelay.
 
 
 state_to_proplist(#mochiweb_socket_server{name=Name,
@@ -265,6 +273,8 @@ handle_call({get, Property}, _From, State) ->
     {reply, Res, State};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
+handle_call(prep_stop, _From, State) ->
+    {reply, close_listen_socket(State), State};
 handle_call(_Message, _From, State) ->
     Res = error,
     {reply, Res, State}.
@@ -294,7 +304,10 @@ handle_cast({set, profile_fun, ProfileFun}, State) ->
 
 terminate(Reason, State) when ?is_old_state(State) ->
     terminate(Reason, upgrade_state(State));
-terminate(_Reason, #mochiweb_socket_server{listen=Listen}) ->
+terminate(_Reason, State) ->
+    close_listen_socket(State).
+
+close_listen_socket(#mochiweb_socket_server{listen=Listen}) ->
     mochiweb_socket:close(Listen).
 
 code_change(_OldVsn, State, _Extra) ->
@@ -363,7 +376,21 @@ handle_info(Info, State) ->
     error_logger:info_report([{'INFO', Info}, {'State', State}]),
     {noreply, State}.
 
-
+graceful_shutdown(_, 0) ->
+    ok;
+graceful_shutdown(Name, ShutdownDelay) ->
+    gen_server:call(Name, prep_stop),
+    WaitLoop = fun (_, Delay) when Delay =< 0 ->
+                        ok;
+                    (Loop, Delay) ->
+                        case mochiweb_socket_server:get(Name, active_sockets) of
+                            0 -> ok;
+                            X -> error_logger:info_msg("Waiting for ~p clients to finish~n", [X]),
+                                 timer:sleep(min(5, Delay)),
+                                 Loop(Loop, Delay - 5)
+                        end
+                end,
+    WaitLoop(WaitLoop, ShutdownDelay).
 
 %%
 %% Tests
@@ -388,7 +415,8 @@ upgrade_state_test() ->
                                        acceptor_pool_size=acceptor_pool_size,
                                        ssl=ssl, ssl_opts=ssl_opts,
                                        acceptor_pool=acceptor_pool,
-                                       profile_fun=undefined},
+                                       profile_fun=undefined,
+                                       shutdown_delay=0},
     ?assertEqual(CmpState, State).
 
 -endif.
