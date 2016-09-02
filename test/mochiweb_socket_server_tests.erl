@@ -38,9 +38,6 @@ client_fun(Socket, [{send_pid, To} | Cmds]) ->
     To ! {client, self()},
     client_fun(Socket, Cmds);
 client_fun(Socket, [{send, Data, Tester} | Cmds]) ->
-    client_fun(Socket, [{send, Data, Tester, 0} | Cmds]);
-client_fun(Socket, [{send, Data, Tester, Delay} | Cmds]) ->
-    timer:sleep(Delay),
     case gen_tcp:send(Socket, Data) of
         ok -> ok;
         {error, E} -> Tester ! {client_send_error, self(), E}
@@ -143,13 +140,10 @@ normal_acceptor_test_fun() ->
              ?assertEqual(Expected, Result)
      end || {Max, PoolSize, NumClients, Expected} <- Tests].
 
-graceful_shutdown_test_fun() ->
+graceful_shutdown_test_fun(ShutDownDelay) ->
     Tester = self(),
     NumClients = 2,
-    ClientSendDelay = 10,
-    BufferTime = 5,
-    ShutDownDelay = (NumClients * ClientSendDelay) + BufferTime,
-    ServerOpts = [{max, NumClients}, {acceptor_pool_size, NumClients}, {shutdown_delay, ShutDownDelay}],
+    ServerOpts = [{max, NumClients}, {acceptor_pool_size, NumClients}],
     ServerLoop =
         fun (Socket, _Opts) ->
                 Tester ! {server_accepted, self()},
@@ -159,7 +153,7 @@ graceful_shutdown_test_fun() ->
     {Server, Port} = socket_server(ServerOpts, ServerLoop),
     Data = <<"data">>,
     ClientCmds = [{send_pid, Tester}, {wait_msg, go},
-                  {send, Data, Tester, ClientSendDelay},
+                  {send, Data, Tester},
                   {close_sock}, {send_msg, done, Tester}],
     start_client_conns(Port, NumClients, fun client_fun/2, ClientCmds, Tester),
 
@@ -181,7 +175,7 @@ graceful_shutdown_test_fun() ->
         end,
     {Connected, _} = ConnectLoop(ConnectLoop, [], [], 0),
 
-    spawn(mochiweb_socket_server, stop, [Server]),
+    spawn(mochiweb_socket_server, stop, [Server, ShutDownDelay]),
 
     WaitLoop =
         fun (_Loop, Done, Error, []) ->
@@ -209,6 +203,6 @@ normal_acceptor_test_() ->
 
 
 graceful_shutdown_test_() ->
-    {timeout, ?LARGE_TIMEOUT, [fun() -> graceful_shutdown_test_fun() end]}.
+    {timeout, ?LARGE_TIMEOUT, [fun() -> graceful_shutdown_test_fun(?LARGE_TIMEOUT - 1) end]}.
 
 -endif.
