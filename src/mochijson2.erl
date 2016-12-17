@@ -149,6 +149,43 @@ parse_decoder_options([{format, Format} | Rest], State)
   when Format =:= struct orelse Format =:= eep18 orelse Format =:= proplist ->
     parse_decoder_options(Rest, State#decoder{object_hook=Format}).
 
+
+-ifdef(map_available).
+json_encode(true, _State) ->
+    <<"true">>;
+json_encode(false, _State) ->
+    <<"false">>;
+json_encode(null, _State) ->
+    <<"null">>;
+json_encode(I, _State) when is_integer(I) ->
+    integer_to_list(I);
+json_encode(F, _State) when is_float(F) ->
+    mochinum:digits(F);
+json_encode(S, State) when is_binary(S); is_atom(S) ->
+    json_encode_string(S, State);
+json_encode([{K, _}|_] = Props, State) when (K =/= struct andalso
+                                             K =/= array andalso
+                                             K =/= json) ->
+    json_encode_proplist(Props, State);
+json_encode({struct, Props}, State) when is_list(Props) ->
+    json_encode_proplist(Props, State);
+json_encode({Props}, State) when is_list(Props) ->
+    json_encode_proplist(Props, State);
+json_encode({}, State) ->
+    json_encode_proplist([], State);
+json_encode(Array, State) when is_list(Array) ->
+    json_encode_array(Array, State);
+json_encode({array, Array}, State) when is_list(Array) ->
+    json_encode_array(Array, State);
+json_encode(M, State) when is_map(M) ->
+    json_encode_map(M, State);
+json_encode({json, IoList}, _State) ->
+    IoList;
+json_encode(Bad, #encoder{handler=null}) ->
+    exit({json_encode, {bad_term, Bad}});
+json_encode(Bad, State=#encoder{handler=Handler}) ->
+    json_encode(Handler(Bad), State).
+-else.
 json_encode(true, _State) ->
     <<"true">>;
 json_encode(false, _State) ->
@@ -181,6 +218,7 @@ json_encode(Bad, #encoder{handler=null}) ->
     exit({json_encode, {bad_term, Bad}});
 json_encode(Bad, State=#encoder{handler=Handler}) ->
     json_encode(Handler(Bad), State).
+-endif.
 
 json_encode_array([], _State) ->
     <<"[]">>;
@@ -201,6 +239,19 @@ json_encode_proplist(Props, State) ->
         end,
     [$, | Acc1] = lists:foldl(F, "{", Props),
     lists:reverse([$\} | Acc1]).
+
+-ifdef(map_available).
+json_encode_map(Map, _State) when map_size(Map) =:= 0 ->
+    <<"{}">>;
+json_encode_map(Map, State) ->
+    F = fun(K, V, Acc) ->
+                KS = json_encode_string(K, State),
+                VS = json_encode(V, State),
+                [$,, VS, $:, KS | Acc]
+          end,
+    [$, | Acc1] = maps:fold(F, "{", Map),
+    lists:reverse([$\} | Acc1]).
+-endif.
 
 json_encode_string(A, State) when is_atom(A) ->
     json_encode_string(atom_to_binary(A, latin1), State);
@@ -938,5 +989,15 @@ utf8_non_character_test_() ->
     S = unicode:characters_to_binary([16#ffff, 16#fffe]),
     [{"roundtrip escaped", ?_assertEqual(S, decode(encode(S)))},
      {"roundtrip utf8", ?_assertEqual(S, decode((encoder([{utf8, true}]))(S)))}].
+
+% iolist_to_binary(mochijson2:encode(#{a => 1, b => #{ c => 2}})).
+-ifdef(map_available).
+encode_map_test() ->
+    M = <<"{\"a\":1,\"b\":{\"c\":2}}">>,
+    ?assertEqual(M, iolist_to_binary(encode(#{a => 1, b => #{ c => 2}}))).
+encode_empty_map_test() ->
+    ?assertEqual(<<"{}">>, encode(#{})).
+
+-endif.
 
 -endif.
