@@ -59,6 +59,18 @@ request(Socket, Body, State, WsVersion, ReplyChannel) ->
                     NewState = call_body(Body, Payload, State, ReplyChannel),
                     loop(Socket, Body, NewState, WsVersion, ReplyChannel)
             end;
+        {ssl, _, WsFrames} ->
+            case parse_frames(WsVersion, WsFrames, Socket) of
+                close ->
+                    mochiweb_socket:close(Socket),
+                    exit(normal);
+                error ->
+                    mochiweb_socket:close(Socket),
+                    exit(normal);
+                Payload ->
+                    NewState = call_body(Body, Payload, State, ReplyChannel),
+                    loop(Socket, Body, NewState, WsVersion, ReplyChannel)
+            end;
         _ ->
             mochiweb_socket:close(Socket),
             exit(normal)
