@@ -82,6 +82,12 @@
 -define(IS_WHITESPACE(C),
         (C =:= $\s orelse C =:= $\t orelse C =:= $\r orelse C =:= $\n)).
 
+-ifdef(map_unavailable).
+-define(IS_MAP(_), false).
+-else.
+-define(IS_MAP(X), is_map(X)).
+-endif.
+
 %% @type json_string() = atom | binary()
 %% @type json_number() = integer() | float()
 %% @type json_array() = [json_term()]
@@ -149,6 +155,7 @@ parse_decoder_options([{format, Format} | Rest], State)
   when Format =:= struct orelse Format =:= eep18 orelse Format =:= proplist ->
     parse_decoder_options(Rest, State#decoder{object_hook=Format}).
 
+
 json_encode(true, _State) ->
     <<"true">>;
 json_encode(false, _State) ->
@@ -175,6 +182,8 @@ json_encode(Array, State) when is_list(Array) ->
     json_encode_array(Array, State);
 json_encode({array, Array}, State) when is_list(Array) ->
     json_encode_array(Array, State);
+json_encode(M, State) when ?IS_MAP(M) ->
+    json_encode_map(M, State);
 json_encode({json, IoList}, _State) ->
     IoList;
 json_encode(Bad, #encoder{handler=null}) ->
@@ -201,6 +210,23 @@ json_encode_proplist(Props, State) ->
         end,
     [$, | Acc1] = lists:foldl(F, "{", Props),
     lists:reverse([$\} | Acc1]).
+
+-ifdef(map_unavailable).
+json_encode_map(Bad, _State) ->
+  %% IS_MAP definition guarantees that this branch is dead
+  exit({json_encode, {bad_term, Bad}}).
+-else.
+json_encode_map(Map, _State) when map_size(Map) =:= 0 ->
+    <<"{}">>;
+json_encode_map(Map, State) ->
+    F = fun(K, V, Acc) ->
+                KS = json_encode_string(K, State),
+                VS = json_encode(V, State),
+                [$,, VS, $:, KS | Acc]
+          end,
+    [$, | Acc1] = maps:fold(F, "{", Map),
+    lists:reverse([$\} | Acc1]).
+-endif.
 
 json_encode_string(A, State) when is_atom(A) ->
     json_encode_string(atom_to_binary(A, latin1), State);
@@ -938,5 +964,16 @@ utf8_non_character_test_() ->
     S = unicode:characters_to_binary([16#ffff, 16#fffe]),
     [{"roundtrip escaped", ?_assertEqual(S, decode(encode(S)))},
      {"roundtrip utf8", ?_assertEqual(S, decode((encoder([{utf8, true}]))(S)))}].
+
+-ifndef(map_unavailable).
+
+encode_map_test() ->
+    M = <<"{\"a\":1,\"b\":{\"c\":2}}">>,
+    ?assertEqual(M, iolist_to_binary(encode(#{a => 1, b => #{ c => 2}}))).
+
+encode_empty_map_test() ->
+    ?assertEqual(<<"{}">>, encode(#{})).
+
+-endif.
 
 -endif.
