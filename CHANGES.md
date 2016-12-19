@@ -1,3 +1,10 @@
+Version 2.16.0 released 2016-12-19
+
+* Added support for encoding maps to mochijson2 (where available)
+  https://github.com/mochi/mochiweb/pull/184
+* Added missing RFC1918 address spaces to the allowed x-forwarded-for header
+  https://github.com/mochi/mochiweb/pull/183
+
 Version 2.15.1 released 2016-06-24
 
 * Fixed deprecation warnings in Erlang/OTP 19.0
