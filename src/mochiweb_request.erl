@@ -637,7 +637,7 @@ serve_file(Path, DocRoot, ExtraHeaders, {?MODULE, [_Socket, _Opts, _Method, _Raw
         undefined ->
             not_found(ExtraHeaders, THIS);
         RelPath ->
-            FullPath = filename:join([DocRoot, RelPath]),
+            FullPath = mochiweb_util:interpret_path_links(DocRoot, RelPath),
             case filelib:is_dir(FullPath) of
                 true ->
                     maybe_redirect(RelPath, FullPath, ExtraHeaders, THIS);
