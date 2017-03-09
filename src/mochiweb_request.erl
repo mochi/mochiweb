@@ -117,7 +117,8 @@ get(peer, {?MODULE, [Socket, _Opts, _Method, _RawPath, _Version, _Headers]}=THIS
                 undefined ->
                     inet_parse:ntoa(Addr);
                 Hosts ->
-                    string:strip(lists:last(string:tokens(Hosts, ",")))
+					[Peer|_] = string:tokens(Hosts, ","),
+                    string:strip(Peer)
             end;
         %% Copied this syntax from webmachine contributor Steve Vinoski
         {ok, {Addr={172, Second, _, _}, _Port}} when (Second > 15) andalso (Second < 32) ->
@@ -139,7 +140,8 @@ get(peer, {?MODULE, [Socket, _Opts, _Method, _RawPath, _Version, _Headers]}=THIS
                 undefined ->
                     "127.0.0.1";
                 Hosts ->
-                    string:strip(lists:last(string:tokens(Hosts, ",")))
+					[Peer|_] = string:tokens(Hosts, ","),
+                    string:strip(Peer)
             end;
         {ok, {Addr, _Port}} ->
             inet_parse:ntoa(Addr);
