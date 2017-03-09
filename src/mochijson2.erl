@@ -186,6 +186,9 @@ json_encode(M, State) when ?IS_MAP(M) ->
     json_encode_map(M, State);
 json_encode({json, IoList}, _State) ->
     IoList;
+json_encode({{Y, M, D}, {H, I, S}}, State) ->
+    Str = io_lib:format("~b-~2..0b-~2..0b ~2..0b:~2..0b:~2..0b", [Y, M, D, H, I, round(S)]),
+    json_encode(list_to_binary(Str), State);
 json_encode(Bad, #encoder{handler=null}) ->
     exit({json_encode, {bad_term, Bad}});
 json_encode(Bad, State=#encoder{handler=Handler}) ->
