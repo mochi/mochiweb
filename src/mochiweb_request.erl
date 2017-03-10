@@ -397,7 +397,9 @@ respond({Code, ResponseHeaders, Body}, {?MODULE, [_Socket, _Opts, Method, _RawPa
         'HEAD' -> send(Header, THIS);
         _      -> send([Header, Body], THIS)
     end,
-    Response.
+    Response;
+respond({Code}) ->
+  respond({Code, [], []}).
 
 %% @spec not_found(request()) -> response()
 %% @doc Alias for <code>not_found([])</code>.
