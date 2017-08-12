@@ -1,3 +1,12 @@
+Version 2.17.0 released 2017-08-12
+
+* Fix deprecation warnings for Erlang/OTP 20.0
+  https://github.com/mochi/mochiweb/pull/186
+* Updated mochiweb_html singleton tag heuristic for HTML5
+  https://github.com/mochi/mochiweb/pull/190
+* Send 400 Bad Request if request line exceeds recbuf (regression fix)
+  https://github.com/mochi/mochiweb/pull/191
+
 Version 2.16.0 released 2016-12-19
 
 * Added support for encoding maps to mochijson2 (where available)
