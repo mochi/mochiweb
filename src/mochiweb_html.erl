@@ -23,7 +23,6 @@
 -module(mochiweb_html).
 -export([tokens/1, parse/1, parse_tokens/1, to_tokens/1, escape/1,
          escape_attr/1, to_html/1]).
--compile([export_all]).
 -ifdef(TEST).
 -export([destack/1, destack/2, is_singleton/1]).
 -endif.
