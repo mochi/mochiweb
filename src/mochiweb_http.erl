@@ -97,6 +97,8 @@ request(Socket, Opts, Body) ->
         {tcp_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal);
+        {tcp_error, _, emsgsize} = Other ->
+            handle_invalid_msg_request(Other, Socket, Opts);
         {ssl_closed, _} ->
             mochiweb_socket:close(Socket),
             exit(normal)
@@ -140,6 +142,10 @@ call_body({M, F}, Req) ->
     M:F(Req);
 call_body(Body, Req) ->
     Body(Req).
+
+-spec handle_invalid_msg_request(term(), term(), term()) -> no_return().
+handle_invalid_msg_request(Msg, Socket, Opts) ->
+    handle_invalid_msg_request(Msg, Socket, Opts, {'GET', {abs_path, "/"}, {0,9}}, []).
 
 -spec handle_invalid_msg_request(term(), term(), term(), term(), term()) -> no_return().
 handle_invalid_msg_request(Msg, Socket, Opts, Request, RevHeaders) ->
