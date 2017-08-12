@@ -15,6 +15,7 @@
 -export([parse_qvalues/1, pick_accepted_encodings/3]).
 -export([make_io/1]).
 -export([normalize_path/1]).
+-export([rand_uniform/2]).
 
 -define(PERCENT, 37).  % $\%
 -define(FULLSTOP, 46). % $\.
@@ -600,6 +601,14 @@ normalize_path("/" ++ Path, "/" ++ _ = Acc) ->
         normalize_path(Path, Acc);
 normalize_path([C|Path], Acc) ->
         normalize_path(Path, [C|Acc]).
+
+-ifdef(rand_mod_unavailable).
+rand_uniform(Start, End) ->
+    crypto:rand_uniform(Start, End).
+-else.
+rand_uniform(Start, End) ->
+    Start + rand:uniform(End - Start) - 1.
+-endif.
 
 %%
 %% Tests
