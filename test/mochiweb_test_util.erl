@@ -1,6 +1,6 @@
 -module(mochiweb_test_util).
 -export([with_server/3, client_request/4, sock_fun/2,
-         read_server_headers/1, drain_reply/3]).
+         read_server_headers/1, drain_reply/3, ssl_client_opts/1]).
 -include("mochiweb_test_util.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -25,6 +25,14 @@ with_server(Transport, ServerFun, ClientFun) ->
     mochiweb_http:stop(Server),
     Res.
 
+-ifdef(sni_unavailable).
+ssl_client_opts(Opts) ->
+  [{ssl_imp, new} | Opts].
+-else.
+ssl_client_opts(Opts) ->
+  [{server_name_indication, disable} | Opts].
+-endif.
+
 sock_fun(Transport, Port) ->
     Opts = [binary, {active, false}, {packet, http}],
     case Transport of
@@ -42,7 +50,7 @@ sock_fun(Transport, Port) ->
                     Socket
             end;
         ssl ->
-            {ok, Socket} = ssl:connect("127.0.0.1", Port, [{ssl_imp, new} | Opts]),
+            {ok, Socket} = ssl:connect("127.0.0.1", Port, ssl_client_opts(Opts)),
             fun (recv) ->
                     ssl:recv(Socket, 0);
                 ({recv, Length}) ->

@@ -128,7 +128,7 @@ parse_options([{recbuf, RecBuf} | Rest], State) when is_integer(RecBuf) orelse
     %% and this doubled value is returned by getsockopt(2).
     %%
     %% See: man 7 socket | grep SO_RCVBUF
-    %% 
+    %%
     %% In case undefined is passed instead of the default buffer
     %% size ?RECBUF_SIZE, no size is set and the OS can control it dynamically
     parse_options(Rest, State#mochiweb_socket_server{recbuf=RecBuf});
@@ -200,7 +200,7 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog,
         {_, _, _, _, _, _, _, _} -> % IPv6
             [inet6, {ip, Ip} | BaseOpts]
     end,
-    OptsBuf=case RecBuf of 
+    OptsBuf=case RecBuf of
         undefined ->
             Opts;
         _ ->

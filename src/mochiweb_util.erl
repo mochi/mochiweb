@@ -602,12 +602,12 @@ normalize_path("/" ++ Path, "/" ++ _ = Acc) ->
 normalize_path([C|Path], Acc) ->
         normalize_path(Path, [C|Acc]).
 
--ifdef(crypto_rand_uniform_unavailable).
-rand_uniform(Start, End) ->
-    Start + rand:uniform(End - Start).
--else.
+-ifdef(rand_mod_unavailable).
 rand_uniform(Start, End) ->
     crypto:rand_uniform(Start, End).
+-else.
+rand_uniform(Start, End) ->
+    Start + rand:uniform(End - Start).
 -endif.
 
 %%
