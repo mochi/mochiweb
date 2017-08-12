@@ -428,6 +428,52 @@ dumb_br_test() ->
        {<<"div">>,[],[{<<"br">>, [], []}, {<<"br">>, [], []}, <<"z">>]},
        mochiweb_html:parse("<div><br><br>z</br></br></div>")).
 
+empty_elements_test() ->
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"area">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<area>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"base">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<base>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"br">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<br>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"col">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<col>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"embed">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<embed>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"hr">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<hr>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"img">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<img>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"input">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<input>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"keygen">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<keygen>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"link">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<link>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"meta">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<meta>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"param">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<param>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"source">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<source>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"track">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<track>z</div>")),
+    ?assertEqual(
+       {<<"div">>,[],[<<"a">>,{<<"wbr">>,[],[]},<<"z">>]},
+       mochiweb_html:parse("<div>a<wbr>z</div>")).
 
 php_test() ->
     %% http://code.google.com/p/mochiweb/issues/detail?id=71
