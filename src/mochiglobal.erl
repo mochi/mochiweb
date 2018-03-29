@@ -24,7 +24,16 @@
 %%      <a href="http://www.erlang.org/pipermail/erlang-questions/2009-March/042503.html">[1]</a>.
 -module(mochiglobal).
 -author("Bob Ippolito <bob@mochimedia.com>").
--export([get/1, get/2, put/2, delete/1]).
+
+-export([get/1,
+         get/2]).
+
+-export([get_unsafe/1,
+         get_unsafe/2]).
+
+-export([put/2]).
+
+-export([delete/1]).
 
 -spec get(atom()) -> any() | undefined.
 %% @equiv get(K, undefined)
@@ -32,13 +41,40 @@ get(K) ->
     get(K, undefined).
 
 -spec get(atom(), T) -> any() | T.
-%% @doc Get the term for K or return Default.
+%% @doc Get the term for K or return Default. Fun without Side-effects!
+%%
+%%      In case term for K is unknown, erlang (erl_prim_loader)
+%%      will try for every call load "K module" for term, it's slow!
 get(K, Default) ->
     get(K, Default, key_to_module(K)).
 
 get(_K, Default, Mod) ->
-    try Mod:term()
-    catch error:undef ->
+    try
+        Mod:term()
+    catch
+        error:undef ->
+            Default
+    end.
+
+-spec get_unsafe(atom()) -> any() | undefined.
+get_unsafe(K) ->
+%% @equiv get_unsafe(K, undefined)
+    get_unsafe(K, undefined).
+
+-spec get_unsafe(atom(), T) -> any() | T.
+%% @doc Get the term for K or return Default. Fun with Side-effects!
+%%
+%%      In case term for K is unknown, erlang (erl_prim_loader)
+%%      will try for load "K module" for term only once, it's fast!
+get_unsafe(K, Default) ->
+    get_unsafe(K, Default, key_to_module(K)).
+
+get_unsafe(K, Default, Mod) ->
+    try
+        Mod:term()
+    catch
+        error:undef ->
+            ?MODULE:put(K, Default),
             Default
     end.
 
