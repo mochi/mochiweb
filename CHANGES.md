@@ -1,3 +1,8 @@
+Version 2.18.0 released 2018-05-12
+
+* Add the 100.64.0.0/10 private IP shared address range
+  https://github.com/mochi/mochiweb/pull/193
+
 Version 2.17.0 released 2017-08-12
 
 * Fix deprecation warnings for Erlang/OTP 20.0
