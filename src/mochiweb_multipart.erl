@@ -314,20 +314,13 @@ find_boundary(Prefix, Data) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-ssl_cert_opts() ->
-    EbinDir = filename:dirname(code:which(?MODULE)),
-    CertDir = filename:join([EbinDir, "..", "support", "test-materials"]),
-    CertFile = filename:join(CertDir, "test_ssl_cert.pem"),
-    KeyFile = filename:join(CertDir, "test_ssl_key.pem"),
-    [{certfile, CertFile}, {keyfile, KeyFile}].
-
 with_socket_server(Transport, ServerFun, ClientFun) ->
     ServerOpts0 = [{ip, "127.0.0.1"}, {port, 0}, {loop, ServerFun}],
     ServerOpts = case Transport of
         plain ->
             ServerOpts0;
         ssl ->
-            ServerOpts0 ++ [{ssl, true}, {ssl_opts, ssl_cert_opts()}]
+            ServerOpts0 ++ [{ssl, true}, {ssl_opts, mochiweb_test_util:ssl_cert_opts()}]
     end,
     {ok, Server} = mochiweb_socket_server:start_link(ServerOpts),
     Port = mochiweb_socket_server:get(Server, port),

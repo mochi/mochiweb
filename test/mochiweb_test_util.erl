@@ -1,12 +1,12 @@
 -module(mochiweb_test_util).
--export([with_server/3, client_request/4, sock_fun/2,
+-export([ssl_cert_opts/0, with_server/3, client_request/4, sock_fun/2,
          read_server_headers/1, drain_reply/3, ssl_client_opts/1]).
 -include("mochiweb_test_util.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 ssl_cert_opts() ->
-    EbinDir = filename:dirname(code:which(?MODULE)),
-    CertDir = filename:join([EbinDir, "..", "support", "test-materials"]),
+    PrivDir = code:priv_dir(mochiweb),
+    CertDir = filename:join([PrivDir, "support", "test-materials"]),
     CertFile = filename:join(CertDir, "test_ssl_cert.pem"),
     KeyFile = filename:join(CertDir, "test_ssl_key.pem"),
     [{certfile, CertFile}, {keyfile, KeyFile}].
