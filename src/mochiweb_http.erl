@@ -160,8 +160,8 @@ handle_invalid_msg_request(Msg, Socket, Opts, Request, RevHeaders) ->
 
 -spec handle_invalid_request(term(), term(), term(), term()) -> no_return().
 handle_invalid_request(Socket, Opts, Request, RevHeaders) ->
-    Req = new_request(Socket, Opts, Request, RevHeaders),
-    Req:respond({400, [], []}),
+    {Mod, _} = Req = new_request(Socket, Opts, Request, RevHeaders),
+    Mod:respond({400, [], []}, Req),
     mochiweb_socket:close(Socket),
     exit(normal).
 
@@ -169,14 +169,14 @@ new_request(Socket, Opts, Request, RevHeaders) ->
     ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, raw}])),
     mochiweb:new_request({Socket, Opts, Request, lists:reverse(RevHeaders)}).
 
-after_response(Body, Req) ->
-    Socket = Req:get(socket),
-    case Req:should_close() of
+after_response(Body, {Mod, _} = Req) ->
+    Socket = Mod:get(socket, Req),
+    case Mod:should_close(Req) of
         true ->
             mochiweb_socket:close(Socket),
             exit(normal);
         false ->
-            Req:cleanup(),
+            Mod:cleanup(Req),
             erlang:garbage_collect(),
             ?MODULE:loop(Socket, mochiweb_request:get(opts, Req), Body)
     end.

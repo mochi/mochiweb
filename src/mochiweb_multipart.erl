@@ -144,11 +144,11 @@ default_file_handler_1(Filename, ContentType, Acc) ->
             default_file_handler_1(Filename, ContentType, [Next | Acc])
     end.
 
-parse_multipart_request(Req, Callback) ->
+parse_multipart_request({Mod, _} = Req, Callback) ->
     %% TODO: Support chunked?
-    Length = list_to_integer(Req:get_combined_header_value("content-length")),
+    Length = list_to_integer(Mod:get_combined_header_value("content-length", Req)),
     Boundary = iolist_to_binary(
-                 get_boundary(Req:get_header_value("content-type"))),
+                 get_boundary(Mod:get_header_value("content-type", Req))),
     Prefix = <<"\r\n--", Boundary/binary>>,
     BS = byte_size(Boundary),
     Chunk = read_chunk(Req, Length),
@@ -180,12 +180,12 @@ split_header(Line) ->
     {string:to_lower(string:strip(Name)),
      mochiweb_util:parse_header(Value)}.
 
-read_chunk(Req, Length) when Length > 0 ->
+read_chunk({Mod, _} = Req, Length) when Length > 0 ->
     case Length of
         Length when Length < ?CHUNKSIZE ->
-            Req:recv(Length);
+            Mod:recv(Length, Req);
         _ ->
-            Req:recv(?CHUNKSIZE)
+            Mod:recv(?CHUNKSIZE, Req)
     end.
 
 read_more(State=#mp{length=Length, buffer=Buffer, req=Req}) ->

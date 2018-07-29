@@ -65,27 +65,27 @@ get_value(Key, Args) when is_list(Args) ->
 %%      replacing Args with the result of the previous get_value. This
 %%      is used to implement formats such as {0.0}.
 get_field(Key, Args) ->
-    get_field(Key, Args, ?MODULE).
+    get_field(Key, Args, {?MODULE, []}).
 
 %% @spec get_field(Key::string(), Args, Module) -> term()
 %% @doc Consecutively call Module:get_value/2 on parts of Key delimited by ".",
 %%      replacing Args with the result of the previous get_value. This
 %%      is used to implement formats such as {0.0}.
-get_field(Key, Args, Module) ->
+get_field(Key, Args, {Module, _} = M) ->
     {Name, Next} = lists:splitwith(fun (C) -> C =/= $. end, Key),
-    Res = try Module:get_value(Name, Args)
+    Res = try Module:get_value(Name, Args, M)
           catch error:undef -> get_value(Name, Args) end,
     case Next of
         "" ->
             Res;
         "." ++ S1 ->
-            get_field(S1, Res, Module)
+            get_field(S1, Res, M)
     end.
 
 %% @spec format(Format::string(), Args) -> iolist()
 %% @doc Format Args with Format.
 format(Format, Args) ->
-    format(Format, Args, ?MODULE).
+    format(Format, Args, {?MODULE, []}).
 
 %% @spec format(Format::string(), Args, Module) -> iolist()
 %% @doc Format Args with Format using Module.
@@ -97,7 +97,7 @@ format(S, Args, Module) ->
 %% @spec format_field(Arg, Format) -> iolist()
 %% @doc Format Arg with Format.
 format_field(Arg, Format) ->
-    format_field(Arg, Format, ?MODULE).
+    format_field(Arg, Format, {?MODULE, []}).
 
 %% @spec format_field(Arg, Format, _Module) -> iolist()
 %% @doc Format Arg with Format.
@@ -108,7 +108,7 @@ format_field(Arg, Format, _Module) ->
 %% @spec f(Format::string(), Args) -> string()
 %% @doc Format Args with Format and return a string().
 f(Format, Args) ->
-    f(Format, Args, ?MODULE).
+    f(Format, Args, {?MODULE, []}).
 
 %% @spec f(Format::string(), Args, Module) -> string()
 %% @doc Format Args with Format using Module and return a string().
@@ -193,22 +193,22 @@ format2([], _Args, _Module, Acc) ->
     lists:reverse(Acc);
 format2([{raw, S} | Rest], Args, Module, Acc) ->
     format2(Rest, Args, Module, [S | Acc]);
-format2([{format, {Key, Convert, Format0}} | Rest], Args, Module, Acc) ->
-    Format = f(Format0, Args, Module),
-    V = case Module of
-            ?MODULE ->
+format2([{format, {Key, Convert, Format0}} | Rest], Args, M, Acc) ->
+    Format = f(Format0, Args, M),
+    V = case M of
+            {?MODULE, []} ->
                 V0 = get_field(Key, Args),
                 V1 = convert_field(V0, Convert),
                 format_field(V1, Format);
-            _ ->
-                V0 = try Module:get_field(Key, Args)
-                     catch error:undef -> get_field(Key, Args, Module) end,
-                V1 = try Module:convert_field(V0, Convert)
+            {Module, _} ->
+                V0 = try Module:get_field(Key, Args, M)
+                     catch error:undef -> get_field(Key, Args, M) end,
+                V1 = try Module:convert_field(V0, Convert, M)
                      catch error:undef -> convert_field(V0, Convert) end,
-                try Module:format_field(V1, Format)
-                catch error:undef -> format_field(V1, Format, Module) end
+                try Module:format_field(V1, Format, M)
+                catch error:undef -> format_field(V1, Format, M) end
         end,
-    format2(Rest, Args, Module, [V | Acc]).
+    format2(Rest, Args, M, [V | Acc]).
 
 default_ctype(_Arg, C=#conversion{ctype=N}) when N =/= undefined ->
     C;
@@ -431,13 +431,13 @@ std_test() ->
     ok.
 
 records_test() ->
-    M = mochifmt_records:new([{conversion, record_info(fields, conversion)}]),
-    R = #conversion{length=long, precision=hard, sign=peace},
-    long = M:get_value("length", R),
-    hard = M:get_value("precision", R),
-    peace = M:get_value("sign", R),
-    <<"long hard">> = bformat("{length} {precision}", R, M),
-    <<"long hard">> = bformat("{0.length} {0.precision}", [R], M),
+    {M, _} = R = mochifmt_records:new([{conversion, record_info(fields, conversion)}]),
+    Rec = #conversion{length=long, precision=hard, sign=peace},
+    long = M:get_value("length", Rec, R),
+    hard = M:get_value("precision", Rec, R),
+    peace = M:get_value("sign", Rec, R),
+    <<"long hard">> = bformat("{length} {precision}", Rec, R),
+    <<"long hard">> = bformat("{0.length} {0.precision}", [Rec], R),
     ok.
 
 -endif.

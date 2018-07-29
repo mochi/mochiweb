@@ -91,9 +91,9 @@ end_to_end_test_factory(ServerTransport) ->
               end_to_end_client(mochiweb_test_util:sock_fun(Transport, Port))
       end).
 
-end_to_end_server(Req) ->
-    ?assertEqual("Upgrade", Req:get_header_value("connection")),
-    ?assertEqual("websocket", Req:get_header_value("upgrade")),
+end_to_end_server({Mod, _} = Req) ->
+    ?assertEqual("Upgrade", Mod:get_header_value("connection", Req)),
+    ?assertEqual("websocket", Mod:get_header_value("upgrade", Req)),
     {ReentryWs, _ReplyChannel} = mochiweb_websocket:upgrade_connection(
                                    Req,
                                    fun end_to_end_ws_loop/3),

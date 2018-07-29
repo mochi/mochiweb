@@ -426,7 +426,7 @@ ok({ContentType, Body}, {?MODULE, [_Socket, _Opts, _Method, _RawPath, _Version, 
     ok({ContentType, [], Body}, THIS);
 ok({ContentType, ResponseHeaders, Body}, {?MODULE, [_Socket, _Opts, _Method, _RawPath, _Version, _Headers]}=THIS) ->
     HResponse = mochiweb_headers:make(ResponseHeaders),
-    case THIS:get(range) of
+    case ?MODULE:get(range, THIS) of
         X when (X =:= undefined orelse X =:= fail) orelse Body =:= chunked ->
             %% http://code.google.com/p/mochiweb/issues/detail?id=54
             %% Range header not supported when chunked, return 200 and provide

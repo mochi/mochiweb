@@ -77,11 +77,11 @@ send(Socket, Payload, hybi) ->
 send(Socket, Payload, hixie) ->
     mochiweb_socket:send(Socket, [0, Payload, 255]).
 
-upgrade_connection(Req, Body) ->
+upgrade_connection({Mod, _} = Req, Body) ->
     case make_handshake(Req) of
         {Version, Response} ->
-            Req:respond(Response),
-            Socket = Req:get(socket),
+            Mod:respond(Response, Req),
+            Socket = Mod:get(socket, Req),
             ReplyChannel = fun (Payload) ->
                 ?MODULE:send(Socket, Payload, Version)
             end,
@@ -90,21 +90,21 @@ upgrade_connection(Req, Body) ->
             end,
             {Reentry, ReplyChannel};
         _ ->
-            mochiweb_socket:close(Req:get(socket)),
+            mochiweb_socket:close(Mod:get(socket, Req)),
             exit(normal)
     end.
 
-make_handshake(Req) ->
-    SecKey  = Req:get_header_value("sec-websocket-key"),
-    Sec1Key = Req:get_header_value("Sec-WebSocket-Key1"),
-    Sec2Key = Req:get_header_value("Sec-WebSocket-Key2"),
-    Origin = Req:get_header_value(origin),
+make_handshake({Mod, _} = Req) ->
+    SecKey  = Mod:get_header_value("sec-websocket-key", Req),
+    Sec1Key = Mod:get_header_value("Sec-WebSocket-Key1", Req),
+    Sec2Key = Mod:get_header_value("Sec-WebSocket-Key2", Req),
+    Origin = Mod:get_header_value(origin, Req),
     if SecKey =/= undefined ->
             hybi_handshake(SecKey);
        Sec1Key =/= undefined andalso Sec2Key =/= undefined ->
-            Host = Req:get_header_value("Host"),
-            Path = Req:get(path),
-            Body = Req:recv(8),
+            Host = Mod:get_header_value("Host", Req),
+            Path = Mod:get(path, Req),
+            Body = Mod:recv(8, Req),
             Scheme = scheme(Req),
             hixie_handshake(Scheme, Host, Path, Sec1Key, Sec2Key, Body, Origin);
        true ->

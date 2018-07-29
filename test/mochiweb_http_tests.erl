@@ -26,10 +26,10 @@ has_acceptor_bug_tests(Server) ->
      {"10000 should trigger the bug if present",
       ?_assertEqual(?SHOULD_HAVE_BUG, has_bug(Port, 10000))}].
 
-responder(Req) ->
-    Req:respond({200,
+responder({Mod, _} = Req) ->
+    Mod:respond({200,
                  [{"Content-Type", "text/html"}],
-                 ["<html><body>Hello</body></html>"]}).
+                 ["<html><body>Hello</body></html>"]}, Req).
 
 has_bug(Port, Len) ->
   case
