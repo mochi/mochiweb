@@ -52,6 +52,7 @@ cookie(Key, Value) ->
 %% where Option = {max_age, int_seconds()} | {local_time, {date(), time()}}
 %%                | {domain, string()} | {path, string()}
 %%                | {secure, true | false} | {http_only, true | false}
+%%                | {same_site, lax | strict}
 %%
 %% @doc Generate a Set-Cookie header field tuple.
 cookie(Key, Value, Options) ->
@@ -109,7 +110,17 @@ cookie(Key, Value, Options) ->
             _ ->
                 ""
         end,
-    CookieParts = [Cookie, ExpiresPart, SecurePart, DomainPart, PathPart, HttpOnlyPart],
+    SameSitePart =
+        case proplists:get_value(same_site, Options) of
+            undefined ->
+                "";
+            lax ->
+                "; SameSite=Lax";
+            strict ->
+                "; SameSite=Strict"
+        end,
+    CookieParts = [Cookie, ExpiresPart, SecurePart, DomainPart, PathPart,
+        HttpOnlyPart, SameSitePart],
     {"Set-Cookie", lists:flatten(CookieParts)}.
 
 
