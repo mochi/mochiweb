@@ -24,6 +24,9 @@
 %%
 -module(mochifmt).
 -author('bob@mochimedia.com').
+
+-compile(tuple_calls).
+
 -export([format/2, format_field/2, convert_field/2, get_value/2, get_field/2]).
 -export([tokenize/1, format/3, get_field/3, format_field/3]).
 -export([bformat/2, bformat/3]).

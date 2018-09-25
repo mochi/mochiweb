@@ -34,6 +34,8 @@
 
 -module(https_store).
 
+-compile(tuple_calls).
+
 -export([start/0,
          stop/0,
          dispatch/1,

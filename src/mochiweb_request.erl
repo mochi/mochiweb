@@ -24,6 +24,8 @@
 -module(mochiweb_request).
 -author('bob@mochimedia.com').
 
+-compile(tuple_calls).
+
 -include_lib("kernel/include/file.hrl").
 -include("internal.hrl").
 

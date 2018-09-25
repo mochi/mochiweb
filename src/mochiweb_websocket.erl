@@ -25,6 +25,8 @@
 
 %% @doc Websockets module for Mochiweb. Based on Misultin websockets module.
 
+-compile(tuple_calls).
+
 -export([loop/5, upgrade_connection/2, request/5]).
 -export([send/3]).
 -ifdef(TEST).

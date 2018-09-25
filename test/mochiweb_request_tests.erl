@@ -1,5 +1,7 @@
 -module(mochiweb_request_tests).
 
+-compile(tuple_calls).
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 

@@ -23,6 +23,8 @@
 %% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 %% THE SOFTWARE.
 
+-compile(tuple_calls).
+
 -include_lib("eunit/include/eunit.hrl").
 
 make_handshake_for_correct_client_test() ->
