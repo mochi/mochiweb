@@ -144,5 +144,7 @@ type(_) ->
 
 exit_if_closed({error, closed}) ->
     exit(normal);
+exit_if_closed({error, einval}) ->
+    exit(normal);
 exit_if_closed(Res) ->
     Res.
