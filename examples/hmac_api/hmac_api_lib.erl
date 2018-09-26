@@ -5,6 +5,8 @@
 
 -author("Hypernumbers Ltd <gordon@hypernumbers.com>").
 
+-compile(tuple_calls).
+
 %%% this library supports the hmac_sha api on both the client-side
 %%% AND the server-side
 %%%

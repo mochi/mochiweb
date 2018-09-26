@@ -28,6 +28,8 @@
 -export([after_response/2, reentry/1]).
 -export([parse_range_request/1, range_skip_length/2]).
 
+-compile(tuple_calls).
+
 -define(REQUEST_RECV_TIMEOUT, 300000).   %% timeout waiting for request line
 -define(HEADERS_RECV_TIMEOUT, 30000).    %% timeout waiting for headers
 
@@ -40,6 +42,8 @@ r15b_workaround() -> true.
 -else.
 r15b_workaround() -> false.
 -endif.
+
+
 
 parse_options(Options) ->
     {loop, HttpLoop} = proplists:lookup(loop, Options),

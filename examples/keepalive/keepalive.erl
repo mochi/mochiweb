@@ -1,5 +1,7 @@
 -module(keepalive).
 
+-compile(tuple_calls).
+
 %% your web app can push data to clients using a technique called comet long
 %% polling.  browsers make a request and your server waits to send a
 %% response until data is available.  see wikipedia for a better explanation:

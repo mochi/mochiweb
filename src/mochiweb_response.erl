@@ -24,6 +24,8 @@
 -module(mochiweb_response).
 -author('bob@mochimedia.com').
 
+-compile(tuple_calls).
+
 -define(QUIP, "Any of you quaids got a smint?").
 
 -export([new/3, get_header_value/2, get/2, dump/1]).

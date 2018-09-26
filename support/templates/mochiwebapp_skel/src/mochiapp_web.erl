@@ -6,6 +6,8 @@
 -module({{appid}}_web).
 -author("{{author}}").
 
+-compile(tuple_calls).
+
 -export([start/1, stop/0, loop/2]).
 
 %% External API

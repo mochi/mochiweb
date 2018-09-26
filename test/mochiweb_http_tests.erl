@@ -7,6 +7,8 @@
 -define(SHOULD_HAVE_BUG, false).
 -endif.
 
+-compile(tuple_calls).
+
 has_acceptor_bug_test_() ->
     {setup,
      fun start_server/0,

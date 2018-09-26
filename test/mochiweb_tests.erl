@@ -2,6 +2,8 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("mochiweb_test_util.hrl").
 
+-compile(tuple_calls).
+
 with_server(Transport, ServerFun, ClientFun) ->
     mochiweb_test_util:with_server(Transport, ServerFun, ClientFun).
 
