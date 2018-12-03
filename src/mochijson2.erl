@@ -125,10 +125,11 @@ decoder(Options) ->
     State = parse_decoder_options(Options, #decoder{}),
     fun (O) -> json_decode(O, State) end.
 
-%% @spec decode(iolist(), [{format, proplist | eep18 | struct}]) -> json_term()
+%% @spec decode(iolist(), [{format, proplist | eep18 | struct | map}]) -> json_term()
 %% @doc Decode the given iolist to Erlang terms using the given object format
 %%      for decoding, where proplist returns JSON objects as [{binary(), json_term()}]
-%%      proplists, eep18 returns JSON objects as {[binary(), json_term()]}, and struct
+%%      proplists, eep18 returns JSON objects as {[binary(), json_term()]},
+%%      map returns JSON objects as #{binary() => json_term()}, and struct
 %%      returns them as-is.
 decode(S, Options) ->
     json_decode(S, parse_decoder_options(Options, #decoder{})).
@@ -151,9 +152,20 @@ parse_decoder_options([], State) ->
     State;
 parse_decoder_options([{object_hook, Hook} | Rest], State) ->
     parse_decoder_options(Rest, State#decoder{object_hook=Hook});
+parse_decoder_options([{format, map} | Rest], State) ->
+    Hook = make_object_hook_for_map(),
+    parse_decoder_options(Rest, State#decoder{object_hook=Hook});
 parse_decoder_options([{format, Format} | Rest], State)
   when Format =:= struct orelse Format =:= eep18 orelse Format =:= proplist ->
     parse_decoder_options(Rest, State#decoder{object_hook=Format}).
+
+-ifdef(map_unavailable).
+make_object_hook_for_map() ->
+    exit({json_decode, {bad_format, map_unavailable}}).
+-else.
+make_object_hook_for_map() ->
+    fun ({struct, P}) -> maps:from_list(P) end.
+-endif.
 
 
 json_encode(true, _State) ->
@@ -966,6 +978,11 @@ utf8_non_character_test_() ->
      {"roundtrip utf8", ?_assertEqual(S, decode((encoder([{utf8, true}]))(S)))}].
 
 -ifndef(map_unavailable).
+
+decode_map_test() ->
+    Json = "{\"var1\": 3, \"var2\": {\"var3\": 7}}",
+    M = #{<<"var1">> => 3,<<"var2">> => #{<<"var3">> => 7}},
+    ?assertEqual(M, decode(Json, [{format, map}])).
 
 encode_map_test() ->
     M = <<"{\"a\":1,\"b\":{\"c\":2}}">>,
