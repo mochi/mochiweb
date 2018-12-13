@@ -23,6 +23,7 @@
          listen=null,
          nodelay=false,
          recbuf=?RECBUF_SIZE,
+         buffer=undefined,
          backlog=128,
          active_sockets=0,
          acceptor_pool_size=16,
@@ -132,6 +133,15 @@ parse_options([{recbuf, RecBuf} | Rest], State) when is_integer(RecBuf) orelse
     %% In case undefined is passed instead of the default buffer
     %% size ?RECBUF_SIZE, no size is set and the OS can control it dynamically
     parse_options(Rest, State#mochiweb_socket_server{recbuf=RecBuf});
+parse_options([{buffer, Buffer} | Rest], State) when is_integer(Buffer) orelse
+                                                Buffer == undefined ->
+    %% `buffer` sets Erlang's userland socket buffer size. The size of this
+    %% buffer affects the maximum URL path that can be parsed. URL sizes that
+    %% are larger than this plus the size of the HTTP verb and some whitespace
+    %% will result in an `emsgsize` TCP error.
+    %%
+    %% If this value is not set Erlang sets it to 1460 which might be too low.
+    parse_options(Rest, State#mochiweb_socket_server{buffer=Buffer});
 parse_options([{acceptor_pool_size, Max} | Rest], State) ->
     MaxInt = ensure_int(Max),
     parse_options(Rest,
@@ -179,7 +189,8 @@ ipv6_supported() ->
     end.
 
 init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog,
-                                   nodelay=NoDelay, recbuf=RecBuf}) ->
+                                   nodelay=NoDelay, recbuf=RecBuf,
+                                   buffer=Buffer}) ->
     process_flag(trap_exit, true),
 
     BaseOpts = [binary,
@@ -200,13 +211,27 @@ init(State=#mochiweb_socket_server{ip=Ip, port=Port, backlog=Backlog,
         {_, _, _, _, _, _, _, _} -> % IPv6
             [inet6, {ip, Ip} | BaseOpts]
     end,
-    OptsBuf=case RecBuf of
-        undefined ->
-            Opts;
-        _ ->
-            [{recbuf, RecBuf}|Opts]
-    end,
+    OptsBuf = set_buffer_opts(RecBuf, Buffer, Opts),
     listen(Port, OptsBuf, State).
+
+
+set_buffer_opts(undefined, undefined, Opts) ->
+    % If recbuf is undefined, user space buffer is set to the default 1460
+    % value. That unexpectedly break the {packet, http} parser and any URL
+    % lines longer than 1460 would error out with emsgsize. So when recbuf is
+    % undefined, use previous value of recbuf for buffer in order to keep older
+    % code from breaking.
+    [{buffer, ?RECBUF_SIZE} | Opts];
+set_buffer_opts(RecBuf, undefined, Opts) ->
+    [{recbuf, RecBuf} | Opts];
+set_buffer_opts(undefined, Buffer, Opts) ->
+    [{buffer, Buffer} | Opts];
+set_buffer_opts(RecBuf, Buffer, Opts) ->
+    % Note: order matters, recbuf will override buffer unless buffer value
+    % comes first, except on older versions of Erlang (ex. 17.0) where it works
+    % exactly the opposite.
+    [{buffer, Buffer}, {recbuf, RecBuf} | Opts].
+
 
 new_acceptor_pool(State=#mochiweb_socket_server{acceptor_pool_size=Size}) ->
     lists:foldl(fun (_, S) -> new_acceptor(S) end, State, lists:seq(1, Size)).
@@ -390,5 +415,12 @@ upgrade_state_test() ->
                                        acceptor_pool=acceptor_pool,
                                        profile_fun=undefined},
     ?assertEqual(CmpState, State).
+
+
+set_buffer_opts_test() ->
+    ?assertEqual([{buffer, 8192}], set_buffer_opts(undefined, undefined, [])),
+    ?assertEqual([{recbuf, 5}], set_buffer_opts(5, undefined, [])),
+    ?assertEqual([{buffer, 6}], set_buffer_opts(undefined, 6, [])),
+    ?assertEqual([{buffer, 6}, {recbuf, 5}], set_buffer_opts(5, 6, [])).
 
 -endif.
