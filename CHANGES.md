@@ -1,5 +1,8 @@
-Version 2.19.0 released 2019-XX-XX
+Version 2.19.0 released 2019-01-XX
 
+* Fix warning in 21.2.3 and crash on incompatible releases
+  (21.2, 21.2.1, 21.2.2 have a SSL bug)
+  https://github.com/mochi/mochiweb/pull/210
 * Erlang/OTP 21 compatibility
   https://github.com/mochi/mochiweb/pull/198
   https://github.com/mochi/mochiweb/pull/204
