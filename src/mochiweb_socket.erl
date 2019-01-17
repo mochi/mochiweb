@@ -87,6 +87,7 @@ transport_accept({ssl, ListenSocket}) ->
 transport_accept(ListenSocket) ->
     gen_tcp:accept(ListenSocket, ?ACCEPT_TIMEOUT).
 
+-ifdef(ssl_handshake_unavailable).
 finish_accept({ssl, Socket}) ->
     case ssl:ssl_accept(Socket, ?SSL_HANDSHAKE_TIMEOUT) of
         ok ->
@@ -96,6 +97,17 @@ finish_accept({ssl, Socket}) ->
     end;
 finish_accept(Socket) ->
     {ok, Socket}.
+-else.
+finish_accept({ssl, Socket}) ->
+    case ssl:handshake(Socket, ?SSL_HANDSHAKE_TIMEOUT) of
+        {ok, SslSocket} ->
+            {ok, {ssl, SslSocket}};
+        {error, _} = Err ->
+            Err
+    end;
+finish_accept(Socket) ->
+    {ok, Socket}.
+-endif.
 
 recv({ssl, Socket}, Length, Timeout) ->
     ssl:recv(Socket, Length, Timeout);

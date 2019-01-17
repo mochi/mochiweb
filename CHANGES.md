@@ -1,3 +1,19 @@
+Version 2.19.0 released 2019-01-17
+
+* Fix warning in 21.2.3 and crash on incompatible releases
+  (21.2, 21.2.1, 21.2.2 have a SSL bug)
+  https://github.com/mochi/mochiweb/pull/210
+* Erlang/OTP 21 compatibility
+  https://github.com/mochi/mochiweb/pull/198
+  https://github.com/mochi/mochiweb/pull/204
+* New `{buffer, Buffer}` socket server option
+  https://github.com/mochi/mochiweb/pull/208
+* New `{format, map}` option for mochijson2:decode/2
+  https://github.com/mochi/mochiweb/pull/206
+* No longer crash when a socket is closed server-side
+  https://github.com/mochi/mochiweb/pull/205
+* Support for SameSite cookie setting
+
 Version 2.18.0 released 2018-05-12
 
 * Add the 100.64.0.0/10 private IP shared address range
