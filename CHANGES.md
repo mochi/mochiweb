@@ -1,4 +1,4 @@
-Version 2.19.0 released 2019-01-XX
+Version 2.19.0 released 2019-01-17
 
 * Fix warning in 21.2.3 and crash on incompatible releases
   (21.2, 21.2.1, 21.2.2 have a SSL bug)
