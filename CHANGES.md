@@ -13,6 +13,7 @@ Version 2.19.0 released 2019-01-17
 * No longer crash when a socket is closed server-side
   https://github.com/mochi/mochiweb/pull/205
 * Support for SameSite cookie setting
+  https://github.com/mochi/mochiweb/pull/203
 
 Version 2.18.0 released 2018-05-12
 
