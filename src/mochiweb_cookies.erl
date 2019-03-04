@@ -39,6 +39,19 @@
          C =:= $[ orelse C =:= $] orelse C =:= $? orelse C =:= $= orelse
          C =:= ${ orelse C =:= $})).
 
+%% RFC 6265 cookie value allowed characters
+%%  cookie-octet      = %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+%%                        ; US-ASCII characters excluding CTLs,
+%%                        ; whitespace DQUOTE, comma, semicolon,
+%%                        ; and backslash
+-define(IS_COOKIE_OCTET(C),
+        (C =:= 16#21
+         orelse (C >= 16#23 andalso C =< 16#2B)
+         orelse (C >= 16#2D andalso C =< 16#3A)
+         orelse (C >= 16#3C andalso C =< 16#5B)
+         orelse (C >= 16#5D andalso C =< 16#7E)
+        )).
+
 %% @type proplist() = [{Key::string(), Value::string()}].
 %% @type header() = {Name::string(), Value::string()}.
 %% @type int_seconds() = integer().
@@ -208,10 +221,14 @@ read_value([$= | Value]) ->
         [?QUOTE | _] ->
             read_quoted(Value1);
         _ ->
-            read_token(Value1)
+            read_value_(Value1)
     end;
 read_value(String) ->
     {"", String}.
+
+read_value_(String) ->
+    F = fun (C) -> ?IS_COOKIE_OCTET(C) end,
+    lists:splitwith(F, String).
 
 read_quoted([?QUOTE | String]) ->
     read_quoted(String, []).
@@ -302,6 +319,12 @@ parse_cookie_test() ->
     ?assertEqual(
        [{"foo", "bar"}, {"baz", "wibble"}],
        parse_cookie("foo=bar , baz=wibble ")),
+    ?assertEqual(
+       [{"foo", "base64=="}, {"bar", "base64="}],
+       parse_cookie("foo=\"base64==\";bar=\"base64=\"")),
+    ?assertEqual(
+       [{"foo", "base64=="}, {"bar", "base64="}],
+       parse_cookie("foo=base64==;bar=base64=")),
     ok.
 
 domain_test() ->

@@ -1,3 +1,8 @@
+Version 2.20.0 released 2019-XX-XX
+
+* Fix parsing of certain unquoted cookie values
+  https://github.com/mochi/mochiweb/pull/212
+
 Version 2.19.0 released 2019-01-17
 
 * Fix warning in 21.2.3 and crash on incompatible releases
