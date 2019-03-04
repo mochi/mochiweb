@@ -40,12 +40,17 @@
          C =:= ${ orelse C =:= $})).
 
 %% RFC 6265 cookie value allowed characters
--define(IS_COOKIE_VAL_ALLOWED(C),
-        (C =:= 33
-         orelse (C >= 35 andalso C =< 43)
-         orelse (C >= 45 andalso C =< 58)
-         orelse (C >= 60 andalso C =< 91)
-         orelse (C >= 93 andalso C =< 126))).
+%%  cookie-octet      = %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+%%                        ; US-ASCII characters excluding CTLs,
+%%                        ; whitespace DQUOTE, comma, semicolon,
+%%                        ; and backslash
+-define(IS_COOKIE_OCTET(C),
+        (C =:= 16#21
+         orelse (C >= 16#23 andalso C =< 16#2B)
+         orelse (C >= 16#2D andalso C =< 16#3A)
+         orelse (C >= 16#3C andalso C =< 16#5B)
+         orelse (C >= 16#5D andalso C =< 16#7E)
+        )).
 
 %% @type proplist() = [{Key::string(), Value::string()}].
 %% @type header() = {Name::string(), Value::string()}.
@@ -222,7 +227,7 @@ read_value(String) ->
     {"", String}.
 
 read_value_(String) ->
-    F = fun (C) -> ?IS_COOKIE_VAL_ALLOWED(C) end,
+    F = fun (C) -> ?IS_COOKIE_OCTET(C) end,
     lists:splitwith(F, String).
 
 read_quoted([?QUOTE | String]) ->
