@@ -140,10 +140,69 @@ normal_acceptor_test_fun() ->
              ?assertEqual(Expected, Result)
      end || {Max, PoolSize, NumClients, Expected} <- Tests].
 
+graceful_shutdown_test_fun(ShutDownDelay) ->
+    Tester = self(),
+    NumClients = 2,
+    ServerOpts = [{max, NumClients}, {acceptor_pool_size, NumClients}],
+    ServerLoop =
+        fun (Socket, _Opts) ->
+                Tester ! {server_accepted, self()},
+                mochiweb_socket:setopts(Socket, [{packet, 1}]),
+                echo_loop(Socket)
+        end,
+    {Server, Port} = socket_server(ServerOpts, ServerLoop),
+    Data = <<"data">>,
+    ClientCmds = [{send_pid, Tester}, {wait_msg, go},
+                  {send, Data, Tester},
+                  {close_sock}, {send_msg, done, Tester}],
+    start_client_conns(Port, NumClients, fun client_fun/2, ClientCmds, Tester),
+
+   ConnectLoop =
+        fun (Loop, Connected, Accepted, Errors) ->
+                case (length(Accepted) + Errors >= NumClients
+                        andalso length(Connected) + Errors >= NumClients) of
+                    true -> {Connected, Accepted};
+                    false ->
+                        receive
+                            {server_accepted, ServerPid} ->
+                                Loop(Loop, Connected, [ServerPid | Accepted], Errors);
+                            {client, ClientPid} ->
+                                Loop(Loop, Connected ++ [ClientPid], Accepted, Errors);
+                            {client_conn_error, _E} ->
+                                Loop(Loop, Connected, Accepted, Errors + 1)
+                        end
+                end
+        end,
+    {Connected, _} = ConnectLoop(ConnectLoop, [], [], 0),
+
+    spawn(mochiweb_socket_server, stop, [Server, ShutDownDelay]),
+
+    WaitLoop =
+        fun (_Loop, Done, Error, []) ->
+            {Done, Error};
+        (Loop, Done, Error, [NextClient | Rest]) ->
+            NextClient ! go,
+            receive
+                {done, From} ->
+                    Loop(Loop, [From | Done], Error, Rest);
+                E ->
+                    Loop(Loop, Done, [E | Error], Rest)
+            end
+        end,
+
+    {Done, Error} = WaitLoop(WaitLoop, [], [], Connected),
+    ?assertEqual(NumClients, length(Done)),
+    ?assertEqual([], Error).
+
+
 -define(LARGE_TIMEOUT, 40).
 
 normal_acceptor_test_() ->
     Tests = normal_acceptor_test_fun(),
     {timeout, ?LARGE_TIMEOUT, Tests}.
+
+
+graceful_shutdown_test_() ->
+    {timeout, ?LARGE_TIMEOUT, [fun() -> graceful_shutdown_test_fun(?LARGE_TIMEOUT - 1) end]}.
 
 -endif.

@@ -9,7 +9,7 @@
 
 -include("internal.hrl").
 
--export([start/1, start_link/1, stop/1]).
+-export([start/1, start_link/1, stop/1, stop/2]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2, code_change/3,
          handle_info/2]).
 -export([get/2, set/3]).
@@ -30,7 +30,8 @@
          ssl=false,
          ssl_opts=[{ssl_imp, new}],
          acceptor_pool=sets:new(),
-         profile_fun=undefined}).
+         profile_fun=undefined,
+         shutdown_notify_pid=undefined}).
 
 -define(is_old_state(State), not is_record(State, mochiweb_socket_server)).
 
@@ -61,12 +62,15 @@ set(Name, Property, _Value) ->
                           [Name, Property]).
 
 stop(Name) when is_atom(Name) orelse is_pid(Name) ->
-    gen_server:call(Name, stop);
+  gen_server:call(Name, stop);
 stop({Scope, Name}) when Scope =:= local orelse Scope =:= global ->
     stop(Name);
 stop(Options) ->
     State = parse_options(Options),
     stop(State#mochiweb_socket_server.name).
+stop(Name, Timeout) when is_atom(Name) orelse is_pid(Name) andalso is_integer(Timeout) ->
+    gen_server:call(Name, prep_stop, Timeout),
+    gen_server:call(Name, stop).
 
 %% Internal API
 
@@ -155,7 +159,9 @@ parse_options([{ssl_opts, SslOpts} | Rest], State) when is_list(SslOpts) ->
     SslOpts1 = [{ssl_imp, new} | proplists:delete(ssl_imp, SslOpts)],
     parse_options(Rest, State#mochiweb_socket_server{ssl_opts=SslOpts1});
 parse_options([{profile_fun, ProfileFun} | Rest], State) when is_function(ProfileFun) ->
-    parse_options(Rest, State#mochiweb_socket_server{profile_fun=ProfileFun}).
+    parse_options(Rest, State#mochiweb_socket_server{profile_fun=ProfileFun});
+parse_options([{shutdown_notify_pid, NotifyPid} | Rest], State) when is_pid(NotifyPid) ->
+    parse_options(Rest, State#mochiweb_socket_server{shutdown_notify_pid=NotifyPid}).
 
 
 start_server(F, State=#mochiweb_socket_server{ssl=Ssl, name=Name}) ->
@@ -305,6 +311,11 @@ handle_call({get, Property}, _From, State) ->
     {reply, Res, State};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
+handle_call(prep_stop, From, State) ->
+    close_listen_socket(State),
+    State1 = State#mochiweb_socket_server{shutdown_notify_pid=From, acceptor_pool_size=0},
+    % Reply will be given when active_socket count goes to 0
+    {noreply, State1};
 handle_call(_Message, _From, State) ->
     Res = error,
     {reply, Res, State}.
@@ -334,7 +345,10 @@ handle_cast({set, profile_fun, ProfileFun}, State) ->
 
 terminate(Reason, State) when ?is_old_state(State) ->
     terminate(Reason, upgrade_state(State));
-terminate(_Reason, #mochiweb_socket_server{listen=Listen}) ->
+terminate(_Reason, State) ->
+    close_listen_socket(State).
+
+close_listen_socket(#mochiweb_socket_server{listen=Listen}) ->
     mochiweb_socket:close(Listen).
 
 code_change(_OldVsn, State, _Extra) ->
@@ -344,7 +358,8 @@ recycle_acceptor(Pid, State=#mochiweb_socket_server{
                         acceptor_pool=Pool,
                         acceptor_pool_size=PoolSize,
                         max=Max,
-                        active_sockets=ActiveSockets}) ->
+                        active_sockets=ActiveSockets,
+                        shutdown_notify_pid=NotifyPid}) ->
     %% A socket is considered to be active from immediately after it
     %% has been accepted (see the {accepted, Pid, Timing} cast above).
     %% This function will be called when an acceptor is transitioning
@@ -362,6 +377,12 @@ recycle_acceptor(Pid, State=#mochiweb_socket_server{
     State1 = State#mochiweb_socket_server{
                acceptor_pool=Pool1,
                active_sockets=ActiveSockets1},
+    case NotifyPid of
+      undefined -> ok;
+      _         -> if ActiveSockets1 =< 0 -> gen_server:reply(NotifyPid, ok);
+                      true -> error_logger:info_msg("~p clients outstanding",[ActiveSockets1])
+                   end
+    end,
     %% Spawn a new acceptor only if it will not overrun the maximum socket
     %% count or the maximum pool size.
     case NewSize + ActiveSockets1 < Max andalso NewSize < PoolSize of
@@ -403,8 +424,6 @@ handle_info(Info, State) ->
     error_logger:info_report([{'INFO', Info}, {'State', State}]),
     {noreply, State}.
 
-
-
 %%
 %% Tests
 %%
@@ -428,7 +447,8 @@ upgrade_state_test() ->
                                        acceptor_pool_size=acceptor_pool_size,
                                        ssl=ssl, ssl_opts=ssl_opts,
                                        acceptor_pool=acceptor_pool,
-                                       profile_fun=undefined},
+                                       profile_fun=undefined,
+                                       shutdown_notify_pid=undefined},
     ?assertEqual(CmpState, State).
 
 
