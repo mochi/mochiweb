@@ -39,6 +39,14 @@
          C =:= $[ orelse C =:= $] orelse C =:= $? orelse C =:= $= orelse
          C =:= ${ orelse C =:= $})).
 
+%% RFC 6265 cookie value allowed characters
+-define(IS_COOKIE_VAL_ALLOWED(C),
+        (C =:= 33
+         orelse (C >= 35 andalso C =< 43)
+         orelse (C >= 45 andalso C =< 58)
+         orelse (C >= 60 andalso C =< 91)
+         orelse (C >= 93 andalso C =< 126))).
+
 %% @type proplist() = [{Key::string(), Value::string()}].
 %% @type header() = {Name::string(), Value::string()}.
 %% @type int_seconds() = integer().
@@ -208,10 +216,14 @@ read_value([$= | Value]) ->
         [?QUOTE | _] ->
             read_quoted(Value1);
         _ ->
-            read_token(Value1)
+            read_value_(Value1)
     end;
 read_value(String) ->
     {"", String}.
+
+read_value_(String) ->
+    F = fun (C) -> ?IS_COOKIE_VAL_ALLOWED(C) end,
+    lists:splitwith(F, String).
 
 read_quoted([?QUOTE | String]) ->
     read_quoted(String, []).
@@ -302,6 +314,12 @@ parse_cookie_test() ->
     ?assertEqual(
        [{"foo", "bar"}, {"baz", "wibble"}],
        parse_cookie("foo=bar , baz=wibble ")),
+    ?assertEqual(
+       [{"foo", "base64=="}, {"bar", "base64="}],
+       parse_cookie("foo=\"base64==\";bar=\"base64=\"")),
+    ?assertEqual(
+       [{"foo", "base64=="}, {"bar", "base64="}],
+       parse_cookie("foo=base64==;bar=base64=")),
     ok.
 
 domain_test() ->
