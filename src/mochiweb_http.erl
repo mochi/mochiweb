@@ -28,8 +28,6 @@
 -export([after_response/2, reentry/1]).
 -export([parse_range_request/1, range_skip_length/2]).
 
--compile(tuple_calls).
-
 -define(REQUEST_RECV_TIMEOUT, 300000).   %% timeout waiting for request line
 -define(HEADERS_RECV_TIMEOUT, 30000).    %% timeout waiting for headers
 
@@ -76,7 +74,7 @@ start_link(Options) ->
     ok = ensure_started(mochiweb_clock),
     mochiweb_socket_server:start_link(parse_options(Options)).
 
-ensure_started(M) ->
+ensure_started(M) when is_atom(M) ->
     case M:start() of
         {ok, _Pid} ->
             ok;
@@ -140,9 +138,9 @@ headers(Socket, Opts, Request, Headers, Body, HeaderCount) ->
         exit(normal)
     end.
 
-call_body({M, F, A}, Req) ->
+call_body({M, F, A}, Req) when is_atom(M) ->
     erlang:apply(M, F, [Req | A]);
-call_body({M, F}, Req) ->
+call_body({M, F}, Req) when is_atom(M) ->
     M:F(Req);
 call_body(Body, Req) ->
     Body(Req).
@@ -164,8 +162,8 @@ handle_invalid_msg_request(Msg, Socket, Opts, Request, RevHeaders) ->
 
 -spec handle_invalid_request(term(), term(), term(), term()) -> no_return().
 handle_invalid_request(Socket, Opts, Request, RevHeaders) ->
-    Req = new_request(Socket, Opts, Request, RevHeaders),
-    Req:respond({400, [], []}),
+    {ReqM, _} = Req = new_request(Socket, Opts, Request, RevHeaders),
+    ReqM:respond({400, [], []}, Req),
     mochiweb_socket:close(Socket),
     exit(normal).
 
@@ -173,14 +171,14 @@ new_request(Socket, Opts, Request, RevHeaders) ->
     ok = mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket, [{packet, raw}])),
     mochiweb:new_request({Socket, Opts, Request, lists:reverse(RevHeaders)}).
 
-after_response(Body, Req) ->
-    Socket = Req:get(socket),
-    case Req:should_close() of
+after_response(Body, {ReqM, _} = Req) ->
+    Socket = ReqM:get(socket, Req),
+    case ReqM:should_close(Req) of
         true ->
             mochiweb_socket:close(Socket),
             exit(normal);
         false ->
-            Req:cleanup(),
+            ReqM:cleanup(Req),
             erlang:garbage_collect(),
             ?MODULE:loop(Socket, mochiweb_request:get(opts, Req), Body)
     end.
