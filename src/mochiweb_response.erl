@@ -24,8 +24,6 @@
 -module(mochiweb_response).
 -author('bob@mochimedia.com').
 
--compile(tuple_calls).
-
 -define(QUIP, "Any of you quaids got a smint?").
 
 -export([new/3, get_header_value/2, get/2, dump/1]).
@@ -56,26 +54,26 @@ get(headers, {?MODULE, [_Request, _Code, Headers]}) ->
 %% @spec dump(response()) -> {mochiweb_request, [{atom(), term()}]}
 %% @doc Dump the internal representation to a "human readable" set of terms
 %%      for debugging/inspection purposes.
-dump({?MODULE, [Request, Code, Headers]}) ->
-    [{request, Request:dump()},
+dump({?MODULE, [{ReqM, _} = Request, Code, Headers]}) ->
+    [{request, ReqM:dump(Request)},
      {code, Code},
      {headers, mochiweb_headers:to_list(Headers)}].
 
 %% @spec send(iodata(), response()) -> ok
 %% @doc Send data over the socket if the method is not HEAD.
-send(Data, {?MODULE, [Request, _Code, _Headers]}) ->
-    case Request:get(method) of
+send(Data, {?MODULE, [{ReqM, _} = Request, _Code, _Headers]}) ->
+    case ReqM:get(method, Request) of
         'HEAD' ->
             ok;
         _ ->
-            Request:send(Data)
+            ReqM:send(Data, Request)
     end.
 
 %% @spec write_chunk(iodata(), response()) -> ok
 %% @doc Write a chunk of a HTTP chunked response. If Data is zero length,
 %%      then the chunked response will be finished.
-write_chunk(Data, {?MODULE, [Request, _Code, _Headers]}=THIS) ->
-    case Request:get(version) of
+write_chunk(Data, {?MODULE, [{ReqM, _} = Request, _Code, _Headers]}=THIS) ->
+    case ReqM:get(version, Request) of
         Version when Version >= {1, 1} ->
             Length = iolist_size(Data),
             send([io_lib:format("~.16b\r\n", [Length]), Data, <<"\r\n">>], THIS);
