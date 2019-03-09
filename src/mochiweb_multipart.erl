@@ -24,8 +24,6 @@
 -module(mochiweb_multipart).
 -author('bob@mochimedia.com').
 
--compile(tuple_calls).
-
 -export([parse_form/1, parse_form/2]).
 -export([parse_multipart_request/2]).
 -export([parts_to_body/3, parts_to_multipart_body/4]).
@@ -146,11 +144,11 @@ default_file_handler_1(Filename, ContentType, Acc) ->
             default_file_handler_1(Filename, ContentType, [Next | Acc])
     end.
 
-parse_multipart_request(Req, Callback) ->
+parse_multipart_request({ReqM, _} = Req, Callback) ->
     %% TODO: Support chunked?
-    Length = list_to_integer(Req:get_combined_header_value("content-length")),
+    Length = list_to_integer(ReqM:get_combined_header_value("content-length", Req)),
     Boundary = iolist_to_binary(
-                 get_boundary(Req:get_header_value("content-type"))),
+                 get_boundary(ReqM:get_header_value("content-type", Req))),
     Prefix = <<"\r\n--", Boundary/binary>>,
     BS = byte_size(Boundary),
     Chunk = read_chunk(Req, Length),
@@ -182,12 +180,12 @@ split_header(Line) ->
     {string:to_lower(string:strip(Name)),
      mochiweb_util:parse_header(Value)}.
 
-read_chunk(Req, Length) when Length > 0 ->
+read_chunk({ReqM, _} = Req, Length) when Length > 0 ->
     case Length of
         Length when Length < ?CHUNKSIZE ->
-            Req:recv(Length);
+            ReqM:recv(Length, Req);
         _ ->
-            Req:recv(?CHUNKSIZE)
+            ReqM:recv(?CHUNKSIZE, Req)
     end.
 
 read_more(State=#mp{length=Length, buffer=Buffer, req=Req}) ->
