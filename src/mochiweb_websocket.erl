@@ -25,8 +25,6 @@
 
 %% @doc Websockets module for Mochiweb. Based on Misultin websockets module.
 
--compile(tuple_calls).
-
 -export([loop/5, upgrade_connection/2, request/5]).
 -export([send/3]).
 -ifdef(TEST).
@@ -79,11 +77,11 @@ send(Socket, Payload, hybi) ->
 send(Socket, Payload, hixie) ->
     mochiweb_socket:send(Socket, [0, Payload, 255]).
 
-upgrade_connection(Req, Body) ->
+upgrade_connection({ReqM, _} = Req, Body) ->
     case make_handshake(Req) of
         {Version, Response} ->
-            Req:respond(Response),
-            Socket = Req:get(socket),
+            ReqM:respond(Response, Req),
+            Socket = ReqM:get(socket, Req),
             ReplyChannel = fun (Payload) ->
                 ?MODULE:send(Socket, Payload, Version)
             end,
@@ -92,21 +90,21 @@ upgrade_connection(Req, Body) ->
             end,
             {Reentry, ReplyChannel};
         _ ->
-            mochiweb_socket:close(Req:get(socket)),
+            mochiweb_socket:close(ReqM:get(socket, Req)),
             exit(normal)
     end.
 
-make_handshake(Req) ->
-    SecKey  = Req:get_header_value("sec-websocket-key"),
-    Sec1Key = Req:get_header_value("Sec-WebSocket-Key1"),
-    Sec2Key = Req:get_header_value("Sec-WebSocket-Key2"),
-    Origin = Req:get_header_value(origin),
+make_handshake({ReqM, _} = Req) ->
+    SecKey  = ReqM:get_header_value("sec-websocket-key", Req),
+    Sec1Key = ReqM:get_header_value("Sec-WebSocket-Key1", Req),
+    Sec2Key = ReqM:get_header_value("Sec-WebSocket-Key2", Req),
+    Origin = ReqM:get_header_value(origin, Req),
     if SecKey =/= undefined ->
             hybi_handshake(SecKey);
        Sec1Key =/= undefined andalso Sec2Key =/= undefined ->
-            Host = Req:get_header_value("Host"),
-            Path = Req:get(path),
-            Body = Req:recv(8),
+            Host = ReqM:get_header_value("Host", Req),
+            Path = ReqM:get(path, Req),
+            Body = ReqM:recv(8, Req),
             Scheme = scheme(Req),
             hixie_handshake(Scheme, Host, Path, Sec1Key, Sec2Key, Body, Origin);
        true ->
