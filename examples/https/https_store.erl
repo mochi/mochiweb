@@ -34,8 +34,6 @@
 
 -module(https_store).
 
--compile(tuple_calls).
-
 -export([start/0,
          stop/0,
          dispatch/1,
@@ -77,7 +75,7 @@ stop() ->
     ok.
 
 dispatch(Req) ->
-    case Req:get(method) of
+    case mochiweb_request:get(method, Req) of
         'GET' ->
             get_resource(Req);
         'PUT' ->
@@ -86,41 +84,41 @@ dispatch(Req) ->
             delete_resource(Req);
         _ ->
             Headers = [{"Allow", "GET,PUT,DELETE"}],
-            Req:respond({405, Headers, "405 Method Not Allowed\r\n"})
+            mochiweb_request:respond({405, Headers, "405 Method Not Allowed\r\n"}, Req)
     end.
 
 get_resource(Req) ->
-    Path = Req:get(path),
+    Path = mochiweb_request:get(path, Req),
     case ets:lookup(?MODULE, Path) of
         [{Path, #resource{type=Type, data=Data}}] ->
-            Req:ok({Type, Data});
+            mochiweb_request:ok({Type, Data}, Req);
         [] ->
-            Req:respond({404, [], "404 Not Found\r\n"})
+            mochiweb_request:respond({404, [], "404 Not Found\r\n"}, Req)
     end.
 
 put_resource(Req) ->
-    ContentType = case Req:get_header_value("Content-Type") of
+    ContentType = case mochiweb_request:get_header_value("Content-Type", Req) of
         undefined ->
             "application/octet-stream";
         S ->
             S
     end,
-    Resource = #resource{type=ContentType, data=Req:recv_body()},
-    http_store ! {self(), {put, Req:get(path), Resource}},
+    Resource = #resource{type=ContentType, data=mochiweb_request:recv_body(Req)},
+    http_store ! {self(), {put, mochiweb_request:get(path, Req), Resource}},
     Pid = whereis(http_store),
     receive
         {Pid, created} ->
-            Req:respond({201, [], "201 Created\r\n"});
+            mochiweb_request:respond({201, [], "201 Created\r\n"}, Req);
         {Pid, updated} ->
-            Req:respond({200, [], "200 OK\r\n"})
+            mochiweb_request:respond({200, [], "200 OK\r\n"}, Req)
     end.
 
 delete_resource(Req) ->
-    http_store ! {self(), {delete, Req:get(path)}},
+    http_store ! {self(), {delete, mochiweb_request:get(path, Req)}},
     Pid = whereis(http_store),
     receive
         {Pid, ok} ->
-            Req:respond({200, [], "200 OK\r\n"})
+            mochiweb_request:respond({200, [], "200 OK\r\n"}, Req)
     end.
 
 loop(#sd{http=Http, https=Https} = SD) ->
