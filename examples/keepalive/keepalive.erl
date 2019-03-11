@@ -1,7 +1,5 @@
 -module(keepalive).
 
--compile(tuple_calls).
-
 %% your web app can push data to clients using a technique called comet long
 %% polling.  browsers make a request and your server waits to send a
 %% response until data is available.  see wikipedia for a better explanation:
@@ -33,7 +31,7 @@ start(Options = [{port, _Port}]) ->
     mochiweb_http:start([{name, ?MODULE}, {loop, ?LOOP} | Options]).
 
 loop(Req) ->
-    Path = Req:get(path),
+    Path = mochiweb_request:get(path, Req),
     case string:tokens(Path, "/") of
         ["longpoll" | RestOfPath] ->
             %% the "reentry" is a continuation -- what @mochiweb_http@
@@ -74,10 +72,10 @@ resume(Req, RestOfPath, Reentry) ->
     %% if we didn't call @Reentry@ here then the function would finish and the
     %% process would exit.  calling @Reentry@ takes care of returning control
     %% to @mochiweb_http@
-    io:format("reentering loop via continuation in ~p~n", [Req:get(path)]),
+    io:format("reentering loop via continuation in ~p~n", [mochiweb_request:get(path, Req)]),
     Reentry(Req).
 
 ok(Req, Response) ->
-    Req:ok({_ContentType = "text/plain",
-            _Headers = [],
-            Response}).
+    mochiweb_request:ok(
+        {_ContentType = "text/plain", _Headers = [], Response},
+        Req).
