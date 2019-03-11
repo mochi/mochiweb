@@ -5,8 +5,6 @@
 
 -author("Hypernumbers Ltd <gordon@hypernumbers.com>").
 
--compile(tuple_calls).
-
 %%% this library supports the hmac_sha api on both the client-side
 %%% AND the server-side
 %%%
@@ -36,9 +34,9 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 authorize_request(Req) ->
-    Method      = Req:get(method),
-    Path        = Req:get(path),
-    Headers     = normalise(mochiweb_headers:to_list(Req:get(headers))),
+    Method      = mochiweb_request:get(method, Req),
+    Path        = mochiweb_request:get(path, Req),
+    Headers     = normalise(mochiweb_headers:to_list(mochiweb_request:get(headers, Req))),
     ContentMD5  = get_header(Headers, "content-md5"),
     ContentType = get_header(Headers, "content-type"),
     Date        = get_header(Headers, "date"),
