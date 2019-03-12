@@ -159,7 +159,7 @@ authorize/request/1 should be called in the loop of project_name_web.erl as per:
     loop(Req, DocRoot) ->
         Auth = hmac_api_lib:authorize_request(Req),
         io:format("Auth is ~p~n", [Auth]),
-        "/" ++ Path = Req:get(path),
+        "/" ++ Path = mochiweb_request:get(path, Req),
         ...
 
 When this is done you are ready to test the api:

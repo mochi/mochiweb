@@ -23,30 +23,31 @@
 %%      (<a href="http://www.python.org/dev/peps/pep-3101/">PEP 3101</a>).
 %%
 -module(mochifmt).
+
 -author('bob@mochimedia.com').
 
--compile(tuple_calls).
+-export([convert_field/2, format/2, format_field/2,
+	 get_field/2, get_value/2]).
 
--export([format/2, format_field/2, convert_field/2, get_value/2, get_field/2]).
--export([tokenize/1, format/3, get_field/3, format_field/3]).
+-export([format/3, format_field/3, get_field/3,
+	 tokenize/1]).
+
 -export([bformat/2, bformat/3]).
+
 -export([f/2, f/3]).
 
--record(conversion, {length, precision, ctype, align, fill_char, sign}).
+-record(conversion,
+	{length, precision, ctype, align, fill_char, sign}).
 
 %% @spec tokenize(S::string()) -> tokens()
 %% @doc Tokenize a format string into mochifmt's internal format.
-tokenize(S) ->
-    {?MODULE, tokenize(S, "", [])}.
+tokenize(S) -> {?MODULE, tokenize(S, "", [])}.
 
 %% @spec convert_field(Arg, Conversion::conversion()) -> term()
 %% @doc Process Arg according to the given explicit conversion specifier.
-convert_field(Arg, "") ->
-    Arg;
-convert_field(Arg, "r") ->
-    repr(Arg);
-convert_field(Arg, "s") ->
-    str(Arg).
+convert_field(Arg, "") -> Arg;
+convert_field(Arg, "r") -> repr(Arg);
+convert_field(Arg, "s") -> str(Arg).
 
 %% @spec get_value(Key::string(), Args::args()) -> term()
 %% @doc Get the Key from Args. If Args is a tuple then convert Key to
@@ -57,38 +58,43 @@ convert_field(Arg, "s") ->
 get_value(Key, Args) when is_tuple(Args) ->
     element(1 + list_to_integer(Key), Args);
 get_value(Key, Args) when is_list(Args) ->
-    try lists:nth(1 + list_to_integer(Key), Args)
-    catch error:_ ->
-            {_K, V} = proplist_lookup(Key, Args),
-            V
+    try lists:nth(1 + list_to_integer(Key), Args) catch
+      error:_ -> {_K, V} = proplist_lookup(Key, Args), V
     end.
 
 %% @spec get_field(Key::string(), Args) -> term()
 %% @doc Consecutively call get_value/2 on parts of Key delimited by ".",
 %%      replacing Args with the result of the previous get_value. This
 %%      is used to implement formats such as {0.0}.
-get_field(Key, Args) ->
-    get_field(Key, Args, ?MODULE).
+get_field(Key, Args) -> get_field(Key, Args, ?MODULE).
 
 %% @spec get_field(Key::string(), Args, Module) -> term()
 %% @doc Consecutively call Module:get_value/2 on parts of Key delimited by ".",
 %%      replacing Args with the result of the previous get_value. This
 %%      is used to implement formats such as {0.0}.
 get_field(Key, Args, Module) ->
-    {Name, Next} = lists:splitwith(fun (C) -> C =/= $. end, Key),
-    Res = try Module:get_value(Name, Args)
-          catch error:undef -> get_value(Name, Args) end,
+    {Name, Next} = lists:splitwith(fun (C) -> C =/= $. end,
+				   Key),
+    Res = mod_get_value(Name, Args, Module),
     case Next of
-        "" ->
-            Res;
-        "." ++ S1 ->
-            get_field(S1, Res, Module)
+      "" -> Res;
+      "." ++ S1 -> get_field(S1, Res, Module)
     end.
+
+mod_get_value(Name, Args, Module) ->
+    try tuple_apply(Module, get_value, [Name, Args]) catch
+      error:undef -> get_value(Name, Args)
+    end.
+
+tuple_apply(Module, F, Args) when is_atom(Module) ->
+    erlang:apply(Module, F, Args);
+tuple_apply(Module, F, Args)
+    when is_tuple(Module), is_atom(element(1, Module)) ->
+    erlang:apply(element(1, Module), F, Args ++ [Module]).
 
 %% @spec format(Format::string(), Args) -> iolist()
 %% @doc Format Args with Format.
-format(Format, Args) ->
-    format(Format, Args, ?MODULE).
+format(Format, Args) -> format(Format, Args, ?MODULE).
 
 %% @spec format(Format::string(), Args, Module) -> iolist()
 %% @doc Format Args with Format using Module.
@@ -110,17 +116,14 @@ format_field(Arg, Format, _Module) ->
 
 %% @spec f(Format::string(), Args) -> string()
 %% @doc Format Args with Format and return a string().
-f(Format, Args) ->
-    f(Format, Args, ?MODULE).
+f(Format, Args) -> f(Format, Args, ?MODULE).
 
 %% @spec f(Format::string(), Args, Module) -> string()
 %% @doc Format Args with Format using Module and return a string().
 f(Format, Args, Module) ->
     case lists:member(${, Format) of
-        true ->
-            binary_to_list(bformat(Format, Args, Module));
-        false ->
-            Format
+      true -> binary_to_list(bformat(Format, Args, Module));
+      false -> Format
     end.
 
 %% @spec bformat(Format::string(), Args) -> binary()
@@ -135,25 +138,22 @@ bformat(Format, Args, Module) ->
 
 %% Internal API
 
-add_raw("", Acc) ->
-    Acc;
-add_raw(S, Acc) ->
-    [{raw, lists:reverse(S)} | Acc].
+add_raw("", Acc) -> Acc;
+add_raw(S, Acc) -> [{raw, lists:reverse(S)} | Acc].
 
-tokenize([], S, Acc) ->
-    lists:reverse(add_raw(S, Acc));
+tokenize([], S, Acc) -> lists:reverse(add_raw(S, Acc));
 tokenize("{{" ++ Rest, S, Acc) ->
     tokenize(Rest, "{" ++ S, Acc);
 tokenize("{" ++ Rest, S, Acc) ->
     {Format, Rest1} = tokenize_format(Rest),
-    tokenize(Rest1, "", [{format, make_format(Format)} | add_raw(S, Acc)]);
+    tokenize(Rest1, "",
+	     [{format, make_format(Format)} | add_raw(S, Acc)]);
 tokenize("}}" ++ Rest, S, Acc) ->
     tokenize(Rest, "}" ++ S, Acc);
 tokenize([C | Rest], S, Acc) ->
     tokenize(Rest, [C | S], Acc).
 
-tokenize_format(S) ->
-    tokenize_format(S, 1, []).
+tokenize_format(S) -> tokenize_format(S, 1, []).
 
 tokenize_format("}" ++ Rest, 1, Acc) ->
     {lists:reverse(Acc), Rest};
@@ -165,90 +165,96 @@ tokenize_format([C | Rest], N, Acc) ->
     tokenize_format(Rest, N, [C | Acc]).
 
 make_format(S) ->
-    {Name0, Spec} = case lists:splitwith(fun (C) -> C =/= $: end, S) of
-                        {_, ""} ->
-                            {S, ""};
-                        {SN, ":" ++ SS} ->
-                            {SN, SS}
-                    end,
-    {Name, Transform} = case lists:splitwith(fun (C) -> C =/= $! end, Name0) of
-                            {_, ""} ->
-                                {Name0, ""};
-                            {TN, "!" ++ TT} ->
-                                {TN, TT}
-                        end,
+    {Name0, Spec} = case lists:splitwith(fun (C) -> C =/= $:
+					 end,
+					 S)
+			of
+		      {_, ""} -> {S, ""};
+		      {SN, ":" ++ SS} -> {SN, SS}
+		    end,
+    {Name, Transform} = case lists:splitwith(fun (C) ->
+						     C =/= $!
+					     end,
+					     Name0)
+			    of
+			  {_, ""} -> {Name0, ""};
+			  {TN, "!" ++ TT} -> {TN, TT}
+			end,
     {Name, Transform, Spec}.
 
 proplist_lookup(S, P) ->
-    A = try list_to_existing_atom(S)
-        catch error:_ -> make_ref() end,
-    B = try list_to_binary(S)
-        catch error:_ -> make_ref() end,
+    A = try list_to_existing_atom(S) catch
+	  error:_ -> make_ref()
+	end,
+    B = try list_to_binary(S) catch
+	  error:_ -> make_ref()
+	end,
     proplist_lookup2({S, A, B}, P).
 
 proplist_lookup2({KS, KA, KB}, [{K, V} | _])
-  when KS =:= K orelse KA =:= K orelse KB =:= K ->
+    when KS =:= K orelse KA =:= K orelse KB =:= K ->
     {K, V};
 proplist_lookup2(Keys, [_ | Rest]) ->
     proplist_lookup2(Keys, Rest).
 
-format2([], _Args, _Module, Acc) ->
-    lists:reverse(Acc);
+format2([], _Args, _Module, Acc) -> lists:reverse(Acc);
 format2([{raw, S} | Rest], Args, Module, Acc) ->
     format2(Rest, Args, Module, [S | Acc]);
-format2([{format, {Key, Convert, Format0}} | Rest], Args, Module, Acc) ->
+format2([{format, {Key, Convert, Format0}} | Rest],
+	Args, Module, Acc) ->
     Format = f(Format0, Args, Module),
     V = case Module of
-            ?MODULE ->
-                V0 = get_field(Key, Args),
-                V1 = convert_field(V0, Convert),
-                format_field(V1, Format);
-            _ ->
-                V0 = try Module:get_field(Key, Args)
-                     catch error:undef -> get_field(Key, Args, Module) end,
-                V1 = try Module:convert_field(V0, Convert)
-                     catch error:undef -> convert_field(V0, Convert) end,
-                try Module:format_field(V1, Format)
-                catch error:undef -> format_field(V1, Format, Module) end
-        end,
+	  ?MODULE ->
+	      V0 = get_field(Key, Args),
+	      V1 = convert_field(V0, Convert),
+	      format_field(V1, Format);
+	  _ ->
+	      V0 = try tuple_apply(Module, get_field, [Key, Args])
+		   catch
+		     error:undef -> get_field(Key, Args, Module)
+		   end,
+	      V1 = try tuple_apply(Module, convert_field,
+				   [V0, Convert])
+		   catch
+		     error:undef -> convert_field(V0, Convert)
+		   end,
+	      try tuple_apply(Module, format_field, [V1, Format])
+	      catch
+		error:undef -> format_field(V1, Format, Module)
+	      end
+	end,
     format2(Rest, Args, Module, [V | Acc]).
 
-default_ctype(_Arg, C=#conversion{ctype=N}) when N =/= undefined ->
+default_ctype(_Arg, C = #conversion{ctype = N})
+    when N =/= undefined ->
     C;
 default_ctype(Arg, C) when is_integer(Arg) ->
-    C#conversion{ctype=decimal};
+    C#conversion{ctype = decimal};
 default_ctype(Arg, C) when is_float(Arg) ->
-    C#conversion{ctype=general};
-default_ctype(_Arg, C) ->
-    C#conversion{ctype=string}.
+    C#conversion{ctype = general};
+default_ctype(_Arg, C) -> C#conversion{ctype = string}.
 
-fix_padding(Arg, #conversion{length=undefined}) ->
+fix_padding(Arg, #conversion{length = undefined}) ->
     Arg;
-fix_padding(Arg, F=#conversion{length=Length, fill_char=Fill0, align=Align0,
-                               ctype=Type}) ->
+fix_padding(Arg,
+	    F = #conversion{length = Length, fill_char = Fill0,
+			    align = Align0, ctype = Type}) ->
     Padding = Length - iolist_size(Arg),
     Fill = case Fill0 of
-               undefined ->
-                   $\s;
-               _ ->
-                   Fill0
-           end,
+	     undefined -> $\s;
+	     _ -> Fill0
+	   end,
     Align = case Align0 of
-                undefined ->
-                    case Type of
-                        string ->
-                            left;
-                        _ ->
-                            right
-                    end;
-                _ ->
-                    Align0
-            end,
+	      undefined ->
+		  case Type of
+		    string -> left;
+		    _ -> right
+		  end;
+	      _ -> Align0
+	    end,
     case Padding > 0 of
-        true ->
-            do_padding(Arg, Padding, Fill, Align, F);
-        false ->
-            Arg
+      true -> do_padding(Arg, Padding, Fill, Align, F);
+      false -> Arg
     end.
 
 do_padding(Arg, Padding, Fill, right, _F) ->
@@ -256,31 +262,31 @@ do_padding(Arg, Padding, Fill, right, _F) ->
 do_padding(Arg, Padding, Fill, center, _F) ->
     LPadding = lists:duplicate(Padding div 2, Fill),
     RPadding = case Padding band 1 of
-                   1 ->
-                       [Fill | LPadding];
-                   _ ->
-                       LPadding
-               end,
+		 1 -> [Fill | LPadding];
+		 _ -> LPadding
+	       end,
     [LPadding, Arg, RPadding];
 do_padding([$- | Arg], Padding, Fill, sign_right, _F) ->
     [[$- | lists:duplicate(Padding, Fill)], Arg];
-do_padding(Arg, Padding, Fill, sign_right, #conversion{sign=$-}) ->
+do_padding(Arg, Padding, Fill, sign_right,
+	   #conversion{sign = $-}) ->
     [lists:duplicate(Padding, Fill), Arg];
-do_padding([S | Arg], Padding, Fill, sign_right, #conversion{sign=S}) ->
+do_padding([S | Arg], Padding, Fill, sign_right,
+	   #conversion{sign = S}) ->
     [[S | lists:duplicate(Padding, Fill)], Arg];
-do_padding(Arg, Padding, Fill, sign_right, #conversion{sign=undefined}) ->
+do_padding(Arg, Padding, Fill, sign_right,
+	   #conversion{sign = undefined}) ->
     [lists:duplicate(Padding, Fill), Arg];
 do_padding(Arg, Padding, Fill, left, _F) ->
     [Arg | lists:duplicate(Padding, Fill)].
 
-fix_sign(Arg, #conversion{sign=$+}) when Arg >= 0 ->
+fix_sign(Arg, #conversion{sign = $+}) when Arg >= 0 ->
     [$+, Arg];
-fix_sign(Arg, #conversion{sign=$\s}) when Arg >= 0 ->
+fix_sign(Arg, #conversion{sign = $\s}) when Arg >= 0 ->
     [$\s, Arg];
-fix_sign(Arg, _F) ->
-    Arg.
+fix_sign(Arg, _F) -> Arg.
 
-ctype($\%) -> percent;
+ctype($%) -> percent;
 ctype($s) -> string;
 ctype($b) -> bin;
 ctype($o) -> oct;
@@ -297,107 +303,123 @@ align($>) -> right;
 align($^) -> center;
 align($=) -> sign_right.
 
-convert2(Arg, F=#conversion{ctype=percent}) ->
-    [convert2(100.0 * Arg, F#conversion{ctype=fixed}), $\%];
-convert2(Arg, #conversion{ctype=string}) ->
-    str(Arg);
-convert2(Arg, #conversion{ctype=bin}) ->
+convert2(Arg, F = #conversion{ctype = percent}) ->
+    [convert2(1.0e+2 * Arg, F#conversion{ctype = fixed}),
+     $%];
+convert2(Arg, #conversion{ctype = string}) -> str(Arg);
+convert2(Arg, #conversion{ctype = bin}) ->
     erlang:integer_to_list(Arg, 2);
-convert2(Arg, #conversion{ctype=oct}) ->
+convert2(Arg, #conversion{ctype = oct}) ->
     erlang:integer_to_list(Arg, 8);
-convert2(Arg, #conversion{ctype=upper_hex}) ->
+convert2(Arg, #conversion{ctype = upper_hex}) ->
     erlang:integer_to_list(Arg, 16);
-convert2(Arg, #conversion{ctype=hex}) ->
+convert2(Arg, #conversion{ctype = hex}) ->
     string:to_lower(erlang:integer_to_list(Arg, 16));
-convert2(Arg, #conversion{ctype=char}) when Arg < 16#80 ->
+convert2(Arg, #conversion{ctype = char})
+    when Arg < 128 ->
     [Arg];
-convert2(Arg, #conversion{ctype=char}) ->
+convert2(Arg, #conversion{ctype = char}) ->
     xmerl_ucs:to_utf8(Arg);
-convert2(Arg, #conversion{ctype=decimal}) ->
+convert2(Arg, #conversion{ctype = decimal}) ->
     integer_to_list(Arg);
-convert2(Arg, #conversion{ctype=general, precision=undefined}) ->
-    try mochinum:digits(Arg)
-    catch error:undef -> io_lib:format("~g", [Arg]) end;
-convert2(Arg, #conversion{ctype=fixed, precision=undefined}) ->
+convert2(Arg,
+	 #conversion{ctype = general, precision = undefined}) ->
+    try mochinum:digits(Arg) catch
+      error:undef -> io_lib:format("~g", [Arg])
+    end;
+convert2(Arg,
+	 #conversion{ctype = fixed, precision = undefined}) ->
     io_lib:format("~f", [Arg]);
-convert2(Arg, #conversion{ctype=exp, precision=undefined}) ->
+convert2(Arg,
+	 #conversion{ctype = exp, precision = undefined}) ->
     io_lib:format("~e", [Arg]);
-convert2(Arg, #conversion{ctype=general, precision=P}) ->
+convert2(Arg,
+	 #conversion{ctype = general, precision = P}) ->
     io_lib:format("~." ++ integer_to_list(P) ++ "g", [Arg]);
-convert2(Arg, #conversion{ctype=fixed, precision=P}) ->
+convert2(Arg,
+	 #conversion{ctype = fixed, precision = P}) ->
     io_lib:format("~." ++ integer_to_list(P) ++ "f", [Arg]);
-convert2(Arg, #conversion{ctype=exp, precision=P}) ->
+convert2(Arg,
+	 #conversion{ctype = exp, precision = P}) ->
     io_lib:format("~." ++ integer_to_list(P) ++ "e", [Arg]).
 
-str(A) when is_atom(A) ->
-    atom_to_list(A);
-str(I) when is_integer(I) ->
-    integer_to_list(I);
+str(A) when is_atom(A) -> atom_to_list(A);
+str(I) when is_integer(I) -> integer_to_list(I);
 str(F) when is_float(F) ->
-    try mochinum:digits(F)
-    catch error:undef -> io_lib:format("~g", [F]) end;
-str(L) when is_list(L) ->
-    L;
-str(B) when is_binary(B) ->
-    B;
-str(P) ->
-    repr(P).
+    try mochinum:digits(F) catch
+      error:undef -> io_lib:format("~g", [F])
+    end;
+str(L) when is_list(L) -> L;
+str(B) when is_binary(B) -> B;
+str(P) -> repr(P).
 
 repr(P) when is_float(P) ->
-    try mochinum:digits(P)
-    catch error:undef -> float_to_list(P) end;
-repr(P) ->
-    io_lib:format("~p", [P]).
+    try mochinum:digits(P) catch
+      error:undef -> float_to_list(P)
+    end;
+repr(P) -> io_lib:format("~p", [P]).
 
 parse_std_conversion(S) ->
     parse_std_conversion(S, #conversion{}).
 
-parse_std_conversion("", Acc) ->
-    Acc;
+parse_std_conversion("", Acc) -> Acc;
 parse_std_conversion([Fill, Align | Spec], Acc)
-  when Align =:= $< orelse Align =:= $> orelse Align =:= $= orelse Align =:= $^ ->
-    parse_std_conversion(Spec, Acc#conversion{fill_char=Fill,
-                                              align=align(Align)});
+    when Align =:= $< orelse
+	   Align =:= $> orelse Align =:= $= orelse Align =:= $^ ->
+    parse_std_conversion(Spec,
+			 Acc#conversion{fill_char = Fill,
+					align = align(Align)});
 parse_std_conversion([Align | Spec], Acc)
-  when Align =:= $< orelse Align =:= $> orelse Align =:= $= orelse Align =:= $^ ->
-    parse_std_conversion(Spec, Acc#conversion{align=align(Align)});
+    when Align =:= $< orelse
+	   Align =:= $> orelse Align =:= $= orelse Align =:= $^ ->
+    parse_std_conversion(Spec,
+			 Acc#conversion{align = align(Align)});
 parse_std_conversion([Sign | Spec], Acc)
-  when Sign =:= $+ orelse Sign =:= $- orelse Sign =:= $\s ->
-    parse_std_conversion(Spec, Acc#conversion{sign=Sign});
+    when Sign =:= $+ orelse
+	   Sign =:= $- orelse Sign =:= $\s ->
+    parse_std_conversion(Spec, Acc#conversion{sign = Sign});
 parse_std_conversion("0" ++ Spec, Acc) ->
     Align = case Acc#conversion.align of
-                undefined ->
-                    sign_right;
-                A ->
-                    A
-            end,
-    parse_std_conversion(Spec, Acc#conversion{fill_char=$0, align=Align});
-parse_std_conversion(Spec=[D|_], Acc) when D >= $0 andalso D =< $9 ->
-    {W, Spec1} = lists:splitwith(fun (C) -> C >= $0 andalso C =< $9 end, Spec),
-    parse_std_conversion(Spec1, Acc#conversion{length=list_to_integer(W)});
+	      undefined -> sign_right;
+	      A -> A
+	    end,
+    parse_std_conversion(Spec,
+			 Acc#conversion{fill_char = $0, align = Align});
+parse_std_conversion(Spec = [D | _], Acc)
+    when D >= $0 andalso D =< $9 ->
+    {W, Spec1} = lists:splitwith(fun (C) ->
+					 C >= $0 andalso C =< $9
+				 end,
+				 Spec),
+    parse_std_conversion(Spec1,
+			 Acc#conversion{length = list_to_integer(W)});
 parse_std_conversion([$. | Spec], Acc) ->
-    case lists:splitwith(fun (C) -> C >= $0 andalso C =< $9 end, Spec) of
-        {"", Spec1} ->
-            parse_std_conversion(Spec1, Acc);
-        {P, Spec1} ->
-            parse_std_conversion(Spec1,
-                                 Acc#conversion{precision=list_to_integer(P)})
+    case lists:splitwith(fun (C) -> C >= $0 andalso C =< $9
+			 end,
+			 Spec)
+	of
+      {"", Spec1} -> parse_std_conversion(Spec1, Acc);
+      {P, Spec1} ->
+	  parse_std_conversion(Spec1,
+			       Acc#conversion{precision = list_to_integer(P)})
     end;
 parse_std_conversion([Type], Acc) ->
-    parse_std_conversion("", Acc#conversion{ctype=ctype(Type)}).
-
+    parse_std_conversion("",
+			 Acc#conversion{ctype = ctype(Type)}).
 
 %%
 %% Tests
 %%
 -ifdef(TEST).
+
 -include_lib("eunit/include/eunit.hrl").
 
 tokenize_test() ->
     {?MODULE, [{raw, "ABC"}]} = tokenize("ABC"),
     {?MODULE, [{format, {"0", "", ""}}]} = tokenize("{0}"),
-    {?MODULE, [{raw, "ABC"}, {format, {"1", "", ""}}, {raw, "DEF"}]} =
-        tokenize("ABC{1}DEF"),
+    {?MODULE,
+     [{raw, "ABC"}, {format, {"1", "", ""}}, {raw, "DEF"}]} =
+	tokenize("ABC{1}DEF"),
     ok.
 
 format_test() ->
@@ -406,26 +428,31 @@ format_test() ->
     <<"   4">> = bformat("{0:{0}}", [4]),
     <<"4   ">> = bformat("{0:4}", ["4"]),
     <<"4   ">> = bformat("{0:{0}}", ["4"]),
-    <<"1.2yoDEF">> = bformat("{2}{0}{1}{3}", {yo, "DE", 1.2, <<"F">>}),
-    <<"cafebabe">> = bformat("{0:x}", {16#cafebabe}),
-    <<"CAFEBABE">> = bformat("{0:X}", {16#cafebabe}),
-    <<"CAFEBABE">> = bformat("{0:X}", {16#cafebabe}),
-    <<"755">> = bformat("{0:o}", {8#755}),
+    <<"1.2yoDEF">> = bformat("{2}{0}{1}{3}",
+			     {yo, "DE", 1.19999999999999995559, <<"F">>}),
+    <<"cafebabe">> = bformat("{0:x}", {3405691582}),
+    <<"CAFEBABE">> = bformat("{0:X}", {3405691582}),
+    <<"CAFEBABE">> = bformat("{0:X}", {3405691582}),
+    <<"755">> = bformat("{0:o}", {493}),
     <<"a">> = bformat("{0:c}", {97}),
     %% Horizontal ellipsis
-    <<226, 128, 166>> = bformat("{0:c}", {16#2026}),
+    <<226, 128, 166>> = bformat("{0:c}", {8230}),
     <<"11">> = bformat("{0:b}", {3}),
     <<"11">> = bformat("{0:b}", [3]),
     <<"11">> = bformat("{three:b}", [{three, 3}]),
     <<"11">> = bformat("{three:b}", [{"three", 3}]),
     <<"11">> = bformat("{three:b}", [{<<"three">>, 3}]),
     <<"\"foo\"">> = bformat("{0!r}", {"foo"}),
-    <<"2008-5-4">> = bformat("{0.0}-{0.1}-{0.2}", {{2008,5,4}}),
-    <<"2008-05-04">> = bformat("{0.0:04}-{0.1:02}-{0.2:02}", {{2008,5,4}}),
+    <<"2008-5-4">> = bformat("{0.0}-{0.1}-{0.2}",
+			     {{2008, 5, 4}}),
+    <<"2008-05-04">> = bformat("{0.0:04}-{0.1:02}-{0.2:02}",
+			       {{2008, 5, 4}}),
     <<"foo6bar-6">> = bformat("foo{1}{0}-{1}", {bar, 6}),
-    <<"-'atom test'-">> = bformat("-{arg!r}-", [{arg, 'atom test'}]),
-    <<"2008-05-04">> = bformat("{0.0:0{1.0}}-{0.1:0{1.1}}-{0.2:0{1.2}}",
-                               {{2008,5,4}, {4, 2, 2}}),
+    <<"-'atom test'-">> = bformat("-{arg!r}-",
+				  [{arg, 'atom test'}]),
+    <<"2008-05-04">> =
+	bformat("{0.0:0{1.0}}-{0.1:0{1.1}}-{0.2:0{1.2}}",
+		{{2008, 5, 4}, {4, 2, 2}}),
     ok.
 
 std_test() ->
@@ -434,13 +461,16 @@ std_test() ->
     ok.
 
 records_test() ->
-    M = mochifmt_records:new([{conversion, record_info(fields, conversion)}]),
-    R = #conversion{length=long, precision=hard, sign=peace},
-    long = M:get_value("length", R),
-    hard = M:get_value("precision", R),
-    peace = M:get_value("sign", R),
+    M = mochifmt_records:new([{conversion,
+			       record_info(fields, conversion)}]),
+    R = #conversion{length = long, precision = hard,
+		    sign = peace},
+    long = mochifmt_records:get_value("length", R, M),
+    hard = mochifmt_records:get_value("precision", R, M),
+    peace = mochifmt_records:get_value("sign", R, M),
     <<"long hard">> = bformat("{length} {precision}", R, M),
-    <<"long hard">> = bformat("{0.length} {0.precision}", [R], M),
+    <<"long hard">> = bformat("{0.length} {0.precision}",
+			      [R], M),
     ok.
 
 -endif.
