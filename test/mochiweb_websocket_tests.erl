@@ -23,8 +23,6 @@
 %% OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 %% THE SOFTWARE.
 
--compile(tuple_calls).
-
 -include_lib("eunit/include/eunit.hrl").
 
 make_handshake_for_correct_client_test() ->
@@ -94,8 +92,8 @@ end_to_end_test_factory(ServerTransport) ->
       end).
 
 end_to_end_server(Req) ->
-    ?assertEqual("Upgrade", Req:get_header_value("connection")),
-    ?assertEqual("websocket", Req:get_header_value("upgrade")),
+    ?assertEqual("Upgrade", mochiweb_request:get_header_value("connection", Req)),
+    ?assertEqual("websocket", mochiweb_request:get_header_value("upgrade", Req)),
     {ReentryWs, _ReplyChannel} = mochiweb_websocket:upgrade_connection(
                                    Req,
                                    fun end_to_end_ws_loop/3),
