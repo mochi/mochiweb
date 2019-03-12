@@ -2,14 +2,12 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("mochiweb_test_util.hrl").
 
--compile(tuple_calls).
-
 with_server(Transport, ServerFun, ClientFun) ->
     mochiweb_test_util:with_server(Transport, ServerFun, ClientFun).
 
 request_test() ->
     R = mochiweb_request:new(z, z, "//foo///bar/baz%20wibble+quux?qs=2", z, []),
-    "/foo/bar/baz wibble quux" = R:get(path),
+    "/foo/bar/baz wibble quux" = mochiweb_request:get(path, R),
     ok.
 
 -define(LARGE_TIMEOUT, 60).
@@ -77,7 +75,7 @@ single_GET_scheme_test_() ->
 single_GET_absoluteURI_test_() ->
     Uri = "https://example.com:123/x/",
     ServerFun = fun (Req) ->
-                        Req:ok({"text/plain", Req:get(path)})
+                        mochiweb_request:ok({"text/plain", mochiweb_request:get(path, Req)}, Req)
                 end,
     %% Note that all the scheme/host/port information is discarded from path
     ClientFun = new_client_fun('GET', [#treq{path = Uri, xreply = <<"/x/">>}]),
@@ -91,7 +89,7 @@ single_CONNECT_test_() ->
 
 single_GET_any_test_() ->
     ServerFun = fun (Req) ->
-                        Req:ok({"text/plain", Req:get(path)})
+                        mochiweb_request:ok({"text/plain", mochiweb_request:get(path, Req)}, Req)
                 end,
     ClientFun = new_client_fun('GET', [#treq{path = "*", xreply = <<"*">>}]),
     [{atom_to_list(Transport),
@@ -104,8 +102,8 @@ cookie_header_test() ->
     ExHeaders = [{"Set-Cookie", "foo=bar"},
                  {"Set-Cookie", "foo=baz"}],
     ServerFun = fun (Req) ->
-                        Reply = ReplyPrefix ++ Req:get(path),
-                        Req:ok({"text/plain", ExHeaders, Reply})
+                        Reply = ReplyPrefix ++ mochiweb_request:get(path, Req),
+                        mochiweb_request:ok({"text/plain", ExHeaders, Reply}, Req)
                 end,
     Path = "cookie_header",
     ExpectedReply = list_to_binary(ReplyPrefix ++ Path),
@@ -119,8 +117,8 @@ do_CONNECT(Transport, Times) ->
     PathPrefix = "example.com:",
     ReplyPrefix = "You requested: ",
     ServerFun = fun (Req) ->
-                        Reply = ReplyPrefix ++ Req:get(path),
-                        Req:ok({"text/plain", Reply})
+                        Reply = ReplyPrefix ++ mochiweb_request:get(path, Req),
+                        mochiweb_request:ok({"text/plain", Reply}, Req)
                 end,
     TestReqs = [begin
                     Path = PathPrefix ++ integer_to_list(N),
@@ -137,8 +135,8 @@ do_GET(Transport, Times) ->
 do_GET(PathPrefix, Transport, Times) ->
     ReplyPrefix = "You requested: ",
     ServerFun = fun (Req) ->
-                        Reply = ReplyPrefix ++ Req:get(path),
-                        Req:ok({"text/plain", Reply})
+                        Reply = ReplyPrefix ++ mochiweb_request:get(path, Req),
+                        mochiweb_request:ok({"text/plain", Reply}, Req)
                 end,
     TestReqs = [begin
                     Path = PathPrefix ++ integer_to_list(N),
@@ -151,9 +149,9 @@ do_GET(PathPrefix, Transport, Times) ->
 
 do_POST(Transport, Size, Times) ->
     ServerFun = fun (Req) ->
-                        Body = Req:recv_body(),
+                        Body = mochiweb_request:recv_body(Req),
                         Headers = [{"Content-Type", "application/octet-stream"}],
-                        Req:respond({201, Headers, Body})
+                        mochiweb_request:respond({201, Headers, Body}, Req)
                 end,
     TestReqs = [begin
                     Path = "/stuff/" ++ integer_to_list(N),
