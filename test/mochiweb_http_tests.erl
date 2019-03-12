@@ -7,8 +7,6 @@
 -define(SHOULD_HAVE_BUG, false).
 -endif.
 
--compile(tuple_calls).
-
 has_acceptor_bug_test_() ->
     {setup,
      fun start_server/0,
@@ -29,9 +27,13 @@ has_acceptor_bug_tests(Server) ->
       ?_assertEqual(?SHOULD_HAVE_BUG, has_bug(Port, 10000))}].
 
 responder(Req) ->
-    Req:respond({200,
-                 [{"Content-Type", "text/html"}],
-                 ["<html><body>Hello</body></html>"]}).
+    mochiweb_request:respond(
+        {
+            200,
+            [{"Content-Type", "text/html"}],
+            ["<html><body>Hello</body></html>"]
+        },
+        Req).
 
 has_bug(Port, Len) ->
   case
