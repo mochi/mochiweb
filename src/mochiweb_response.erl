@@ -22,11 +22,13 @@
 %% @doc Response abstraction.
 
 -module(mochiweb_response).
+
 -author('bob@mochimedia.com').
 
 -define(QUIP, "Any of you quaids got a smint?").
 
--export([new/3, get_header_value/2, get/2, dump/1]).
+-export([dump/1, get/2, get_header_value/2, new/3]).
+
 -export([send/2, write_chunk/2]).
 
 %% @type response(). A mochiweb_response parameterized module instance.
@@ -39,7 +41,8 @@ new(Request, Code, Headers) ->
 %% @spec get_header_value(string() | atom() | binary(), response()) ->
 %%           string() | undefined
 %% @doc Get the value of the given response header.
-get_header_value(K, {?MODULE, [_Request, _Code, Headers]}) ->
+get_header_value(K,
+		 {?MODULE, [_Request, _Code, Headers]}) ->
     mochiweb_headers:get_value(K, Headers).
 
 %% @spec get(request | code | headers, response()) -> term()
@@ -55,36 +58,38 @@ get(headers, {?MODULE, [_Request, _Code, Headers]}) ->
 %% @doc Dump the internal representation to a "human readable" set of terms
 %%      for debugging/inspection purposes.
 dump({?MODULE, [{ReqM, _} = Request, Code, Headers]}) ->
-    [{request, ReqM:dump(Request)},
-     {code, Code},
+    [{request, ReqM:dump(Request)}, {code, Code},
      {headers, mochiweb_headers:to_list(Headers)}].
 
 %% @spec send(iodata(), response()) -> ok
 %% @doc Send data over the socket if the method is not HEAD.
-send(Data, {?MODULE, [{ReqM, _} = Request, _Code, _Headers]}) ->
+send(Data,
+     {?MODULE, [{ReqM, _} = Request, _Code, _Headers]}) ->
     case ReqM:get(method, Request) of
-        'HEAD' ->
-            ok;
-        _ ->
-            ReqM:send(Data, Request)
+      'HEAD' -> ok;
+      _ -> ReqM:send(Data, Request)
     end.
 
 %% @spec write_chunk(iodata(), response()) -> ok
 %% @doc Write a chunk of a HTTP chunked response. If Data is zero length,
 %%      then the chunked response will be finished.
-write_chunk(Data, {?MODULE, [{ReqM, _} = Request, _Code, _Headers]}=THIS) ->
+write_chunk(Data,
+	    {?MODULE, [{ReqM, _} = Request, _Code, _Headers]} =
+		THIS) ->
     case ReqM:get(version, Request) of
-        Version when Version >= {1, 1} ->
-            Length = iolist_size(Data),
-            send([io_lib:format("~.16b\r\n", [Length]), Data, <<"\r\n">>], THIS);
-        _ ->
-            send(Data, THIS)
+      Version when Version >= {1, 1} ->
+	  Length = iolist_size(Data),
+	  send([io_lib:format("~.16b\r\n", [Length]), Data,
+		<<"\r\n">>],
+	       THIS);
+      _ -> send(Data, THIS)
     end.
-
 
 %%
 %% Tests
 %%
 -ifdef(TEST).
+
 -include_lib("eunit/include/eunit.hrl").
+
 -endif.
