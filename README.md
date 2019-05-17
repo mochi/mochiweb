@@ -1,4 +1,4 @@
-MochiWeb is an Erlang library for building lightweight HTTP servers.
+testMochiWeb is an Erlang library for building lightweight HTTP servers.
 
 The latest version of MochiWeb is available at http://github.com/mochi/mochiweb
 
