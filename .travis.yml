@@ -12,3 +12,5 @@ otp_release:
   - 17.5
   - R16B03-1
   - R15B03
+before_script:
+  - kerl list installations
