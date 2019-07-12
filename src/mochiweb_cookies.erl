@@ -65,7 +65,7 @@ cookie(Key, Value) ->
 %% where Option = {max_age, int_seconds()} | {local_time, {date(), time()}}
 %%                | {domain, string()} | {path, string()}
 %%                | {secure, true | false} | {http_only, true | false}
-%%                | {same_site, lax | strict}
+%%                | {same_site, lax | strict | none}
 %%
 %% @doc Generate a Set-Cookie header field tuple.
 cookie(Key, Value, Options) ->
@@ -130,7 +130,9 @@ cookie(Key, Value, Options) ->
             lax ->
                 "; SameSite=Lax";
             strict ->
-                "; SameSite=Strict"
+                "; SameSite=Strict";
+            none ->
+                "; SameSite=None"
         end,
     CookieParts = [Cookie, ExpiresPart, SecurePart, DomainPart, PathPart,
         HttpOnlyPart, SameSitePart],
@@ -378,6 +380,18 @@ cookie_test() ->
           "Max-Age=86417"},
     C3 = cookie("Customer", "WILE_E_COYOTE",
                 [{max_age, 86417}, {local_time, LocalTime}]),
+
+    % test various values for SameSite
+    %
+    % unset default to nothing
+    C4 = {"Set-Cookie","i=test123; Version=1"},
+    C4 = cookie("i", "test123", []),
+    C5 = {"Set-Cookie","i=test123; Version=1; SameSite=Strict"},
+    C5 = cookie("i", "test123", [ {same_site, strict}]),
+    C6 = {"Set-Cookie","i=test123; Version=1; SameSite=Lax"},
+    C6 = cookie("i", "test123", [ {same_site, lax}]),
+    C7 = {"Set-Cookie","i=test123; Version=1; SameSite=None"},
+    C7 = cookie("i", "test123", [ {same_site, none}]),
     ok.
 
 -endif.
