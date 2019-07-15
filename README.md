@@ -14,7 +14,7 @@ To create a new mochiweb using project in a specific directory:
 
 Information about Rebar (Erlang build tool) is available at https://github.com/rebar/rebar
 
-MochiWeb is currently tested with Erlang/OTP R15B03 through 21.2.3.
+MochiWeb is currently tested with Erlang/OTP R15B03 through 22.0.
 
 # OTP 21.2, 21.2.1, 21.2.2 warning
 

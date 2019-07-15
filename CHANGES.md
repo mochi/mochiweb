@@ -1,5 +1,8 @@
-Version 2.20.0 released 2019-XX-XX
+Version 2.20.0 released 2019-07-14
 
+* Expand testing matrix to include Erlang/OTP 22.0 and Erlang/OTP 21.3
+* Add support for SameSite=none in cookies
+  https://github.com/mochi/mochiweb/pull/225
 * Fix parsing of certain unquoted cookie values
   https://github.com/mochi/mochiweb/pull/212
 
