@@ -8,7 +8,6 @@
   {applications, [kernel, stdlib, crypto, inets, ssl, xmerl,
                   compiler, syntax_tools]},
 
-  {maintainers, ["Bob Ippolito"]},
   {licenses, ["MIT"]},
   {links, [{"Github", "https://github.com/mochi/mochiweb"}]}
  ]
