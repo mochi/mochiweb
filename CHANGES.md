@@ -1,3 +1,7 @@
+Version 2.20.1 released 2020-02-03
+
+* Removed deprecated metadata from .app file
+
 Version 2.20.0 released 2019-07-14
 
 * Expand testing matrix to include Erlang/OTP 22.0 and Erlang/OTP 21.3
