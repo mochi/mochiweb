@@ -17,8 +17,8 @@
 listen(Ssl, Port, Opts, SslOpts) ->
     case Ssl of
         true ->
-            Opts1 = add_unbroken_ciphers_default(Opts ++ SslOpts),
-            Opts2 = add_safe_protocol_versions(Opts1),
+            Opts1 = add_safe_protocol_versions(Opts),
+            Opts2 = add_unbroken_ciphers_default(Opts1 ++ SslOpts),
             case ssl:listen(Port, Opts2) of
                 {ok, ListenSocket} ->
                     {ok, {ssl, ListenSocket}};
@@ -29,10 +29,38 @@ listen(Ssl, Port, Opts, SslOpts) ->
             gen_tcp:listen(Port, Opts)
     end.
 
+-ifdef(new_crypto_unavailable).
 add_unbroken_ciphers_default(Opts) ->
     Default = filter_unsecure_cipher_suites(ssl:cipher_suites()),
     Ciphers = filter_broken_cipher_suites(proplists:get_value(ciphers, Opts, Default)),
     [{ciphers, Ciphers} | proplists:delete(ciphers, Opts)].
+
+%% Filter old map style cipher suites
+filter_unsecure_cipher_suites(Ciphers) ->
+    lists:filter(fun
+                    ({_,des_cbc,_}) -> false;
+                    ({_,_,md5}) -> false;
+                    (_) -> true
+                 end,
+                 Ciphers).
+
+-else.
+add_unbroken_ciphers_default(Opts) ->
+    %% add_safe_protocol_versions/1 must have been called to ensure a {versions, _} tuple is present
+    Versions = proplists:get_value(versions, Opts),
+    CipherSuites = lists:append([ssl:cipher_suites(all, Version) || Version <- Versions]),
+    Default = filter_unsecure_cipher_suites(CipherSuites),
+    Ciphers = filter_broken_cipher_suites(proplists:get_value(ciphers, Opts, Default)),
+    [{ciphers, Ciphers} | proplists:delete(ciphers, Opts)].
+
+%% Filter new map style cipher suites
+filter_unsecure_cipher_suites(Ciphers) ->
+    ssl:filter_cipher_suites(Ciphers, [
+        {key_exchange, fun(des_cbc) -> false; (_) -> true end},
+        {mac, fun(md5) -> false; (_) -> true end}
+    ]).
+
+-endif.
 
 filter_broken_cipher_suites(Ciphers) ->
 	case proplists:get_value(ssl_app, ssl:versions()) of
@@ -43,14 +71,6 @@ filter_broken_cipher_suites(Ciphers) ->
         _ ->
             Ciphers
     end.
-
-filter_unsecure_cipher_suites(Ciphers) ->
-    lists:filter(fun
-                    ({_,des_cbc,_}) -> false;
-                    ({_,_,md5}) -> false;
-                    (_) -> true
-                 end,
-                 Ciphers).
 
 add_safe_protocol_versions(Opts) ->
     case proplists:is_defined(versions, Opts) of

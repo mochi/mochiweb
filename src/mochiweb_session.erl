@@ -131,7 +131,7 @@ decrypt_data(<<IV:16/binary, Crypt/binary>>, Key) ->
     crypto:aes_cfb_128_decrypt(Key, IV, Crypt).
 
 -spec gen_key(iolist(), iolist()) -> binary().
-gen_key(ExpirationTime, ServerKey)->
+gen_key(ExpirationTime, ServerKey) ->
     crypto:md5_mac(ServerKey, [ExpirationTime]).
 
 -spec gen_hmac(iolist(), binary(), iolist(), binary()) -> binary().
@@ -139,6 +139,7 @@ gen_hmac(ExpirationTime, Data, SessionKey, Key) ->
     crypto:sha_mac(Key, [ExpirationTime, Data, SessionKey]).
 
 -else.
+-ifdef(new_crypto_unavailable).
 -spec encrypt_data(binary(), binary()) -> binary().
 encrypt_data(Data, Key) ->
     IV = crypto:strong_rand_bytes(16),
@@ -150,13 +151,33 @@ decrypt_data(<<IV:16/binary, Crypt/binary>>, Key) ->
     crypto:block_decrypt(aes_cfb128, Key, IV, Crypt).
 
 -spec gen_key(iolist(), iolist()) -> binary().
-gen_key(ExpirationTime, ServerKey)->
+gen_key(ExpirationTime, ServerKey) ->
     crypto:hmac(md5, ServerKey, [ExpirationTime]).
 
 -spec gen_hmac(iolist(), binary(), iolist(), binary()) -> binary().
 gen_hmac(ExpirationTime, Data, SessionKey, Key) ->
     crypto:hmac(sha, Key, [ExpirationTime, Data, SessionKey]).
 
+-else. % new crypto available (OTP 23+)
+-spec encrypt_data(binary(), binary()) -> binary().
+encrypt_data(Data, Key) ->
+    IV = crypto:strong_rand_bytes(16),
+    Crypt = crypto:crypto_one_time(aes_128_cfb128, Key, IV, Data, true),
+    <<IV/binary, Crypt/binary>>.
+
+-spec decrypt_data(binary(), binary()) -> binary().
+decrypt_data(<<IV:16/binary, Crypt/binary>>, Key) ->
+    crypto:crypto_one_time(aes_128_cfb128, Key, IV, Crypt, false).
+
+-spec gen_key(iolist(), iolist()) -> binary().
+gen_key(ExpirationTime, ServerKey) ->
+    crypto:mac(hmac, md5, ServerKey, [ExpirationTime]).
+
+-spec gen_hmac(iolist(), binary(), iolist(), binary()) -> binary().
+gen_hmac(ExpirationTime, Data, SessionKey, Key) ->
+    crypto:mac(hmac, sha, Key, [ExpirationTime, Data, SessionKey]).
+
+-endif.
 -endif.
 
 -ifdef(TEST).

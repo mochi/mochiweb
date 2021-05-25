@@ -3,6 +3,7 @@ language: erlang
 notifications:
   email: false
 otp_release:
+  - 23.0
   - 22.0
   - 21.3
   - 21.2.3
