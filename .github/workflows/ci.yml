@@ -1,0 +1,42 @@
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+jobs:
+  test:
+    name: test
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+        otp:
+          - "24.0.2"
+          - "23.3.1"
+          - "22.3.4.9"
+          - "21.3.8.17"
+          - "20.3.8.26"
+        include:
+          - os: ubuntu-18.04
+            otp: "21.2.7"
+          - os: ubuntu-18.04
+            otp: "19.3.6.13"
+          - os: ubuntu-18.04
+            otp: "18.3.4.11"
+          - os: ubuntu-18.04
+            otp: "16.b.2.basho10"
+    steps:
+      - uses: actions/checkout@v2.3.2
+      - run: |
+          VERSION=${{matrix.otp}}
+          RELEASE=$(lsb_release -cs)
+          DIR=$(mktemp -d)
+          pushd $DIR
+          FILE=esl-erlang_$VERSION-1~ubuntu~$RELEASE\_amd64.deb
+          wget https://packages.erlang-solutions.com/erlang/debian/pool/$FILE
+          sudo dpkg -i $FILE
+          popd
+          rm -r $DIR
+      - run: make test

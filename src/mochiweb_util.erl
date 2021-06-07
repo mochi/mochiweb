@@ -356,6 +356,12 @@ urlsplit_query("#" ++ Rest, Acc) ->
 urlsplit_query([C | Rest], Acc) ->
     urlsplit_query(Rest, [C | Acc]).
 
+extension(Name) ->
+    case filename:extension(Name) of
+        "" -> Name;
+        Ext -> Ext
+    end.
+
 %% @spec guess_mime(string()) -> string()
 %% @doc  Guess the mime type of a file by the extension of its filename.
 guess_mime(File) ->
@@ -363,7 +369,7 @@ guess_mime(File) ->
         "crossdomain.xml" ->
             "text/x-cross-domain-policy";
         Name ->
-            case mochiweb_mime:from_extension(filename:extension(Name)) of
+            case mochiweb_mime:from_extension(extension(Name)) of
                 undefined ->
                     "text/plain";
                 Mime ->
