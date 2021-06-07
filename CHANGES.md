@@ -1,3 +1,10 @@
+Version 2.21.0 released 2021-06-06
+
+* Upgrade crypto functions to support OTP 23
+  https://github.com/mochi/mochiweb/pull/231
+* Switch from Travis to GitHub Actions for testing
+  https://github.com/mochi/mochiweb/pull/232
+
 Version 2.20.1 released 2020-02-03
 
 * Removed deprecated metadata from .app file
