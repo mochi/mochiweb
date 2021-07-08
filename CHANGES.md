@@ -1,3 +1,9 @@
+Version 2.22.0 released XXXX-XX-XX
+
+* Renamed master branch to main
+* Add unquote_path/1 for separate '+' encoding
+  https://github.com/mochi/mochiweb/pull/231
+
 Version 2.21.0 released 2021-06-06
 
 * Upgrade crypto functions to support OTP 23

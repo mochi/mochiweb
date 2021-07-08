@@ -10,3 +10,4 @@
 *.swp
 *.beam
 *.dump
+rebar.lock
