@@ -5,7 +5,7 @@
 
 -module(mochiweb_util).
 -author('bob@mochimedia.com').
--export([join/2, quote_plus/1, urlencode/1, parse_qs/1, unquote/1]).
+-export([join/2, quote_plus/1, urlencode/1, parse_qs/1, unquote/1, unquote_path/1]).
 -export([path_split/1]).
 -export([urlsplit/1, urlsplit_path/1, urlunsplit/1, urlunsplit_path/1]).
 -export([guess_mime/1, parse_header/1]).
@@ -34,6 +34,8 @@ hexdigit(C) when C < 16 -> $A + (C - 10).
 unhexdigit(C) when C >= $0, C =< $9 -> C - $0;
 unhexdigit(C) when C >= $a, C =< $f -> C - $a + 10;
 unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
+unhexdigit(Hi, Lo) ->
+    unhexdigit(Lo) bor (unhexdigit(Hi) bsl 4).
 
 %% @spec partition(String, Sep) -> {String, [], []} | {Prefix, Sep, Postfix}
 %% @doc Inspired by Python 2.5's str.partition:
@@ -256,9 +258,26 @@ qs_revdecode([], Acc) ->
 qs_revdecode([$+ | Rest], Acc) ->
     qs_revdecode(Rest, [$\s | Acc]);
 qs_revdecode([Lo, Hi, ?PERCENT | Rest], Acc) when ?IS_HEX(Lo), ?IS_HEX(Hi) ->
-    qs_revdecode(Rest, [(unhexdigit(Lo) bor (unhexdigit(Hi) bsl 4)) | Acc]);
+    qs_revdecode(Rest, [(unhexdigit(Hi, Lo)) | Acc]);
 qs_revdecode([C | Rest], Acc) ->
     qs_revdecode(Rest, [C | Acc]).
+
+%% @spec unquote_path(string() | binary()) -> string()
+%% @doc Unquote a URL encoded string, does not encode + into space.
+unquote_path(Binary) when is_binary(Binary) ->
+    unquote_path(binary_to_list(Binary));
+unquote_path(String) ->
+    qs_revdecode_path(lists:reverse(String)).
+
+qs_revdecode_path(S) ->
+    qs_revdecode_path(S, []).
+
+qs_revdecode_path([], Acc) ->
+    Acc;
+qs_revdecode_path([Lo, Hi, ?PERCENT | Rest], Acc) when ?IS_HEX(Lo), ?IS_HEX(Hi) ->
+    qs_revdecode_path(Rest, [(unhexdigit(Hi, Lo)) | Acc]);
+qs_revdecode_path([C | Rest], Acc) ->
+    qs_revdecode_path(Rest, [C | Acc]).
 
 %% @spec urlsplit(Url) -> {Scheme, Netloc, Path, Query, Fragment}
 %% @doc Return a 5-tuple, does not expand % escapes. Only supports HTTP style
