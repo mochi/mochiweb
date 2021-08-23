@@ -1,4 +1,4 @@
-Version 2.22.0 released XXXX-XX-XX
+Version 2.22.0 released 2021-08-23
 
 * Renamed master branch to main
 * Add unquote_path/1 for separate '+' encoding
