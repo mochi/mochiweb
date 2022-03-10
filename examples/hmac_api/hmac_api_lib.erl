@@ -12,7 +12,7 @@
 %%% sign/5 is used client-side to sign a request
 %%% - it returns an HTTPAuthorization header
 %%%
-%%% authorize_request/1 takes a mochiweb Request as an arguement
+%%% authorize_request/1 takes a mochiweb Request as an argument
 %%% and checks that the request matches the signature
 %%%
 %%% get_api_keypair/0 creates a pair of public/private keys
