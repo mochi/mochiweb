@@ -142,7 +142,7 @@ end_to_end_client(S) ->
       0:1, %% Rsv1
       0:1, %% Rsv2
       0:1, %% Rsv3
-      1:4, %% Opcode, text frame (all mochiweb suports for now)
+      1:4, %% Opcode, text frame (all mochiweb supports for now)
       MsgSize:8, %% Expecting small size
       SmallMessage/binary>> =
 	WsFrames,

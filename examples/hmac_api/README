@@ -53,7 +53,7 @@ The api described in this document is NOT:
   - see https://github.com/tim/erlang-oauth
 * an implementation of 3-legged OAUTH
 
-It is not suitable for use in applications where an end user has to log into a service and piggy-back on top of a keypair security system.
+It is not suitable for use in applications where an end user has to log into a service and piggy-back on top of a key pair security system.
 
 THE CLIENT LIBRARY HERE IS **NOT** AN AMAZON CLIENT LIBRARY. AMAZON DOES FUNKY STUFF WITH HOSTNAMES AND PUSHES THEM ONTO THE URL IN CANONICALIZATION! THE CLIENT LIBRARY IS AMAZON-A-LIKE ENOUGH TO USE THE AMAZON DOCOS TO BUILD A TEST SUITE.
 

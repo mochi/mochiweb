@@ -38,7 +38,7 @@
 %% TODO: Import this from elsewhere after attribute types refactor.
 -type header() :: {string(), string()}.
 
-%% @doc Generates a secure encrypted binary convining all the parameters. The
+%% @doc Generates a secure encrypted binary combining all the parameters. The
 %% expiration time must be a 32-bit integer.
 -spec generate_session_data(
         ExpirationTime :: expiration_time(),
