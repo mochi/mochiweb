@@ -55,7 +55,7 @@ init(Server, Listen, Loop, Opts) ->
       {error, Err}
 	  when Err =:= closed orelse
 		 Err =:= esslaccept orelse Err =:= timeout ->
-	  exit(normal);
+	  exit({shutdown, Err});
       Other ->
 	  %% Mitigate out of file descriptor scenario by sleeping for a
 	  %% short time to slow error rate

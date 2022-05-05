@@ -201,7 +201,7 @@ get(peer,
 		string:strip(lists:last(string:tokens(Hosts, ",")))
 	  end;
       {ok, {Addr, _Port}} -> inet_parse:ntoa(Addr);
-      {error, enotconn} -> exit(normal)
+      {error, enotconn = Error} -> exit({shutdown, Error})
     end;
 get(path,
     {?MODULE,
@@ -261,7 +261,7 @@ send(Data,
        _Headers]}) ->
     case mochiweb_socket:send(Socket, Data) of
       ok -> ok;
-      _ -> exit(normal)
+      _ -> exit({shutdown, send_error})
     end.
 
 %% @spec recv(integer(), request()) -> binary()
@@ -283,7 +283,7 @@ recv(Length, Timeout,
        _Headers]}) ->
     case mochiweb_socket:recv(Socket, Length, Timeout) of
       {ok, Data} -> put(?SAVE_RECV, true), Data;
-      _ -> exit(normal)
+      _ -> exit({shutdown, recv_error})
     end.
 
 %% @spec body_length(request()) -> undefined | chunked | unknown_transfer_encoding | integer()
@@ -774,7 +774,7 @@ read_chunk_length({?MODULE,
 	  {Hex, _Rest} = lists:splitwith(Splitter,
 					 binary_to_list(Header)),
 	  mochihex:to_int(Hex);
-      _ -> exit(normal)
+      _ -> exit({shutdown, read_chunk_length_recv_error})
     end.
 
 %% @spec read_chunk(integer(), request()) -> Chunk::binary() | [Footer::binary()]
@@ -792,7 +792,7 @@ read_chunk(0,
 		case mochiweb_socket:recv(Socket, 0, ?IDLE_TIMEOUT) of
 		  {ok, <<"\r\n">>} -> Acc;
 		  {ok, Footer} -> F1(F1, [Footer | Acc]);
-		  _ -> exit(normal)
+		  _ -> exit({shutdown, read_chunk_recv_error})
 		end
 	end,
     Footers = F(F, []),
@@ -810,7 +810,7 @@ read_chunk(Length,
 			      ?IDLE_TIMEOUT)
 	of
       {ok, <<Chunk:Length/binary, "\r\n">>} -> Chunk;
-      _ -> exit(normal)
+      _ -> exit({shutdown, read_chunk_recv_error})
     end.
 
 read_sub_chunks(Length, MaxChunkSize, Fun, FunState,

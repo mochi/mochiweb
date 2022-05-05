@@ -174,9 +174,9 @@ type({ssl, _}) ->
 type(_) ->
     plain.
 
-exit_if_closed({error, closed}) ->
-    exit(normal);
-exit_if_closed({error, einval}) ->
-    exit(normal);
+exit_if_closed({error, closed = Error}) ->
+    exit({shutdown, Error});
+exit_if_closed({error, einval = Error}) ->
+    exit({shutdown, Error});
 exit_if_closed(Res) ->
     Res.

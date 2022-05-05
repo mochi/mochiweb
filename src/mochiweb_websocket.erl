@@ -48,23 +48,23 @@ loop(Socket, Body, State, WsVersion, ReplyChannel) ->
 
 request(Socket, Body, State, WsVersion, ReplyChannel) ->
     receive
-      {tcp_closed, _} ->
-	  mochiweb_socket:close(Socket), exit(normal);
-      {ssl_closed, _} ->
-	  mochiweb_socket:close(Socket), exit(normal);
-      {tcp_error, _, _} ->
-	  mochiweb_socket:close(Socket), exit(normal);
+      {tcp_closed = Error, _} ->
+	  mochiweb_socket:close(Socket), exit({shutdown, Error});
+      {ssl_closed = Error, _} ->
+	  mochiweb_socket:close(Socket), exit({shutdown, Error});
+      {tcp_error, _, Error} ->
+	  mochiweb_socket:close(Socket), exit({shutdown, {tcp_error, Error}});
       {Proto, _, WsFrames}
 	  when Proto =:= tcp orelse Proto =:= ssl ->
 	  case parse_frames(WsVersion, WsFrames, Socket) of
-	    close -> mochiweb_socket:close(Socket), exit(normal);
-	    error -> mochiweb_socket:close(Socket), exit(normal);
+	    close -> mochiweb_socket:close(Socket), exit({shutdown, websocket_parse_frames_close});
+	    error -> mochiweb_socket:close(Socket), exit({shutdown, websocket_parse_frames_error});
 	    Payload ->
 		NewState = call_body(Body, Payload, State,
 				     ReplyChannel),
 		loop(Socket, Body, NewState, WsVersion, ReplyChannel)
 	  end;
-      _ -> mochiweb_socket:close(Socket), exit(normal)
+      _ -> mochiweb_socket:close(Socket), exit({shutdown, websocket_request_error})
     end.
 
 call_body({M, F, A}, Payload, State, ReplyChannel) ->
@@ -96,7 +96,7 @@ upgrade_connection({ReqM, _} = Req, Body) ->
 	  {Reentry, ReplyChannel};
       _ ->
 	  mochiweb_socket:close(ReqM:get(socket, Req)),
-	  exit(normal)
+	  exit({shutdown, websocket_handshake_error})
     end.
 
 make_handshake({ReqM, _} = Req) ->
@@ -204,19 +204,19 @@ parse_hybi_frames(Socket,
 								{active,
 								 once}])),
     receive
-      {tcp_closed, _} ->
-	  mochiweb_socket:close(Socket), exit(normal);
-      {ssl_closed, _} ->
-	  mochiweb_socket:close(Socket), exit(normal);
-      {tcp_error, _, _} ->
-	  mochiweb_socket:close(Socket), exit(normal);
+      {tcp_closed = Error, _} ->
+	  mochiweb_socket:close(Socket), exit({shutdown, Error});
+      {ssl_closed = Error, _} ->
+	  mochiweb_socket:close(Socket), exit({shutdown, Error});
+      {tcp_error, _, Error} ->
+	  mochiweb_socket:close(Socket), exit({shutdown, {tcp_error, Error}});
       {Proto, _, Continuation}
 	  when Proto =:= tcp orelse Proto =:= ssl ->
 	  parse_hybi_frames(Socket,
 			    <<PartFrame/binary, Continuation/binary>>, Acc);
-      _ -> mochiweb_socket:close(Socket), exit(normal)
+      _ -> mochiweb_socket:close(Socket), exit({shutdown, parse_hybi_frames_error})
       after 5000 ->
-		mochiweb_socket:close(Socket), exit(normal)
+		mochiweb_socket:close(Socket), exit({shutdown, parse_hybi_frames_timeout})
     end;
 parse_hybi_frames(S,
 		  <<_Fin:1, _Rsv:3, Opcode:4, _Mask:1, 127:7, 0:1,

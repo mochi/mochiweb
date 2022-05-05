@@ -116,14 +116,14 @@ request(Socket, Opts, Body) ->
       {Protocol, _, {http_error, "\n"}}
 	  when Protocol == http orelse Protocol == ssl ->
 	  request(Socket, Opts, Body);
-      {tcp_closed, _} ->
-	  mochiweb_socket:close(Socket), exit(normal);
+      {tcp_closed = Error, _} ->
+	  mochiweb_socket:close(Socket), exit({shutdown, Error});
       {tcp_error, _, emsgsize} = Other ->
 	  handle_invalid_msg_request(Other, Socket, Opts);
-      {ssl_closed, _} ->
-	  mochiweb_socket:close(Socket), exit(normal)
+      {ssl_closed = Error, _} ->
+	  mochiweb_socket:close(Socket), exit({shutdown, Error})
       after ?REQUEST_RECV_TIMEOUT ->
-		mochiweb_socket:close(Socket), exit(normal)
+		mochiweb_socket:close(Socket), exit({shutdown, request_recv_timeout})
     end.
 
 reentry(Body) ->
@@ -153,13 +153,13 @@ headers(Socket, Opts, Request, Headers, Body,
 	  when Protocol == http orelse Protocol == ssl ->
 	  headers(Socket, Opts, Request,
 		  [{Name, Value} | Headers], Body, 1 + HeaderCount);
-      {tcp_closed, _} ->
-	  mochiweb_socket:close(Socket), exit(normal);
+      {tcp_closed = Error, _} ->
+	  mochiweb_socket:close(Socket), exit({shutdown, Error});
       {tcp_error, _, emsgsize} = Other ->
 	  handle_invalid_msg_request(Other, Socket, Opts, Request,
 				     Headers)
       after ?HEADERS_RECV_TIMEOUT ->
-		mochiweb_socket:close(Socket), exit(normal)
+		mochiweb_socket:close(Socket), exit({shutdown, headers_recv_timeout})
     end.
 
 call_body({M, F, A}, Req) when is_atom(M) ->
@@ -183,7 +183,7 @@ handle_invalid_msg_request(Msg, Socket, Opts, Request,
       {{tcp_error, _, emsgsize}, true} ->
 	  %% R15B02 returns this then closes the socket, so close and exit
 	  mochiweb_socket:close(Socket),
-	  exit(normal);
+         exit({shutdown, {tcp_error, emsgsize}});
       _ ->
 	  handle_invalid_request(Socket, Opts, Request,
 				 RevHeaders)
@@ -198,7 +198,7 @@ handle_invalid_request(Socket, Opts, Request,
 				  RevHeaders),
     ReqM:respond({400, [], []}, Req),
     mochiweb_socket:close(Socket),
-    exit(normal).
+    exit({shutdown, invalid_request}).
 
 new_request(Socket, Opts, Request, RevHeaders) ->
     ok =
@@ -211,7 +211,7 @@ new_request(Socket, Opts, Request, RevHeaders) ->
 after_response(Body, {ReqM, _} = Req) ->
     Socket = ReqM:get(socket, Req),
     case ReqM:should_close(Req) of
-      true -> mochiweb_socket:close(Socket), exit(normal);
+      true -> mochiweb_socket:close(Socket), exit({shutdown, should_close});
       false ->
 	  ReqM:cleanup(Req),
 	  erlang:garbage_collect(),

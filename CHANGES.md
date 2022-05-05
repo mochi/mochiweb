@@ -1,3 +1,15 @@
+New version
+
+* Crashing client processes now exit with reason
+  `{shutdown, Error}`. This ensures processes
+  linked to the connection process are also
+  cleaned up. If exit `normal` was caught in a
+  request loop callback, for example in a
+  `try ... catch exit:normal ...` expression,
+  that expression might have to be updated to
+  handle the `{shutdown, Error}` error reason.
+  https://github.com/mochi/mochiweb/pull/238
+
 Version 2.22.0 released 2021-08-23
 
 * Renamed master branch to main
