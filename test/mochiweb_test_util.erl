@@ -25,13 +25,8 @@ with_server(Transport, ServerFun, ClientFun) ->
     mochiweb_http:stop(Server),
     Res.
 
--ifdef(sni_unavailable).
-ssl_client_opts(Opts) ->
-  [{ssl_imp, new} | Opts].
--else.
 ssl_client_opts(Opts) ->
   [{server_name_indication, disable} | Opts].
--endif.
 
 sock_fun(Transport, Port) ->
     Opts = [binary, {active, false}, {packet, http}],
