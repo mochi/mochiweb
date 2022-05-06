@@ -108,8 +108,8 @@ request(Socket, Opts, Body) ->
 	  request(Socket, Opts, Body);
       {tcp_closed = Error, _} ->
 	  mochiweb_socket:close(Socket), exit({shutdown, Error});
-      {tcp_error, _, emsgsize} = Other ->
-	  handle_invalid_msg_request(Other, Socket, Opts);
+      {tcp_error, _, emsgsize} ->
+	  handle_invalid_request(Socket, Opts);
       {ssl_closed = Error, _} ->
 	  mochiweb_socket:close(Socket), exit({shutdown, Error})
       after ?REQUEST_RECV_TIMEOUT ->
@@ -145,9 +145,8 @@ headers(Socket, Opts, Request, Headers, Body,
 		  [{Name, Value} | Headers], Body, 1 + HeaderCount);
       {tcp_closed = Error, _} ->
 	  mochiweb_socket:close(Socket), exit({shutdown, Error});
-      {tcp_error, _, emsgsize} = Other ->
-	  handle_invalid_msg_request(Other, Socket, Opts, Request,
-				     Headers)
+      {tcp_error, _, emsgsize} ->
+	  handle_invalid_request(Socket, Opts, Request, Headers)
       after ?HEADERS_RECV_TIMEOUT ->
 		mochiweb_socket:close(Socket), exit({shutdown, headers_recv_timeout})
     end.
@@ -157,20 +156,11 @@ call_body({M, F, A}, Req) when is_atom(M) ->
 call_body({M, F}, Req) when is_atom(M) -> M:F(Req);
 call_body(Body, Req) -> Body(Req).
 
--spec handle_invalid_msg_request(term(), term(),
-				 term()) -> no_return().
-
-handle_invalid_msg_request(Msg, Socket, Opts) ->
-    handle_invalid_msg_request(Msg, Socket, Opts,
+-spec handle_invalid_request(term(), term()) -> no_return().
+handle_invalid_request(Socket, Opts) ->
+    handle_invalid_request(Socket, Opts,
 			       {'GET', {abs_path, "/"}, {0, 9}}, []).
 
--spec handle_invalid_msg_request(term(), term(), term(),
-				 term(), term()) -> no_return().
-
-handle_invalid_msg_request(_Msg, Socket, Opts, Request,
-			   RevHeaders) ->
-    handle_invalid_request(Socket, Opts, Request,
-                RevHeaders).
 
 -spec handle_invalid_request(term(), term(), term(),
 			     term()) -> no_return().
