@@ -348,9 +348,13 @@ find_boundary(Prefix, Data) ->
 -include_lib("eunit/include/eunit.hrl").
 
 ssl_cert_opts() ->
-    EbinDir = filename:dirname(code:which(?MODULE)),
-    CertDir = filename:join([EbinDir, "..", "support",
-			     "test-materials"]),
+    {ok, Cwd} = file:get_cwd(),
+    CertDir = filename:join(
+        case filename:basename(Cwd) of
+            %% rebar2 compatibility
+            ".eunit" -> [".."];
+            _ -> []
+        end ++ ["support", "test-materials"]),
     CertFile = filename:join(CertDir, "test_ssl_cert.pem"),
     KeyFile = filename:join(CertDir, "test_ssl_key.pem"),
     [{certfile, CertFile}, {keyfile, KeyFile}].
