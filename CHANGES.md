@@ -1,5 +1,10 @@
-New version
+Version 3.0.0 released 2022-XX-XX
 
+* Minimum OTP version is now 18, which
+  allows us to remove a number of backwards
+  compatibility hacks while still supporting
+  almost 7 years of Erlang releases.
+  https://github.com/mochi/mochiweb/pull/239
 * Crashing client processes now exit with reason
   `{shutdown, Error}`. This ensures processes
   linked to the connection process are also

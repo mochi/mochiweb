@@ -43,16 +43,6 @@
 
 -define(DEFAULTS, [{name, ?MODULE}, {port, 8888}]).
 
--ifdef(gen_tcp_r15b_workaround).
-
-r15b_workaround() -> false.
-
--else.
-
-r15b_workaround() -> false.
-
--endif.
-
 parse_options(Options) ->
     {loop, HttpLoop} = proplists:lookup(loop, Options),
     Loop = {?MODULE, loop, [HttpLoop]},
@@ -118,8 +108,8 @@ request(Socket, Opts, Body) ->
 	  request(Socket, Opts, Body);
       {tcp_closed = Error, _} ->
 	  mochiweb_socket:close(Socket), exit({shutdown, Error});
-      {tcp_error, _, emsgsize} = Other ->
-	  handle_invalid_msg_request(Other, Socket, Opts);
+      {tcp_error, _, emsgsize} ->
+	  handle_invalid_request(Socket, Opts);
       {ssl_closed = Error, _} ->
 	  mochiweb_socket:close(Socket), exit({shutdown, Error})
       after ?REQUEST_RECV_TIMEOUT ->
@@ -155,9 +145,8 @@ headers(Socket, Opts, Request, Headers, Body,
 		  [{Name, Value} | Headers], Body, 1 + HeaderCount);
       {tcp_closed = Error, _} ->
 	  mochiweb_socket:close(Socket), exit({shutdown, Error});
-      {tcp_error, _, emsgsize} = Other ->
-	  handle_invalid_msg_request(Other, Socket, Opts, Request,
-				     Headers)
+      {tcp_error, _, emsgsize} ->
+	  handle_invalid_request(Socket, Opts, Request, Headers)
       after ?HEADERS_RECV_TIMEOUT ->
 		mochiweb_socket:close(Socket), exit({shutdown, headers_recv_timeout})
     end.
@@ -167,27 +156,11 @@ call_body({M, F, A}, Req) when is_atom(M) ->
 call_body({M, F}, Req) when is_atom(M) -> M:F(Req);
 call_body(Body, Req) -> Body(Req).
 
--spec handle_invalid_msg_request(term(), term(),
-				 term()) -> no_return().
-
-handle_invalid_msg_request(Msg, Socket, Opts) ->
-    handle_invalid_msg_request(Msg, Socket, Opts,
+-spec handle_invalid_request(term(), term()) -> no_return().
+handle_invalid_request(Socket, Opts) ->
+    handle_invalid_request(Socket, Opts,
 			       {'GET', {abs_path, "/"}, {0, 9}}, []).
 
--spec handle_invalid_msg_request(term(), term(), term(),
-				 term(), term()) -> no_return().
-
-handle_invalid_msg_request(Msg, Socket, Opts, Request,
-			   RevHeaders) ->
-    case {Msg, r15b_workaround()} of
-      {{tcp_error, _, emsgsize}, true} ->
-	  %% R15B02 returns this then closes the socket, so close and exit
-	  mochiweb_socket:close(Socket),
-         exit({shutdown, {tcp_error, emsgsize}});
-      _ ->
-	  handle_invalid_request(Socket, Opts, Request,
-				 RevHeaders)
-    end.
 
 -spec handle_invalid_request(term(), term(), term(),
 			     term()) -> no_return().
