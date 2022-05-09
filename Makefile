@@ -1,24 +1,16 @@
-PREFIX:=../
-DEST:=$(PREFIX)$(PROJECT)
+REBAR?=rebar3
 
-REBAR=./rebar
+.PHONY: all edoc test clean
 
-.PHONY: all edoc test clean build_plt dialyzer app
+build:
+	@$(REBAR) get-deps # rebar2 compatibility, it's no-op on rebar3
+	@$(REBAR) compile
 
-all:
-	@$(REBAR) prepare-deps
-
-edoc: all
-	@$(REBAR) doc
-
-test:
-	@rm -rf .eunit
-	@mkdir -p .eunit
+test: build
 	@$(REBAR) eunit
+
+edoc: build
+	@$(REBAR) edoc
 
 clean:
 	@$(REBAR) clean
-
-app:
-	@[ -z "$(PROJECT)" ] && echo "ERROR: required variable PROJECT missing" 1>&2 && exit 1 || true
-	@$(REBAR) -r create template=mochiwebapp dest=$(DEST) appid=$(PROJECT)
