@@ -1,0 +1,14 @@
+/ebin
+/doc
+/_test
+/.eunit
+/docs
+.DS_Store
+/TEST-*.xml
+/deps
+/.rebar
+*.swp
+*.beam
+*.dump
+_build/
+rebar.lock

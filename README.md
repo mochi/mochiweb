@@ -6,13 +6,9 @@ The mailing list for MochiWeb is at https://groups.google.com/group/mochiweb/
 
 Erlang OTP is required for setting up the MochiWeb environment and is available at https://www.erlang.org/
 
-To create a new mochiweb using project:
-   make app PROJECT=project_name
+To create a new mochiweb using project see the `example_project` in the `examples/` folder.
 
-To create a new mochiweb using project in a specific directory:
-   make app PROJECT=project_name PREFIX=$HOME/projects/
-
-Information about Rebar (Erlang build tool) is available at https://github.com/rebar/rebar
+Information about Rebar (Erlang build tool) is available at https://github.com/erlang/rebar3
 
 MochiWeb is currently tested with Erlang/OTP 18.3 through 24.0,
 versions older than 3.0.0 may still be compatible back to R15B-03.
