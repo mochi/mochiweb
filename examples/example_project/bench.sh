@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # workaround for rebar mustache template bug
-DEFAULT_PORT={{port}}
+DEFAULT_PORT=8080
 HOST=${HOST:-127.0.0.1}
 PORT=${PORT:-${DEFAULT_PORT}}
 

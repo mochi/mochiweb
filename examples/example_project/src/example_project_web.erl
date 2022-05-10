@@ -1,11 +1,11 @@
-%% @author {{author}}
-%% @copyright {{year}} {{author}}
+%% @author Mochi Media <dev@mochimedia.com>
+%% @copyright 2010 Mochi Media <dev@mochimedia.com>
 
-%% @doc Web server for {{appid}}.
+%% @doc Web server for example_project.
 
--module('{{appid}}_web').
+-module('example_project_web').
 
--author("{{author}}").
+-author("Mochi Media <dev@mochimedia.com>").
 
 -export([loop/2, start/1, stop/0]).
 

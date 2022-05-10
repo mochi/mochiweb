@@ -5,34 +5,24 @@ on:
   pull_request:
 jobs:
   test:
-    name: test
+    name: test ${{matrix.otp}} on ${{matrix.os}}
     runs-on: ${{matrix.os}}
+    container:
+      image: erlang:${{matrix.otp}}
     strategy:
       fail-fast: false
       matrix:
         os:
           - ubuntu-latest
         otp:
-          - "24.3.3"
-          - "23.3.4.5"
-          - "22.3.4.9"
-          - "21.3.8.17"
+          - "24.3.4.0"
+          - "23.3.4.14"
+          - "22.3.4.26"
+          - "21.3.8.24"
           - "20.3.8.26"
-        include:
-          - os: ubuntu-18.04
-            otp: "19.3.6.13"
-          - os: ubuntu-18.04
-            otp: "18.3.4.11"
+          - "19.3.6.13"
+          - "18.3.4.11"
     steps:
       - uses: actions/checkout@v2.3.2
-      - run: |
-          VERSION=${{matrix.otp}}
-          RELEASE=$(lsb_release -cs)
-          DIR=$(mktemp -d)
-          pushd $DIR
-          FILE=esl-erlang_$VERSION-1~ubuntu~$RELEASE\_amd64.deb
-          wget https://packages.erlang-solutions.com/erlang/debian/pool/$FILE
-          sudo dpkg -i $FILE
-          popd
-          rm -r $DIR
       - run: make test
+      - run: REBAR=rebar make test
