@@ -1,9 +1,0 @@
-%% -*- erlang -*-
-{application, {{appid}},
- [{description, "{{appid}}"},
-  {vsn, "{{version}}"},
-  {modules, []},
-  {registered, []},
-  {mod, {'{{appid}}_app', []}},
-  {env, []},
-  {applications, [kernel, stdlib, crypto]}]}.

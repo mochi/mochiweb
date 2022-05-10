@@ -10,6 +10,5 @@
 *.swp
 *.beam
 *.dump
+_build/
 rebar.lock
-/_build
-/rebar3.crashdump

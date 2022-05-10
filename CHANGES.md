@@ -1,5 +1,8 @@
-Version 3.0.0 released 2022-XX-XX
+Version 3.0.0 released 2022-05-09
 
+* rebar3 is now the preferred build tool (finally)
+  https://github.com/mochi/mochiweb/pull/241
+  https://github.com/mochi/mochiweb/pull/243
 * Minimum OTP version is now 18, which
   allows us to remove a number of backwards
   compatibility hacks while still supporting
@@ -14,6 +17,7 @@ Version 3.0.0 released 2022-XX-XX
   that expression might have to be updated to
   handle the `{shutdown, Error}` error reason.
   https://github.com/mochi/mochiweb/pull/238
+  https://github.com/mochi/mochiweb/pull/242
 
 Version 2.22.0 released 2021-08-23
 
