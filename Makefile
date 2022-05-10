@@ -1,6 +1,8 @@
 REBAR?=rebar3
 
-.PHONY: all edoc test clean
+.PHONY: all edoc test clean build
+
+all: build
 
 build:
 	@$(REBAR) get-deps # rebar2 compatibility, it's no-op on rebar3
