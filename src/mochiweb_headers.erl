@@ -174,7 +174,7 @@ lookup(K, T) ->
 %% @doc Insert the pair into the headers if it does not already exist.
 default(K, V, T) ->
     K1 = normalize(K),
-    V1 = any_to_list(V),
+    V1 = trim_leading_and_trailing_ws(any_to_list(V)),
     try gb_trees:insert(K1, {K, V1}, T)
     catch
         error:{key_exists, _} ->
@@ -185,7 +185,7 @@ default(K, V, T) ->
 %% @doc Insert the pair into the headers, replacing any pre-existing key.
 enter(K, V, T) ->
     K1 = normalize(K),
-    V1 = any_to_list(V),
+    V1 = trim_leading_and_trailing_ws(any_to_list(V)),
     gb_trees:enter(K1, {K, V1}, T).
 
 %% @spec insert(key(), value(), headers()) -> headers()
@@ -193,7 +193,7 @@ enter(K, V, T) ->
 %%      A merge is done with Value = V0 ++ ", " ++ V1.
 insert(K, V, T) ->
     K1 = normalize(K),
-    V1 = any_to_list(V),
+    V1 = trim_leading_and_trailing_ws(any_to_list(V)),
     try gb_trees:insert(K1, {K, V1}, T)
     catch
         error:{key_exists, _} ->
@@ -214,6 +214,9 @@ tokenize_header_value(undefined) ->
     undefined;
 tokenize_header_value(V) ->
     reversed_tokens(trim_and_reverse(V, false), [], []).
+
+trim_leading_and_trailing_ws(S) ->
+    re:replace(S, "^[ \\t]*|[ \\t]*$", "", [global, {return, list}]).
 
 trim_and_reverse([S | Rest], Reversed) when S=:=$ ; S=:=$\n; S=:=$\t ->
     trim_and_reverse(Rest, Reversed);
