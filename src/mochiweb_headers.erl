@@ -242,7 +242,7 @@ reversed_tokens([C | Rest], Token, Acc) when C=:=$ ;C=:=$\n;C=:=$\t;C=:=$, ->
 reversed_tokens([C | Rest], Token, Acc) ->
     reversed_tokens(Rest, [C | Token], Acc);
 reversed_tokens(_, _, _) ->
-    undefeined.
+    undefined.
 
 extract_quoted_string([], _Acc) ->
     undefined;
