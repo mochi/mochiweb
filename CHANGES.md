@@ -1,4 +1,4 @@
-Version 3.1.0 released 2022-08-21
+Version 3.1.0 released 2022-08-13
 
 * Leading and trailing whitespace in header values are now trimmed
   for better RFC 7230 compliance.
