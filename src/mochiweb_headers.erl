@@ -216,7 +216,7 @@ tokenize_header_value(V) ->
     reversed_tokens(trim_and_reverse(V, false), [], []).
 
 trim_leading_and_trailing_ws(S) ->
-    re:replace(S, "^[ \\t]*|[ \\t]*$", "", [global, {return, list}]).
+    trim_and_reverse(trim_and_reverse(S, false), false).
 
 trim_and_reverse([S | Rest], Reversed) when S=:=$ ; S=:=$\n; S=:=$\t ->
     trim_and_reverse(Rest, Reversed);
@@ -366,6 +366,13 @@ set_cookie_test() ->
        [{"set-cookie", "foo"}, {"set-cookie", "bar"}, {"set-cookie", "baz"}],
        to_list(H)),
     ok.
+
+whitespace_headers_test() ->
+    %% Check RFC 7230 whitespace compliance
+    H = ?MODULE:make([{"X-Auth-Roles", "      test, test2,test3,       test4,    test5     ,        test6     "}]),
+    ?assertEqual(
+       [{"X-Auth-Roles", "test, test2,test3,       test4,    test5     ,        test6"}],
+       to_list(H)).
 
 headers_test() ->
     H = ?MODULE:make([{hdr, foo}, {"Hdr", "bar"}, {'Hdr', 2}]),
