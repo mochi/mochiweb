@@ -1,3 +1,10 @@
+Version 3.1.0 released 2022-08-21
+
+* Leading and trailing whitespace in header values are now trimmed
+  for better RFC 7230 compliance.
+  https://github.com/mochi/mochiweb/pull/247
+  https://github.com/mochi/mochiweb/pull/248
+
 Version 3.0.0 released 2022-05-09
 
 * rebar3 is now the preferred build tool (finally)
