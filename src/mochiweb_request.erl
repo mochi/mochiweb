@@ -769,7 +769,7 @@ read_chunk_length({?MODULE,
 								     [{packet,
 								       raw}])),
 	  Splitter = fun (C) ->
-			     C =/= $\r andalso C =/= $\n andalso C =/= $\n
+			     C =/= $\r andalso C =/= $\n andalso C =/= $\s
 		     end,
 	  {Hex, _Rest} = lists:splitwith(Splitter,
 					 binary_to_list(Header)),
