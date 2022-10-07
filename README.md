@@ -10,7 +10,7 @@ To create a new mochiweb using project see the `example_project` in the `example
 
 Information about Rebar (Erlang build tool) is available at https://github.com/erlang/rebar3
 
-MochiWeb is currently tested with Erlang/OTP 18.3 through 24.0,
+MochiWeb is currently tested with Erlang/OTP 18.3 through 25.1.1,
 versions older than 3.0.0 may still be compatible back to R15B-03.
 
 # OTP 21.2, 21.2.1, 21.2.2 warning
