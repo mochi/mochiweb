@@ -1,3 +1,8 @@
+Version 3.1.1 released 2022-XX-XX
+
+* Fix for chunk length parsing edge case
+  https://github.com/mochi/mochiweb/pull/249
+
 Version 3.1.0 released 2022-08-13
 
 * Leading and trailing whitespace in header values are now trimmed
