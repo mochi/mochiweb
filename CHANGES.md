@@ -1,5 +1,7 @@
 Version 3.1.1 released 2022-XX-XX
 
+* OTP 25 added to test matrix
+  https://github.com/mochi/mochiweb/pull/251
 * Fix for chunk length parsing edge case
   https://github.com/mochi/mochiweb/pull/249
 
