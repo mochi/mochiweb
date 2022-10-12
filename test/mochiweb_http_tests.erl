@@ -1,16 +1,48 @@
 -module(mochiweb_http_tests).
 
 -include_lib("eunit/include/eunit.hrl").
+-include("mochiweb_test_util.hrl").
 
 has_acceptor_bug_test_() ->
     {setup, fun start_server/0, fun mochiweb_http:stop/1,
      fun has_acceptor_bug_tests/1}.
+
 
 start_server() ->
     application:start(inets),
     {ok, Pid} = mochiweb_http:start_link([{port, 0},
 					  {loop, fun responder/1}]),
     Pid.
+
+chunked_server(Req) ->
+    mochiweb_request:respond(
+        {
+            201,
+            [{"Content-Type", "application/octet-stream"}],
+            mochiweb_request:recv_body(Req)
+        },
+        Req
+    ).
+
+chunked_client(Transport, Port) ->
+    mochiweb_test_util:client_request(
+        Transport,
+        Port,
+        'POST',
+        [#treq{
+            path = "/",
+            body = {chunked, ["5\r\n", "Mochi\r\n", "9  \r\n", "Developer\r\n", "0\r\n\r\n"]},
+            xreply = <<"MochiDeveloper">>
+        }]
+    ).
+
+chunked_encoding_test() ->
+    Res = mochiweb_test_util:with_server(
+        plain,
+        fun chunked_server/1,
+        fun chunked_client/2
+    ),
+    ?assertEqual(ok, Res).
 
 has_acceptor_bug_tests(Server) ->
     Port = mochiweb_socket_server:get(Server, port),
