@@ -710,7 +710,7 @@ parse_post({?MODULE,
 
 %% @spec stream_chunked_body(integer(), fun(), term(), request()) -> term()
 %% @doc The function is called for each chunk.
-%%      Used internally by read_chunked_body.
+%%      Used internally by stream_body.
 stream_chunked_body(MaxChunkSize, Fun, FunState,
 		    {?MODULE,
 		     [_Socket, _Opts, _Method, _RawPath, _Version,

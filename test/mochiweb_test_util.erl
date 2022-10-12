@@ -67,6 +67,11 @@ sock_fun(Transport, Port) ->
 client_request(Transport, Port, Method, TestReqs) ->
     client_request(sock_fun(Transport, Port), Method, TestReqs).
 
+body({ chunked, ChunkedBody }) ->
+    ChunkedBody;
+body(Body) ->
+    Body.
+
 client_request(SockFun, _Method, []) ->
     {the_end, {error, closed}} = {the_end, SockFun(recv)},
     ok;
@@ -75,7 +80,7 @@ client_request(SockFun, Method,
     Request = [atom_to_list(Method), " ", Path, " HTTP/1.1\r\n",
                client_headers(Body, Rest =:= []),
                "\r\n",
-               Body],
+               body(Body)],
     ok = SockFun({setopts, [{packet, http}]}),
     ok = SockFun({send, Request}),
     case Method of
@@ -118,14 +123,20 @@ read_server_headers(SockFun, Headers) ->
               mochiweb_headers:insert(Header, Value, Headers))
     end.
 
+body_length_headers(<<>>) ->
+    "";
+body_length_headers({ chunked, _ }) ->
+    "Transfer-Encoding: chunked\r\n";
+body_length_headers(Body) ->
+    ["Content-Length: ", integer_to_list(byte_size(Body)), "\r\n"].
+
 client_headers(Body, IsLastRequest) ->
     ["Host: localhost\r\n",
      case Body of
         <<>> ->
             "";
         _ ->
-            ["Content-Type: application/octet-stream\r\n",
-             "Content-Length: ", integer_to_list(byte_size(Body)), "\r\n"]
+            ["Content-Type: application/octet-stream\r\n" | body_length_headers(Body)]
      end,
      case IsLastRequest of
          true ->
