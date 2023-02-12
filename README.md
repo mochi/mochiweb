@@ -2,7 +2,7 @@
 MochiWeb is an Erlang library for building lightweight HTTP servers.
 
 ## Overview
-MochiWeb provides a lightweight and fast solution for building HTTP servers in Erlang. The library is provides features for building robust and scalable HTTP servers.
+MochiWeb provides a lightweight and fast solution for building HTTP servers in Erlang. The library provides features for building robust and scalable HTTP servers.
 
 ## Getting Started
 Before you can use MochiWeb, you'll need to have [Erlang OTP](https://www.erlang.org/) installed. Once you have Erlang OTP installed, you can download the latest version of MochiWeb from the [GitHub repository](https://github.com/mochi/mochiweb).
