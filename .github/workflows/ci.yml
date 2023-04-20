@@ -15,15 +15,16 @@ jobs:
         os:
           - ubuntu-latest
         otp:
-          - "25.1.1"
-          - "24.3.4.0"
-          - "23.3.4.14"
+          - "25.3.0.0"
+          - "24.3.4.10"
+          - "23.3.4.18"
           - "22.3.4.26"
           - "21.3.8.24"
           - "20.3.8.26"
           - "19.3.6.13"
           - "18.3.4.11"
     steps:
-      - uses: actions/checkout@v2.3.2
+      - uses: actions/checkout@v3
       - run: make test
+      - run: make edoc
       - run: REBAR=rebar make test

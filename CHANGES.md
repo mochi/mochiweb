@@ -1,3 +1,8 @@
+Version 3.1.2 released 2023-04-20
+
+* Fix rebar edoc settings
+  https://github.com/mochi/mochiweb/pull/257
+
 Version 3.1.1 released 2022-10-11
 
 * OTP 25 added to test matrix
