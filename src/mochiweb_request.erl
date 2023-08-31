@@ -59,6 +59,8 @@
 -export([accepted_content_types/2,
 	 accepts_content_type/2]).
 
+-export([is_closed/1]).
+
 -define(SAVE_QS, mochiweb_request_qs).
 
 -define(SAVE_PATH, mochiweb_request_path).
@@ -1140,3 +1142,13 @@ accept_header({?MODULE,
       undefined -> "*/*";
       Value -> Value
     end.
+
+%% @spec is_closed(request()) -> true | false | undefined
+%% @doc Check if a request connection is closing or already closed. This may be
+%% useful when processing long running request callbacks, when the client
+%% disconnects after a short timeout. This function works on Linux, NetBSD,
+%% OpenBSD, FreeBSD and MacOS. On other operating systems, like Windows for
+%% instance, it will return undefined.
+is_closed({?MODULE,
+        [Socket, _Opts, _Method, _RawPath, _Version, _Headers]}) ->
+    mochiweb_socket:is_closed(Socket).
