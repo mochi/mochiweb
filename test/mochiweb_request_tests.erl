@@ -235,4 +235,27 @@ should_close_test() ->
 		 (F({1, 0}, [{"Connection", "Keep-Alive"}]))),
     ok.
 
+is_closed_test() ->
+    Headers = mochiweb_headers:make([{"Accept", "text/html"}]),
+    {ok, Socket} = gen_tcp:listen(0, [{active, false}]),
+    Req = mochiweb_request:new(Socket, 'GET', "/foo", {1, 1}, Headers),
+    case is_closed_supported() of
+        true ->
+            ?assertNot(mochiweb_request:is_closed(Req)),
+            gen_tcp:close(Socket),
+            ?assert(mochiweb_request:is_closed(Req));
+        false ->
+            ?assertEqual(undefined, mochiweb_request:is_closed(Req)),
+            gen_tcp:close(Socket),
+            ?assertEqual(undefined, mochiweb_request:is_closed(Req))
+    end.
+
+is_closed_supported() ->
+    case os:type() of
+        {unix, OsName} ->
+            lists:member(OsName, [linux, openbsd, netbsd, freebsd, darwin]);
+        {_, _} ->
+            false
+    end.
+
 -endif.
