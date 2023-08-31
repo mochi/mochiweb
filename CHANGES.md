@@ -1,3 +1,8 @@
+Version 3.2.0 released 2023-08-31
+
+* Add new mochiweb_request:is_closed/1 function
+  https://github.com/mochi/mochiweb/pull/258
+
 Version 3.1.2 released 2023-04-20
 
 * Fix rebar edoc settings
