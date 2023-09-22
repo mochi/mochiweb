@@ -1,3 +1,8 @@
+Version 3.2.1 released 2023-09-22
+
+* mochinum:digits/1: fix handling of -0.0 for OTP-26.1/27.0
+  https://github.com/mochi/mochiweb/pull/260
+
 Version 3.2.0 released 2023-08-31
 
 * Add new mochiweb_request:is_closed/1 function
