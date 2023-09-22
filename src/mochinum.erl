@@ -44,7 +44,7 @@
 %%       human-readable output, or compact ASCII serializations for floats.
 digits(N) when is_integer(N) ->
     integer_to_list(N);
-digits(0.0) ->
+digits(Float) when Float == 0.0 ->
     "0.0";
 digits(Float) ->
     {Frac1, Exp1} = frexp_int(Float),
@@ -287,6 +287,8 @@ digits_test() ->
                  digits(0)),
     ?assertEqual("0.0",
                  digits(0.0)),
+    ?assertEqual("0.0",
+                 digits(-0.0)),
     ?assertEqual("1.0",
                  digits(1.0)),
     ?assertEqual("-1.0",
