@@ -1,3 +1,8 @@
+Version 3.2.2 released XXXX-XX-XX
+
+* Update Erlang CI images
+  https://github.com/mochi/mochiweb/pull/261
+
 Version 3.2.1 released 2023-09-22
 
 * mochinum:digits/1: fix handling of -0.0 for OTP-26.1/27.0
