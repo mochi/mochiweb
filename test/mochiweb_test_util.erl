@@ -31,7 +31,7 @@ with_server(Transport, ServerFun, ClientFun) ->
     Res.
 
 ssl_client_opts(Opts) ->
-  [{server_name_indication, disable} | Opts].
+  [{server_name_indication, disable}, {verify, verify_none} | Opts].
 
 sock_fun(Transport, Port) ->
     Opts = [binary, {active, false}, {packet, http}],
