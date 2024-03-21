@@ -23,10 +23,27 @@ jobs:
           - "22"
           - "21"
           - "20"
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test
+      - run: make edoc
+      - run: REBAR=rebar make test
+  test-eol:
+    name: test ${{matrix.otp}} on ${{matrix.os}}
+    runs-on: ${{matrix.os}}
+    container:
+      image: erlang:${{matrix.otp}}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+        otp:
           - "19"
           - "18"
     steps:
-      - uses: actions/checkout@v4
+      # The old containers can't run checkout@v4
+      - uses: actions/checkout@v3
       - run: make test
       - run: make edoc
       - run: REBAR=rebar make test
