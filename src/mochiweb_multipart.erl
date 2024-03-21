@@ -275,7 +275,7 @@ feed_mp(body,
 	  C1 = Callback({body, Data}),
 	  feed_mp(headers,
 		  State#mp{callback = C1(body_end), buffer = Rest});
-      {maybe, Start} ->
+      {'maybe', Start} ->
 	  <<Data:Start/binary, Rest/binary>> = Buffer,
 	  feed_mp(body,
 		  read_more(State#mp{callback = Callback({body, Data}),
@@ -328,7 +328,7 @@ find_boundary(Prefix, Data) ->
 		{end_boundary, Skip, size(Prefix) + 4};
 	    _ when size(Data) < PrefixSkip + 4 ->
 		%% Underflow
-		{maybe, Skip};
+		{'maybe', Skip};
 	    _ ->
 		%% False positive
 		not_found
@@ -336,7 +336,7 @@ find_boundary(Prefix, Data) ->
       {partial, Skip, Length}
 	  when Skip + Length =:= size(Data) ->
 	  %% Underflow
-	  {maybe, Skip};
+	  {'maybe', Skip};
       _ -> not_found
     end.
 
@@ -695,8 +695,8 @@ find_boundary_test() ->
     {end_boundary, 1, 9} = find_boundary(B,
 					 <<"!\r\n--X--\r\nRest">>),
     not_found = find_boundary(B, <<"--X\r\nRest">>),
-    {maybe, 0} = find_boundary(B, <<"\r\n--X\r">>),
-    {maybe, 1} = find_boundary(B, <<"!\r\n--X\r">>),
+    {'maybe', 0} = find_boundary(B, <<"\r\n--X\r">>),
+    {'maybe', 1} = find_boundary(B, <<"!\r\n--X\r">>),
     P = <<"\r\n-----------------------------160374543510"
 	  "82272548568224146">>,
     B0 = <<55, 212, 131, 77, 206, 23, 216, 198, 35, 87, 252,
@@ -705,7 +705,7 @@ find_boundary_test() ->
 	   45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 45,
 	   45, 45, 45, 45, 45, 45, 45, 45, 45, 45, 49, 54, 48, 51,
 	   55, 52, 53, 52, 51, 53, 49>>,
-    {maybe, 30} = find_boundary(P, B0),
+    {'maybe', 30} = find_boundary(P, B0),
     not_found = find_boundary(B, <<"\r\n--XJOPKE">>),
     ok.
 
