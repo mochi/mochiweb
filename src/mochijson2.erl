@@ -966,8 +966,9 @@ decode_map_test() ->
     ?assertEqual(M, decode(Json, [{format, map}])).
 
 encode_map_test() ->
-    M = <<"{\"a\":1,\"b\":{\"c\":2}}">>,
-    ?assertEqual(M, iolist_to_binary(encode(#{a => 1, b => #{ c => 2}}))).
+    ?assertEqual(<<"{\"a\":1}">>, iolist_to_binary(encode(#{a => 1}))),
+    M = #{<<"a">> => 1, <<"b">> => #{<<"c">> => 2}},
+    ?assertEqual(M, decode(iolist_to_binary(encode(#{a => 1, b => #{ c => 2}})), [{format, map}])).
 
 encode_empty_map_test() ->
     ?assertEqual(<<"{}">>, encode(#{})).

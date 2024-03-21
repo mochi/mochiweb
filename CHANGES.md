@@ -1,5 +1,7 @@
-Version 3.2.2 released XXXX-XX-XX
+Version 3.2.2 released 2024-03-21
 
+* Use single quotes around 'maybe' atom for compatibility with OTP 27
+  https://github.com/mochi/mochiweb/pull/262
 * Update Erlang CI images
   https://github.com/mochi/mochiweb/pull/261
 
