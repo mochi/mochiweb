@@ -15,6 +15,7 @@ jobs:
         os:
           - ubuntu-latest
         otp:
+          - "28"
           - "27"
           - "26"
           - "25"
