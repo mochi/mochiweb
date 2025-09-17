@@ -1,3 +1,9 @@
+Version 3.3.0 released 2025-09-17
+
+* Add OTP 28 to CI and fix crypto:start() deprecation warning.
+  Removed support for OTP 18 and OTP 19.
+  https://github.com/mochi/mochiweb/pull/264
+
 Version 3.2.2 released 2024-03-21
 
 * Use single quotes around 'maybe' atom for compatibility with OTP 27
