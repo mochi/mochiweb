@@ -8,6 +8,7 @@
 -behaviour(gen_server).
 
 -include("internal.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -export([start/1, start_link/1, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, terminate/2, code_change/3,
@@ -57,8 +58,7 @@ get(Name, Property) ->
 set(Name, profile_fun, Fun) ->
     gen_server:cast(Name, {set, profile_fun, Fun});
 set(Name, Property, _Value) ->
-    error_logger:info_msg("?MODULE:set for ~p with ~p not implemented~n",
-                          [Name, Property]).
+    ?LOG_INFO("?MODULE:set for ~p with ~p not implemented~n", [Name, Property]).
 
 stop(Name) when is_atom(Name) orelse is_pid(Name) ->
     gen_server:call(Name, stop);
@@ -79,9 +79,8 @@ parse_options([], State=#mochiweb_socket_server{acceptor_pool_size=PoolSize,
                                                 max=Max}) ->
     case Max < PoolSize of
         true ->
-            error_logger:info_report([{warning, "max is set lower than acceptor_pool_size"},
-                                      {max, Max},
-                                      {acceptor_pool_size, PoolSize}]);
+            LogMsg = "max ~p is set lower than acceptor_pool_size ~p",
+            ?LOG_WARNING(LogMsg, [Max, PoolSize]);
         false ->
             ok
     end,
@@ -167,26 +166,8 @@ start_server(F, State=#mochiweb_socket_server{ssl=Ssl, name=Name}) ->
             gen_server:F(Name, ?MODULE, State, [])
     end.
 
--ifdef(otp_21).
-check_ssl_compatibility() ->
-    case lists:keyfind(ssl, 1, application:loaded_applications()) of
-        {_, _, V} when V =:= "9.1" orelse V =:= "9.1.1" ->
-            {error, "ssl-" ++ V ++ " (OTP 21.2 to 21.2.2) has a regression and is not safe to use with mochiweb. See https://bugs.erlang.org/browse/ERL-830"};
-        _ ->
-            ok
-    end.
--else.
-check_ssl_compatibility() ->
-    ok.
--endif.
-
 prep_ssl(true) ->
-    ok = mochiweb:ensure_started(crypto),
-    ok = mochiweb:ensure_started(asn1),
-    ok = mochiweb:ensure_started(public_key),
-    ok = mochiweb:ensure_started(ssl),
-    ok = check_ssl_compatibility(),
-    ok;
+    ok = mochiweb:ensure_started(ssl);
 prep_ssl(false) ->
     ok.
 
@@ -196,7 +177,7 @@ ensure_int(S) when is_list(S) ->
     list_to_integer(S).
 
 ipv6_supported() ->
-    case (catch inet:getaddr("localhost", inet6)) of
+    case inet:getaddr("localhost", inet6) of
         {ok, _Addr} ->
             true;
         {error, _} ->
@@ -319,7 +300,12 @@ handle_cast({accepted, Pid, Timing},
         undefined ->
             undefined;
         F when is_function(F) ->
-            catch F([{timing, Timing} | state_to_proplist(State1)])
+            try
+                F([{timing, Timing} | state_to_proplist(State1)])
+            catch
+                _:_ ->
+                    undefined
+            end
     end,
     {noreply, recycle_acceptor(Pid, State1)};
 handle_cast({set, profile_fun, ProfileFun}, State) ->
@@ -380,8 +366,7 @@ handle_info({'EXIT', Pid, Reason},
     case sets:is_element(Pid, Pool) of
         true ->
             %% If there was an unexpected error accepting, log and sleep.
-            error_logger:error_report({?MODULE, ?LINE,
-                                       {acceptor_error, Reason}}),
+            ?LOG_ERROR("Accept error ~p", [Reason]),
             timer:sleep(100);
         false ->
             ok
@@ -397,12 +382,12 @@ handle_info({From, Tag, get_modules}, State = #mochiweb_socket_server{name={loca
 
 % If for some reason we can't get the module name, send empty list to avoid release_handler timeout:
 handle_info({From, Tag, get_modules}, State) ->
-    error_logger:info_msg("mochiweb_socket_server replying to dynamic modules request as '[]'~n",[]),
+    ?LOG_INFO("mochiweb_socket_server replying to dynamic modules request as '[]'~n",[]),
     From ! {element(2,Tag), []},
     {noreply, State};
 
 handle_info(Info, State) ->
-    error_logger:info_report([{'INFO', Info}, {'State', State}]),
+    ?LOG_INFO("handle_info Info:~p State:~p", [Info, State]),
     {noreply, State}.
 
 

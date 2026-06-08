@@ -26,6 +26,7 @@
 -author('bob@mochimedia.com').
 
 -include("internal.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -export([init/4, start_link/3, start_link/4]).
 
@@ -50,26 +51,29 @@ do_accept(Server, Listen) ->
     end.
 
 init(Server, Listen, Loop, Opts) ->
-    case catch do_accept(Server, Listen) of
+    try do_accept(Server, Listen) of
       {ok, Socket} -> call_loop(Loop, Socket, Opts);
       {error, Err}
 	  when Err =:= closed orelse
 		 Err =:= esslaccept orelse Err =:= timeout ->
 	  exit({shutdown, Err});
       Other ->
-	  %% Mitigate out of file descriptor scenario by sleeping for a
-	  %% short time to slow error rate
-	  case Other of
-	    {error, emfile} ->
-		receive  after ?EMFILE_SLEEP_MSEC -> ok end;
-	    _ -> ok
-	  end,
-	  error_logger:error_report([{application, mochiweb},
-				     "Accept failed error",
-				     lists:flatten(io_lib:format("~p",
-								 [Other]))]),
-	  exit({error, accept_failed})
+          accept_failure(Other)
+    catch _:Other ->
+      accept_failure(Other)
     end.
+
+%% Mitigate out of file descriptor scenario by sleeping for a
+%% short time to slow error rate
+emfile_backoff({error, emfile}) ->
+    receive  after ?EMFILE_SLEEP_MSEC -> ok end;
+emfile_backoff(_Error) ->
+    ok.
+
+accept_failure(Error) ->
+    emfile_backoff(Error),
+    ?LOG_ERROR("Accept failed error ~p", [Error]),
+    exit({error, accept_failed}).
 
 call_loop({M, F}, Socket, Opts) when is_atom(M) ->
     M:F(Socket, Opts);

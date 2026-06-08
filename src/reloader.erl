@@ -151,11 +151,15 @@ reload(Module) ->
             case erlang:function_exported(Module, test, 0) of
                 true ->
                     io:format(" - Calling ~p:test() ...", [Module]),
-                    case catch Module:test() of
+                    try Module:test() of
                         ok ->
                             io:format(" ok.~n"),
                             reload;
-                        Reason ->
+                        Other ->
+                            io:format(" fail: ~p.~n", [Other]),
+                            reload_but_test_failed
+                    catch
+                        _:Reason ->
                             io:format(" fail: ~p.~n", [Reason]),
                             reload_but_test_failed
                     end;

@@ -30,22 +30,6 @@ listen(Ssl, Port, Opts, SslOpts) ->
             gen_tcp:listen(Port, Opts)
     end.
 
--ifdef(new_crypto_unavailable).
-add_unbroken_ciphers_default(Opts) ->
-    Default = filter_unsecure_cipher_suites(ssl:cipher_suites()),
-    Ciphers = filter_broken_cipher_suites(proplists:get_value(ciphers, Opts, Default)),
-    [{ciphers, Ciphers} | proplists:delete(ciphers, Opts)].
-
-%% Filter old map style cipher suites
-filter_unsecure_cipher_suites(Ciphers) ->
-    lists:filter(fun
-                    ({_,des_cbc,_}) -> false;
-                    ({_,_,md5}) -> false;
-                    (_) -> true
-                 end,
-                 Ciphers).
-
--else.
 add_unbroken_ciphers_default(Opts) ->
     %% add_safe_protocol_versions/1 must have been called to ensure a {versions, _} tuple is present
     Versions = proplists:get_value(versions, Opts),
@@ -60,8 +44,6 @@ filter_unsecure_cipher_suites(Ciphers) ->
         {key_exchange, fun(des_cbc) -> false; (_) -> true end},
         {mac, fun(md5) -> false; (_) -> true end}
     ]).
-
--endif.
 
 filter_broken_cipher_suites(Ciphers) ->
 	case proplists:get_value(ssl_app, ssl:versions()) of
@@ -108,17 +90,6 @@ transport_accept({ssl, ListenSocket}) ->
 transport_accept(ListenSocket) ->
     gen_tcp:accept(ListenSocket, ?ACCEPT_TIMEOUT).
 
--ifdef(ssl_handshake_unavailable).
-finish_accept({ssl, Socket}) ->
-    case ssl:ssl_accept(Socket, ?SSL_HANDSHAKE_TIMEOUT) of
-        ok ->
-            {ok, {ssl, Socket}};
-        {error, _} = Err ->
-            Err
-    end;
-finish_accept(Socket) ->
-    {ok, Socket}.
--else.
 finish_accept({ssl, Socket}) ->
     case ssl:handshake(Socket, ?SSL_HANDSHAKE_TIMEOUT) of
         {ok, SslSocket} ->
@@ -128,7 +99,6 @@ finish_accept({ssl, Socket}) ->
     end;
 finish_accept(Socket) ->
     {ok, Socket}.
--endif.
 
 recv({ssl, Socket}, Length, Timeout) ->
     ssl:recv(Socket, Length, Timeout);

@@ -91,11 +91,10 @@ new_response({Request, Code, Headers}) ->
                           mochiweb_headers:make(Headers)).
 
 %% @spec ensure_started(App::atom()) -> ok
-%% @doc Start the given App if it has not been started already.
+%% @doc Start the given App and all it
+%% dependencies if it has not been started already.
 ensure_started(App) ->
-    case application:start(App) of
-        ok ->
-            ok;
-        {error, {already_started, App}} ->
+    case application:ensure_all_started(App) of
+        {ok, _} ->
             ok
     end.
