@@ -12,6 +12,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Publish to Hex.pm
-        uses: erlangpack/github-action@v3
+        uses: erlangpack/github-action@v4
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
