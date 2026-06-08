@@ -140,7 +140,8 @@ cmd_status(Argv, Options) ->
     Port = cmd_port(Argv, [exit_status, stderr_to_stdout,
                            use_stdio, binary | Options]),
     try cmd_loop(Port, [])
-    after catch port_close(Port)
+    after
+        try port_close(Port) catch _:Error -> Error end
     end.
 
 %% @spec cmd_loop(port(), list()) -> {ExitStatus::integer(), Stdout::binary()}
@@ -689,7 +690,8 @@ cmd_port_test() ->
     Port = cmd_port(["echo", "$bling$ `word`!"],
                     [eof, stream, {line, 4096}]),
     Res = try lists:append(lists:reverse(cmd_port_test_spool(Port, [])))
-          after catch port_close(Port)
+          after
+              try port_close(Port) catch _:Error -> Error end
           end,
     self() ! {Port, wtf},
     try cmd_port_test_spool(Port, [])

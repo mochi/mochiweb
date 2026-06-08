@@ -381,7 +381,7 @@ with_socket_server(Transport, ServerFun, ClientFun) ->
 						       ClientOpts1),
 			 {ok, {ssl, SslSocket}}
 		   end,
-    Res = (catch ClientFun(Client)),
+    Res = try ClientFun(Client) catch _:Error -> Error end,
     mochiweb_socket_server:stop(Server),
     Res.
 

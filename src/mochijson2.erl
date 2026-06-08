@@ -763,7 +763,7 @@ input_validation_test() ->
               ok = try decode(X) catch invalid_utf8 -> ok end,
               %% could be {ucs,{bad_utf8_character_code}} or
               %%          {json_encode,{bad_char,_}}
-              {'EXIT', _} = (catch encode(X))
+              {error, _} = try encode(X) catch error:E -> {error, E} end
       end, Bad).
 
 inline_json_test() ->
@@ -898,8 +898,9 @@ float_test() ->
 
 handler_test() ->
     ?assertEqual(
-       {'EXIT',{json_encode,{bad_term,{x,y}}}},
-       catch encode({x,y})),
+       {exit,{json_encode,{bad_term,{x,y}}}},
+       try encode({x,y}) catch exit:E -> {exit, E} end
+    ),
     F = fun ({x,y}) -> [] end,
     ?assertEqual(
        <<"[]">>,
@@ -934,8 +935,9 @@ array_test() ->
 
 bad_char_test() ->
     ?assertEqual(
-       {'EXIT', {json_encode, {bad_char, 16#110000}}},
-       catch json_string_is_safe([16#110000])).
+       {exit, {json_encode, {bad_char, 16#110000}}},
+       try json_string_is_safe([16#110000]) catch exit:E -> {exit, E} end
+    ).
 
 utf8_roundtrip_test_() ->
     %% These are the boundary cases for UTF8 encoding

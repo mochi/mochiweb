@@ -15,17 +15,15 @@ jobs:
         os:
           - ubuntu-latest
         otp:
+          - "29"
           - "28"
           - "27"
           - "26"
           - "25"
           - "24"
           - "23"
-          - "22"
-          - "21"
-          - "20"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: make test
       - run: make edoc
       - run: REBAR=rebar make test

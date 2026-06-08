@@ -26,7 +26,7 @@ with_server(Transport, ServerFun, ClientFun) ->
     end,
     {ok, Server} = mochiweb_http:start_link(ServerOpts),
     Port = mochiweb_socket_server:get(Server, port),
-    Res = (catch ClientFun(Transport, Port)),
+    Res = try ClientFun(Transport, Port) catch _:Error -> Error end,
     mochiweb_http:stop(Server),
     Res.
 
