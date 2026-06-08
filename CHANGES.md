@@ -1,3 +1,9 @@
+Version 3.4.0 released 2026-06-08
+
+* Add OTP 29 support and fix related deprecation warnings.
+  Minimum supported version is now OTP 23.
+  https://github.com/mochi/mochiweb/pull/266
+
 Version 3.3.0 released 2025-09-17
 
 * Add OTP 28 to CI and fix crypto:start() deprecation warning.
