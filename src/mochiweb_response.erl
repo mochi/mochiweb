@@ -28,7 +28,7 @@
 -define(QUIP, "Any of you quaids got a smint?").
 
 -export([dump/1, get/2, get_header_value/2, new/3, new/4,
-	 encoder/3, supported_encoders/0]).
+	 encoder/3, compress/3, supported_encoders/0]).
 
 -export([send/2, write_chunk/2]).
 
@@ -57,16 +57,27 @@ supported_encoders() ->
 %% @doc Return a response so that its write_chunk/2 compresses each chunk with
 %%      the given codec. Every chunk is flushed so bytes are written
 %%      out immediately. Empty chunk that finishes a chunked response will end the
-%%      compression stream. The caller should include the matching content-encoding
-%%      response header.
+%%      compression stream. In mochiweb_request:respond/2 we set the matching
+%%      Content-Encoding header but callers using encoder/3 directly should
+%%      set it themselves.
 encoder(gzip, Level, {?MODULE, [Request, Code, Headers]}) ->
-    Z = zlib:open(),
-    %% 16 + 15 is gzip framing with the maximum window size
-    %% (from zlib.erl gzip/1)
-    ok = zlib:deflateInit(Z, Level, deflated, 16 + 15, 8, default),
+    Z = zlib_gzip_init(Level),
     new(Request, Code, Headers, {gzip, Z});
 encoder(zstd, Level, {?MODULE, [Request, Code, Headers]}) ->
     new(Request, Code, Headers, {zstd, zstd_open(Level)}).
+
+%% @spec compress(encoding(), integer(), iodata()) -> iodata()
+%% @doc Compress a whole body in one pass with the given codec. Used by
+%%      mochiweb_request:respond/2 for {compressed, {Codec, Level}, Body}
+%%      bodies, which also sets the matching Content-Encoding header.
+compress(gzip, Level, Body) ->
+    Z = zlib_gzip_init(Level),
+    Compressed = zlib:deflate(Z, Body, finish),
+    ok = zlib:deflateEnd(Z),
+    ok = zlib:close(Z),
+    Compressed;
+compress(zstd, Level, Body) ->
+    zstd_oneshot(Level, Body).
 
 %% @spec get_header_value(string() | atom() | binary(), response()) ->
 %%           string() | undefined
@@ -124,6 +135,12 @@ write_chunk(Data,
 write_chunk(Data, {?MODULE, _} = THIS) ->
     write_raw_chunk(Data, THIS).
 
+zlib_gzip_init(Level) ->
+    Z = zlib:open(),
+    %% 16 + 15 is gzip framing with the maximum window size (from zlib.erl gzip/1)
+    ok = zlib:deflateInit(Z, Level, deflated, 16 + 15, 8, default),
+    Z.
+
 %% Codec helpers. We expect both gzip and zstd to flush on each call. That's why
 %% we gated zstd to OTP 29+ since it has the flush call implemented
 encoder_data({gzip, Z}, Data) ->
@@ -165,6 +182,9 @@ zstd_finish(Ctx) ->
     ok = zstd:close(Ctx),
     Tail.
 
+zstd_oneshot(Level, Body) ->
+    zstd:compress(Body, #{compressionLevel => Level}).
+
 -else.
 
 zstd_supported() ->
@@ -177,6 +197,9 @@ zstd_data(_Ctx, _Data) ->
     erlang:error({unsupported_encoder, zstd}).
 
 zstd_finish(_Ctx) ->
+    erlang:error({unsupported_encoder, zstd}).
+
+zstd_oneshot(_Level, _Body) ->
     erlang:error({unsupported_encoder, zstd}).
 
 -endif.
