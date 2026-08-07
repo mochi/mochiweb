@@ -471,7 +471,10 @@ format_response_header({Code, ResponseHeaders, Length},
 %%      client (if the get(method) /= 'HEAD'). The Content-Length header
 %%      will be set by the Body length, and the server will insert header
 %%      defaults. A {chunked, {Codec = gzip|zstd, Level}} body starts a chunked
-%%      response with chunks compressed by write_chunk/2
+%%      response with chunks compressed by write_chunk/2. A
+%%      {compressed, {Codec, Level}, Body} body sends Body compressed in
+%%      one pass. Both set the matching Content-Encoding header
+%%      automatically.
 respond({Code, ResponseHeaders, {file, IoDevice}},
 	{?MODULE,
 	 [_Socket, _Opts, Method, _RawPath, _Version,
@@ -527,12 +530,34 @@ respond({Code, ResponseHeaders, {chunked, {Codec, Level}}},
       true -> ok;
       false -> erlang:error({unsupported_encoder, Codec})
     end,
-    Response = respond({Code, ResponseHeaders, chunked}, THIS),
+    HResponse = mochiweb_headers:insert("Content-Encoding",
+					atom_to_list(Codec),
+					mochiweb_headers:make(ResponseHeaders)),
+    Response = respond({Code, HResponse, chunked}, THIS),
     case Method of
       %% For HEAD we don't have a body so we don't compress anything
       'HEAD' -> Response;
       _ -> mochiweb_response:encoder(Codec, Level, Response)
     end;
+respond({Code, ResponseHeaders,
+	 {compressed, {Codec, Level}, Body}},
+	{?MODULE,
+	 [_Socket, _Opts, _Method, _RawPath, _Version,
+	  _Headers]} =
+	    THIS)
+    when Codec =:= gzip; Codec =:= zstd ->
+    %% Check for unsupported codecs (for ex. zstd on OTP < 29)
+    case lists:member(Codec, mochiweb_response:supported_encoders()) of
+      true -> ok;
+      false -> erlang:error({unsupported_encoder, Codec})
+    end,
+    %% Compress here and set the encoding header, then pass on to the next
+    %% clause to set the content-length properly based on the compressed body.
+    HResponse = mochiweb_headers:insert("Content-Encoding",
+					atom_to_list(Codec),
+					mochiweb_headers:make(ResponseHeaders)),
+    Compressed = mochiweb_response:compress(Codec, Level, Body),
+    respond({Code, HResponse, Compressed}, THIS);
 respond({Code, ResponseHeaders, Body},
 	{?MODULE,
 	 [_Socket, _Opts, Method, _RawPath, _Version,

@@ -45,11 +45,11 @@ chunked_encoding_test() ->
     ?assertEqual(ok, Res).
 
 gzip_chunked_server(Req) ->
+    %% Content-Encoding is set by respond/2 from the codec
     Resp = mochiweb_request:respond(
         {
             200,
-            [{"Content-Type", "application/json"},
-             {"Content-Encoding", "gzip"}],
+            [{"Content-Type", "application/json"}],
             {chunked, {gzip, 1}}
         },
         Req
@@ -102,14 +102,57 @@ gzip_chunked_encoding_test() ->
     ),
     ?assertEqual(ok, Res).
 
+oneshot_payload() ->
+    iolist_to_binary(lists:duplicate(100, <<"{\"key\": \"value\"}, ">>)).
+
+gzip_oneshot_server(Req) ->
+    %% Content-Encoding is set by respond/2 from the codec
+    mochiweb_request:respond(
+        {
+            200,
+            [{"Content-Type", "application/json"}],
+            {compressed, {gzip, 1}, oneshot_payload()}
+        },
+        Req
+    ).
+
+gzip_oneshot_client(Transport, Port) ->
+    {Headers, Body} = read_oneshot_response(Transport, Port, "gzip"),
+    ?assertEqual("gzip", mochiweb_headers:get_value("Content-Encoding", Headers)),
+    ?assertEqual(oneshot_payload(), zlib:gunzip(Body)),
+    ok.
+
+read_oneshot_response(Transport, Port, Encoding) ->
+    SockFun = mochiweb_test_util:sock_fun(Transport, Port),
+    ok = SockFun({setopts, [{packet, http}]}),
+    ok = SockFun({send, ["GET / HTTP/1.1\r\n",
+                         "Host: localhost\r\n",
+                         "Accept-Encoding: ", Encoding, "\r\n",
+                         "Connection: close\r\n",
+                         "\r\n"]}),
+    {ok, {http_response, {1, 1}, 200, _}} = SockFun(recv),
+    Headers = mochiweb_test_util:read_server_headers(SockFun),
+    Length = list_to_integer(
+        mochiweb_headers:get_value("Content-Length", Headers)
+    ),
+    {Headers, mochiweb_test_util:drain_reply(SockFun, Length, <<>>)}.
+
+gzip_oneshot_test() ->
+    Res = mochiweb_test_util:with_server(
+        plain,
+        fun gzip_oneshot_server/1,
+        fun gzip_oneshot_client/2
+    ),
+    ?assertEqual(ok, Res).
+
 -if(?OTP_RELEASE >= 29).
 
 zstd_chunked_server(Req) ->
+    %% Content-Encoding is set by respond/2 from the codec
     Resp = mochiweb_request:respond(
         {
             200,
-            [{"Content-Type", "application/json"},
-             {"Content-Encoding", "zstd"}],
+            [{"Content-Type", "application/json"}],
             {chunked, {zstd, 1}}
         },
         Req
@@ -139,8 +182,7 @@ zstd_big_chunk_server(Req) ->
     Resp = mochiweb_request:respond(
         {
             200,
-            [{"Content-Type", "application/json"},
-             {"Content-Encoding", "zstd"}],
+            [{"Content-Type", "application/json"}],
             {chunked, {zstd, 1}}
         },
         Req
@@ -187,6 +229,30 @@ zstd_big_chunk_test() ->
     ),
     ?assertEqual(ok, Res).
 
+zstd_oneshot_server(Req) ->
+    mochiweb_request:respond(
+        {
+            200,
+            [{"Content-Type", "application/json"}],
+            {compressed, {zstd, 1}, oneshot_payload()}
+        },
+        Req
+    ).
+
+zstd_oneshot_client(Transport, Port) ->
+    {Headers, Body} = read_oneshot_response(Transport, Port, "zstd"),
+    ?assertEqual("zstd", mochiweb_headers:get_value("Content-Encoding", Headers)),
+    ?assertEqual(oneshot_payload(), iolist_to_binary(zstd:decompress(Body))),
+    ok.
+
+zstd_oneshot_test() ->
+    Res = mochiweb_test_util:with_server(
+        plain,
+        fun zstd_oneshot_server/1,
+        fun zstd_oneshot_client/2
+    ),
+    ?assertEqual(ok, Res).
+
 -else.
 
 %% For belt and suspenders on releases < OTP-29 if the user code somehow
@@ -198,7 +264,7 @@ zstd_unsupported_fails_early_test() ->
     ?assertError(
         {unsupported_encoder, zstd},
         mochiweb_request:respond(
-            {200, [{"Content-Encoding", "zstd"}], {chunked, {zstd, 1}}},
+            {200, [], {chunked, {zstd, 1}}},
             Req
         )
     ).
