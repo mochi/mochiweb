@@ -466,11 +466,12 @@ format_response_header({Code, ResponseHeaders, Length},
 					Length, HResponse),
     format_response_header({Code, HResponse1}, THIS).
 
-%% @spec respond({integer(), ioheaders(), iodata() | chunked | {file, IoDevice}}, request()) -> response()
+%% @spec respond({integer(), ioheaders(), iodata() | chunked | {chunked, {Codec, integer()}} | {file, IoDevice}}, request()) -> response()
 %% @doc Start the HTTP response with start_response, and send Body to the
 %%      client (if the get(method) /= 'HEAD'). The Content-Length header
 %%      will be set by the Body length, and the server will insert header
-%%      defaults.
+%%      defaults. A {chunked, {Codec = gzip|zstd, Level}} body starts a chunked
+%%      response with chunks compressed by write_chunk/2
 respond({Code, ResponseHeaders, {file, IoDevice}},
 	{?MODULE,
 	 [_Socket, _Opts, Method, _RawPath, _Version,
@@ -514,6 +515,24 @@ respond({Code, ResponseHeaders, chunked},
 		       HResponse
 		 end,
     start_response({Code, HResponse1}, THIS);
+respond({Code, ResponseHeaders, {chunked, {Codec, Level}}},
+	{?MODULE,
+	 [_Socket, _Opts, Method, _RawPath, _Version, _Headers]} =
+	    THIS)
+    when Codec =:= gzip; Codec =:= zstd ->
+    %% ResponseHeaders has the content-encoding already so unsupported
+    %% codecs (for ex. zstd on OTP < 29) shouldn't produce a response for
+    %% encoding the body doesn't have
+    case lists:member(Codec, mochiweb_response:supported_encoders()) of
+      true -> ok;
+      false -> erlang:error({unsupported_encoder, Codec})
+    end,
+    Response = respond({Code, ResponseHeaders, chunked}, THIS),
+    case Method of
+      %% For HEAD we don't have a body so we don't compress anything
+      'HEAD' -> Response;
+      _ -> mochiweb_response:encoder(Codec, Level, Response)
+    end;
 respond({Code, ResponseHeaders, Body},
 	{?MODULE,
 	 [_Socket, _Opts, Method, _RawPath, _Version,
