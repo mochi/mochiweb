@@ -87,33 +87,26 @@ loop(Socket, Opts, Body) ->
     request(Socket, Opts, Body).
 
 request(Socket, Opts, Body) ->
-    ok =
-	mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket,
-							       [{active,
-								 once}])),
-    receive
-      {Protocol, _, {http_request, Method, Path, Version}}
-	  when Protocol == http orelse Protocol == ssl ->
+    case mochiweb_socket:recv(Socket, 0, ?REQUEST_RECV_TIMEOUT) of
+      {ok, {http_request, Method, Path, Version}} ->
 	  ok =
 	      mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket,
 								     [{packet,
 								       httph}])),
 	  headers(Socket, Opts, {Method, Path, Version}, [], Body,
 		  0);
-      {Protocol, _, {http_error, "\r\n"}}
-	  when Protocol == http orelse Protocol == ssl ->
-	  request(Socket, Opts, Body);
-      {Protocol, _, {http_error, "\n"}}
-	  when Protocol == http orelse Protocol == ssl ->
-	  request(Socket, Opts, Body);
-      {tcp_closed = Error, _} ->
+      %% skip stray CRLF (or LF) before a request (rfc7230 sec 3.5)
+      {ok, {http_error, "\r\n"}} -> request(Socket, Opts, Body);
+      {ok, {http_error, "\n"}} -> request(Socket, Opts, Body);
+      {error, closed = Error} ->
 	  mochiweb_socket:close(Socket), exit({shutdown, Error});
-      {tcp_error, _, emsgsize} ->
+      {error, timeout} ->
+	  mochiweb_socket:close(Socket),
+	  exit({shutdown, request_recv_timeout});
+      {error, emsgsize} ->
 	  handle_invalid_request(Socket, Opts);
-      {ssl_closed = Error, _} ->
-	  mochiweb_socket:close(Socket), exit({shutdown, Error})
-      after ?REQUEST_RECV_TIMEOUT ->
-		mochiweb_socket:close(Socket), exit({shutdown, request_recv_timeout})
+      _Other ->
+	  handle_invalid_request(Socket, Opts)
     end.
 
 reentry(Body) ->
@@ -129,26 +122,23 @@ headers(Socket, Opts, Request, Headers, _Body,
     handle_invalid_request(Socket, Opts, Request, Headers);
 headers(Socket, Opts, Request, Headers, Body,
 	HeaderCount) ->
-    ok =
-	mochiweb_socket:exit_if_closed(mochiweb_socket:setopts(Socket,
-							       [{active,
-								 once}])),
-    receive
-      {Protocol, _, http_eoh}
-	  when Protocol == http orelse Protocol == ssl ->
+    case mochiweb_socket:recv(Socket, 0, ?HEADERS_RECV_TIMEOUT) of
+      {ok, http_eoh} ->
 	  Req = new_request(Socket, Opts, Request, Headers),
 	  call_body(Body, Req),
 	  (?MODULE):after_response(Body, Req);
-      {Protocol, _, {http_header, _, Name, _, Value}}
-	  when Protocol == http orelse Protocol == ssl ->
+      {ok, {http_header, _, Name, _, Value}} ->
 	  headers(Socket, Opts, Request,
 		  [{Name, Value} | Headers], Body, 1 + HeaderCount);
-      {tcp_closed = Error, _} ->
+      {error, closed = Error} ->
 	  mochiweb_socket:close(Socket), exit({shutdown, Error});
-      {tcp_error, _, emsgsize} ->
+      {error, timeout} ->
+	  mochiweb_socket:close(Socket),
+	  exit({shutdown, headers_recv_timeout});
+      {error, emsgsize} ->
+	  handle_invalid_request(Socket, Opts, Request, Headers);
+      _Other ->
 	  handle_invalid_request(Socket, Opts, Request, Headers)
-      after ?HEADERS_RECV_TIMEOUT ->
-		mochiweb_socket:close(Socket), exit({shutdown, headers_recv_timeout})
     end.
 
 call_body({M, F, A}, Req) when is_atom(M) ->
@@ -169,7 +159,8 @@ handle_invalid_request(Socket, Opts, Request,
 		       RevHeaders) ->
     {ReqM, _} = Req = new_request(Socket, Opts, Request,
 				  RevHeaders),
-    ReqM:respond({400, [], []}, Req),
+    %% Advertise socket closure with connection:close (rfc7230 sec 6.6)
+    ReqM:respond({400, [{"Connection", "close"}], []}, Req),
     mochiweb_socket:close(Socket),
     exit({shutdown, invalid_request}).
 
