@@ -4,6 +4,8 @@
 
 -module(mochiweb_socket).
 
+-include("internal.hrl").
+
 -export([listen/4,
          accept/1, transport_accept/1, finish_accept/1,
          recv/3, send/2, close/1, port/1, peername/1,
@@ -20,7 +22,8 @@ listen(Ssl, Port, Opts, SslOpts) ->
         true ->
             Opts1 = add_safe_protocol_versions(Opts),
             Opts2 = add_unbroken_ciphers_default(Opts1 ++ SslOpts),
-            case ssl:listen(Port, Opts2) of
+            Opts3 = add_packet_size_limit(Opts2),
+            case ssl:listen(Port, Opts3) of
                 {ok, ListenSocket} ->
                     {ok, {ssl, ListenSocket}};
                 {error, _} = Err ->
@@ -28,6 +31,19 @@ listen(Ssl, Port, Opts, SslOpts) ->
             end;
         false ->
             gen_tcp:listen(Port, Opts)
+    end.
+
+%% SSL equivalent for max buffer limit (emsgize) is packet_size. Set it so
+%% we get the same behavior for TCP and SSL transports. On error the long
+%% header lines will faul w/ {error, {invalid_packet, _}} in both cases.
+add_packet_size_limit(Opts) ->
+    case proplists:is_defined(packet_size, Opts) of
+        true ->
+            Opts;
+        false ->
+            RecBuf = proplists:get_value(recbuf, Opts, ?RECBUF_SIZE),
+            Buffer = proplists:get_value(buffer, Opts, RecBuf),
+            [{packet_size, Buffer} | Opts]
     end.
 
 add_unbroken_ciphers_default(Opts) ->

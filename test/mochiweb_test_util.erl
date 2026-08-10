@@ -1,6 +1,7 @@
 -module(mochiweb_test_util).
 -export([with_server/3, client_request/4, sock_fun/2,
-         read_server_headers/1, drain_reply/3, ssl_client_opts/1]).
+         read_server_headers/1, drain_reply/3, ssl_client_opts/1,
+         ssl_cert_opts/0]).
 -include("mochiweb_test_util.hrl").
 -include_lib("eunit/include/eunit.hrl").
 

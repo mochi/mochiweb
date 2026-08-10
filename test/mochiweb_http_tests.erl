@@ -9,9 +9,19 @@ has_acceptor_bug_test_() ->
 
 
 start_server() ->
+    start_server(plain).
+
+start_server(Transport) ->
     application:start(inets),
-    {ok, Pid} = mochiweb_http:start_link([{port, 0},
-					  {loop, fun responder/1}]),
+    Opts = [{port, 0}, {loop, fun responder/1}] ++
+        case Transport of
+            plain ->
+                [];
+            ssl ->
+                [{ssl, true},
+                 {ssl_opts, mochiweb_test_util:ssl_cert_opts()}]
+        end,
+    {ok, Pid} = mochiweb_http:start_link(Opts),
     Pid.
 
 chunked_server(Req) ->
@@ -299,3 +309,149 @@ has_bug(Port, Len) ->
       %% It is expected that the request will fail because the header is too long
       {ok, {{"HTTP/1.1", 400, "Bad Request"}, _, []}} -> false
     end.
+
+%% rfc7230 cases taken from cowboy's  test/rfc7230_SUITE.erl (ISC license)
+rfc7230_test_() ->
+    %% Go over tcp and tls
+    [{setup, fun () -> start_server(Transport) end,
+      fun mochiweb_http:stop/1,
+      fun (Server) ->
+          Port = mochiweb_socket_server:get(Server, port),
+          [{lists:concat([Transport, ": ", Doc]),
+            {timeout, 15,
+             ?_assertEqual(expect_for(Transport, Expect),
+                           raw_exchange(Transport, Port, Raw))}}
+           || {Doc, Expect, Raw} <- rfc7230_cases()]
+      end} || Transport <- [plain, ssl]].
+
+%% Most of the time we expect both transport to have the same behavior but not
+%% always they can differ (see header line too long case below)
+expect_for(plain, {per_transport, Plain, _Ssl}) -> Plain;
+expect_for(ssl, {per_transport, _Plain, Ssl}) -> Ssl;
+expect_for(_Transport, Expect) -> Expect.
+
+rfc7230_cases() ->
+    [{"empty line before the request line is skipped",
+      {response, 200},
+      <<"\r\nGET / HTTP/1.1\r\nHost: l\r\n\r\n">>},
+     {"stray LF alone before request line is skipped",
+      {response, 200},
+      <<"\nGET / HTTP/1.1\r\nHost: l\r\n\r\n">>},
+     {"bunch of empty lines before request are skipped",
+      {response, 200},
+      <<"\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n"
+        "GET / HTTP/1.1\r\nHost: l\r\n\r\n">>},
+     {"response as a request doesn't work",
+      {response, 400},
+      <<"HTTP/1.1 200 OK\r\n\r\n">>},
+     {"a malformed request line is rejected (3.1.1)",
+      {response, 400},
+      <<"GET\r\n">>},
+     %% TCP limits long lines with inet buffer size (emsgsize). There we
+     %% reject it with a 400. For SSL connections we limit it with packet_size.
+     %% If we get a line that's too long then the connection is torn down so
+     %% we get a connection closed case
+     {"request line longer than the buffer",
+      {per_transport, {response, 400}, closed},
+      iolist_to_binary(["GET /", binary:copy(<<"a">>, 10240),
+                        " HTTP/1.1\r\nHost: l\r\n\r\n"])},
+     {"header line longer than the buffer",
+      {per_transport, {response, 400}, closed},
+      iolist_to_binary(["GET / HTTP/1.1\r\nHost: l\r\nx-huge: ",
+                        binary:copy(<<"a">>, 10240), "\r\n\r\n"])},
+     {"absolute form paths are accepted",
+      {response, 200},
+      <<"GET http://example.org/ HTTP/1.1\r\nHost: l\r\n\r\n">>},
+     {"star form path is ok",
+      {response, 200},
+      <<"OPTIONS * HTTP/1.1\r\nHost: l\r\n\r\n">>},
+     {"no whitespace before header colon",
+      {response, 400},
+      <<"GET / HTTP/1.1\r\nHost : l\r\n\r\n">>},
+     {"header lines need a colon",
+      {response, 400},
+      <<"GET / HTTP/1.1\r\nHost: l\r\nheader-line-without-a-colon\r\n\r\n">>},
+     {"header continuations are allowed (sec 3.2.4)",
+      {response, 200},
+      <<"GET / HTTP/1.1\r\nHost: l\r\nX-A: 1\r\n\tfolded\r\n\r\n">>},
+     {"bare LF line endings are ok (sec 3.5)",
+      {response, 200},
+      <<"GET / HTTP/1.1\nHost: l\n\n">>},
+     {"missing Host header is not enforced (sec 5.4, apps can chose here)",
+      {response, 200},
+      <<"GET / HTTP/1.1\r\n\r\n">>},
+     {"can have spaces in request line are tolerated (sec 3.1.1)",
+      {response, 200},
+      <<"GET  / HTTP/1.1\r\nHost: l\r\n\r\n">>},
+     {"no ridiculous number of headers 1000 (sec 3.2.5)",
+      {response, 400},
+      iolist_to_binary(["GET / HTTP/1.1\r\nHost: l\r\n",
+                        [["X-", integer_to_list(I), ": a\r\n"]
+                         || I <- lists:seq(1, 10001)],
+                        "\r\n"])}].
+
+raw_exchange(plain, Port, Raw) ->
+    {ok, S} = gen_tcp:connect("127.0.0.1", Port,
+                              [binary, {active, false}, {packet, http},
+                               {nodelay, true}]),
+    raw_exchange1(gen_tcp, S, Raw);
+raw_exchange(ssl, Port, Raw) ->
+    ClientOpts = mochiweb_test_util:ssl_client_opts(
+                   [binary, {active, false}, {packet, http},
+                    {nodelay, true}]),
+    {ok, S} = ssl:connect("127.0.0.1", Port, ClientOpts),
+    raw_exchange1(ssl, S, Raw).
+
+raw_exchange1(Mod, S, Raw) ->
+    ok = Mod:send(S, Raw),
+    R = case Mod:recv(S, 0, 2000) of
+            {ok, {http_response, _, Code, _}} -> {response, Code};
+            {error, closed} -> closed;
+            {error, timeout} -> no_response;
+            Other -> Other
+        end,
+    close_socket(Mod, S),
+    R.
+
+close_socket(gen_tcp, S) ->
+    gen_tcp:close(S);
+close_socket(ssl, S) ->
+    %% use a bounded time for cleanup as ssl connection can take a while to tear down
+    try ssl:close(S, 1000) catch _:_ -> ok end,
+    ok.
+
+%% Check what happens if client goes away while sneding header. Server should cleanup
+%% and then continue serving other requests
+client_disconnect_mid_headers_test() ->
+    Res = mochiweb_test_util:with_server(
+        plain,
+        fun responder/1,
+        fun (plain, Port) ->
+            {ok, S} = gen_tcp:connect("127.0.0.1", Port,
+                                      [binary, {active, false}]),
+            ok = gen_tcp:send(S, <<"GET / HTTP/1.1\r\nHost: l\r\n">>),
+            ok = gen_tcp:close(S),
+            ?assertEqual({response, 200},
+                         raw_exchange(plain, Port,
+                                      <<"GET / HTTP/1.1\r\nHost: l\r\n\r\n">>))
+        end
+    ),
+    ?assertEqual(ok, Res).
+
+%% If we're about to close, send a 400 response with connection:close (sec 6.6)
+invalid_request_connection_close_test() ->
+    Res = mochiweb_test_util:with_server(
+        plain,
+        fun responder/1,
+        fun (Transport, Port) ->
+            SockFun = mochiweb_test_util:sock_fun(Transport, Port),
+            ok = SockFun({send, <<"GET / HTTP/1.1\r\nbadheader\r\n"
+                                  "Host: l\r\n\r\n">>}),
+            {ok, {http_response, {1, 1}, 400, _}} = SockFun(recv),
+            Headers = mochiweb_test_util:read_server_headers(SockFun),
+            ?assertEqual("close",
+                         mochiweb_headers:get_value("Connection", Headers)),
+            ok
+        end
+    ),
+    ?assertEqual(ok, Res).
