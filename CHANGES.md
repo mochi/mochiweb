@@ -1,3 +1,11 @@
+Version 3.5.0 released 2026-08-16
+
+* Add gzip and zstd chunked and one-shot response compression
+  https://github.com/mochi/mochiweb/pull/268
+  https://github.com/mochi/mochiweb/pull/269
+* Switch to passive mode to avoid having to toggle `{active, once}` constantly
+  https://github.com/mochi/mochiweb/pull/270
+
 Version 3.4.0 released 2026-06-08
 
 * Add OTP 29 support and fix related deprecation warnings.
