@@ -654,3 +654,20 @@ no_letter_no_tag_test() ->
          [{<<"body">>,[],[<<"<3><!><*><<>>">>,{<<"body">>,[],[]}]}]},
        mochiweb_html:parse(<<"<html><body><3><!><*><<>><body></html>">>)
       ).
+
+parse_charref_test_() ->
+    [?_assertEqual(
+        {<<"p">>, [], [<<"&">>]},
+        mochiweb_html:parse(<<"<p>&#38;</p>">>)),
+     ?_assertEqual(
+        {<<"p">>, [], [<<"&#9999999;">>]},
+        mochiweb_html:parse(<<"<p>&#9999999;</p>">>)),
+     ?_assertEqual(
+        {<<"p">>, [], [<<"&#x110000;">>]},
+        mochiweb_html:parse(<<"<p>&#x110000;</p>">>)),
+     ?_assertEqual(
+        {<<"p">>, [], [<<"&#-1;">>]},
+        mochiweb_html:parse(<<"<p>&#-1;</p>">>)),
+     ?_assertEqual(
+        {<<"p">>, [], [<<"&#xD800;&#xD800;">>]},
+        mochiweb_html:parse(<<"<p>&#xD800;&#xD800;</p>">>))].

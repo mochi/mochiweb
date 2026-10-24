@@ -33,12 +33,16 @@
 charref(B) when is_binary(B) ->
     charref(binary_to_list(B));
 charref([$#, C | L]) when C =:= $x orelse C =:= $X ->
-    try erlang:list_to_integer(L, 16)
+    try erlang:list_to_integer(L, 16) of
+        I when I >= 0 andalso I =< 16#10FFFF -> I;
+        _ -> undefined
     catch
         error:badarg -> undefined
     end;
 charref([$# | L]) ->
-    try list_to_integer(L)
+    try list_to_integer(L) of
+        I when I >= 0 andalso I =< 16#10FFFF -> I;
+        _ -> undefined
     catch
         error:badarg -> undefined
     end;
