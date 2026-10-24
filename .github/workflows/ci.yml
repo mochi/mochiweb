@@ -20,8 +20,6 @@ jobs:
           - "27"
           - "26"
           - "25"
-          - "24"
-          - "23"
     steps:
       - uses: actions/checkout@v6
       - run: make test
