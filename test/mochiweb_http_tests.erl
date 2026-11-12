@@ -133,6 +133,9 @@ gzip_oneshot_client(Transport, Port) ->
     ok.
 
 read_oneshot_response(Transport, Port, Encoding) ->
+    read_oneshot_response(Transport, Port, Encoding, 200).
+
+read_oneshot_response(Transport, Port, Encoding, Code) ->
     SockFun = mochiweb_test_util:sock_fun(Transport, Port),
     ok = SockFun({setopts, [{packet, http}]}),
     ok = SockFun({send, ["GET / HTTP/1.1\r\n",
@@ -140,7 +143,7 @@ read_oneshot_response(Transport, Port, Encoding) ->
                          "Accept-Encoding: ", Encoding, "\r\n",
                          "Connection: close\r\n",
                          "\r\n"]}),
-    {ok, {http_response, {1, 1}, 200, _}} = SockFun(recv),
+    {ok, {http_response, {1, 1}, Code, _}} = SockFun(recv),
     Headers = mochiweb_test_util:read_server_headers(SockFun),
     Length = list_to_integer(
         mochiweb_headers:get_value("Content-Length", Headers)
@@ -152,6 +155,56 @@ gzip_oneshot_test() ->
         plain,
         fun gzip_oneshot_server/1,
         fun gzip_oneshot_client/2
+    ),
+    ?assertEqual(ok, Res).
+
+gzip_oneshot_empty_server(Req) ->
+    mochiweb_request:respond(
+        {
+            200,
+            [{"Content-Type", "application/json"}],
+            {compressed, {gzip, 1}, [<<>>, []]}
+        },
+        Req
+    ).
+
+gzip_oneshot_empty_client(Transport, Port) ->
+    {Headers, Body} = read_oneshot_response(Transport, Port, "gzip"),
+    ?assertEqual(undefined, mochiweb_headers:get_value("Content-Encoding", Headers)),
+    ?assertEqual("0", mochiweb_headers:get_value("Content-Length", Headers)),
+    ?assertEqual(<<>>, Body),
+    ok.
+
+gzip_oneshot_empty_test() ->
+    Res = mochiweb_test_util:with_server(
+        plain,
+        fun gzip_oneshot_empty_server/1,
+        fun gzip_oneshot_empty_client/2
+    ),
+    ?assertEqual(ok, Res).
+
+gzip_oneshot_304_server(Req) ->
+    mochiweb_request:respond(
+        {
+            304,
+            [{"ETag", "\"abc\""}],
+            {compressed, {gzip, 1}, <<>>}
+        },
+        Req
+    ).
+
+gzip_oneshot_304_client(Transport, Port) ->
+    {Headers, Body} = read_oneshot_response(Transport, Port, "gzip", 304),
+    ?assertEqual(undefined, mochiweb_headers:get_value("Content-Encoding", Headers)),
+    ?assertEqual("0", mochiweb_headers:get_value("Content-Length", Headers)),
+    ?assertEqual(<<>>, Body),
+    ok.
+
+gzip_oneshot_304_test() ->
+    Res = mochiweb_test_util:with_server(
+        plain,
+        fun gzip_oneshot_304_server/1,
+        fun gzip_oneshot_304_client/2
     ),
     ?assertEqual(ok, Res).
 
