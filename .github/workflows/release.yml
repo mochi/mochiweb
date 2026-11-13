@@ -11,7 +11,20 @@ jobs:
       - name: Check out
         uses: actions/checkout@v7
 
+      # rebar3_hex 7.3+ needs rebar3 3.27.1+ (it relies on rebar3 for
+      # HEX_API_KEY and auth handling), so pin both rather than relying
+      # on whatever a prebuilt image happens to ship.
+      - uses: erlef/setup-beam@v1.24.1
+        with:
+          otp-version: "29"
+          rebar3-version: "3.28.0"
+
+      - name: Install rebar3_hex
+        run: |
+          mkdir -p ~/.config/rebar3
+          echo '{plugins, [{rebar3_hex, "7.5.0"}]}.' > ~/.config/rebar3/rebar.config
+
       - name: Publish to Hex.pm
-        uses: erlangpack/github-action@v4
+        run: rebar3 hex publish -r hexpm --yes
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
