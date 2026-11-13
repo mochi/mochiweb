@@ -26,8 +26,8 @@
 
 -export([to_hex/1, to_bin/1, to_int/1, dehex/1, hexdigit/1]).
 
-%% @spec to_hex(integer | iolist()) -> string()
 %% @doc Convert an iolist to a hexadecimal string.
+-spec to_hex(non_neg_integer() | iolist() | binary()) -> string().
 to_hex(0) ->
     "0";
 to_hex(I) when is_integer(I), I > 0 ->
@@ -35,18 +35,18 @@ to_hex(I) when is_integer(I), I > 0 ->
 to_hex(B) ->
     to_hex(iolist_to_binary(B), []).
 
-%% @spec to_bin(string()) -> binary()
 %% @doc Convert a hexadecimal string to a binary.
+-spec to_bin(string()) -> binary().
 to_bin(L) ->
     to_bin(L, []).
 
-%% @spec to_int(string()) -> integer()
 %% @doc Convert a hexadecimal string to an integer.
+-spec to_int(string()) -> integer().
 to_int(L) ->
     erlang:list_to_integer(L, 16).
 
-%% @spec dehex(char()) -> integer()
 %% @doc Convert a hex digit to its integer value.
+-spec dehex(char()) -> 0..15.
 dehex(C) when C >= $0, C =< $9 ->
     C - $0;
 dehex(C) when C >= $a, C =< $f ->
@@ -54,8 +54,8 @@ dehex(C) when C >= $a, C =< $f ->
 dehex(C) when C >= $A, C =< $F ->
     C - $A + 10.
 
-%% @spec hexdigit(integer()) -> char()
 %% @doc Convert an integer less than 16 to a hex digit.
+-spec hexdigit(0..15) -> char().
 hexdigit(C) when C >= 0, C =< 9 ->
     C + $0;
 hexdigit(C) when C =< 15 ->

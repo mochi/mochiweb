@@ -39,22 +39,25 @@
 -record(conversion,
 	{length, precision, ctype, align, fill_char, sign}).
 
-%% @spec tokenize(S::string()) -> tokens()
+-type tokens() :: {?MODULE, list()}.
+-export_type([tokens/0]).
+
 %% @doc Tokenize a format string into mochifmt's internal format.
+-spec tokenize(S :: string()) -> tokens().
 tokenize(S) -> {?MODULE, tokenize(S, "", [])}.
 
-%% @spec convert_field(Arg, Conversion::conversion()) -> term()
 %% @doc Process Arg according to the given explicit conversion specifier.
+-spec convert_field(Arg :: term(), Conversion :: string()) -> term().
 convert_field(Arg, "") -> Arg;
 convert_field(Arg, "r") -> repr(Arg);
 convert_field(Arg, "s") -> str(Arg).
 
-%% @spec get_value(Key::string(), Args::args()) -> term()
 %% @doc Get the Key from Args. If Args is a tuple then convert Key to
 %%      an integer and get element(1 + Key, Args). If Args is a list and Key
 %%      can be parsed as an integer then use lists:nth(1 + Key, Args),
 %%      otherwise try and look for Key in Args as a proplist, converting
 %%      Key to an atom or binary if necessary.
+-spec get_value(Key :: string(), Args :: tuple() | list()) -> term().
 get_value(Key, Args) when is_tuple(Args) ->
     element(1 + list_to_integer(Key), Args);
 get_value(Key, Args) when is_list(Args) ->
@@ -62,16 +65,16 @@ get_value(Key, Args) when is_list(Args) ->
       error:_ -> {_K, V} = proplist_lookup(Key, Args), V
     end.
 
-%% @spec get_field(Key::string(), Args) -> term()
 %% @doc Consecutively call get_value/2 on parts of Key delimited by ".",
 %%      replacing Args with the result of the previous get_value. This
 %%      is used to implement formats such as {0.0}.
+-spec get_field(Key :: string(), Args :: term()) -> term().
 get_field(Key, Args) -> get_field(Key, Args, ?MODULE).
 
-%% @spec get_field(Key::string(), Args, Module) -> term()
 %% @doc Consecutively call Module:get_value/2 on parts of Key delimited by ".",
 %%      replacing Args with the result of the previous get_value. This
 %%      is used to implement formats such as {0.0}.
+-spec get_field(Key :: string(), Args :: term(), Module :: term()) -> term().
 get_field(Key, Args, Module) ->
     {Name, Next} = lists:splitwith(fun (C) -> C =/= $. end,
 				   Key),
@@ -92,47 +95,47 @@ tuple_apply(Module, F, Args)
     when is_tuple(Module), is_atom(element(1, Module)) ->
     erlang:apply(element(1, Module), F, Args ++ [Module]).
 
-%% @spec format(Format::string(), Args) -> iolist()
 %% @doc Format Args with Format.
+-spec format(Format :: string() | tokens(), Args :: term()) -> iolist().
 format(Format, Args) -> format(Format, Args, ?MODULE).
 
-%% @spec format(Format::string(), Args, Module) -> iolist()
 %% @doc Format Args with Format using Module.
+-spec format(Format :: string() | tokens(), Args :: term(), Module :: term()) -> iolist().
 format({?MODULE, Parts}, Args, Module) ->
     format2(Parts, Args, Module, []);
 format(S, Args, Module) ->
     format(tokenize(S), Args, Module).
 
-%% @spec format_field(Arg, Format) -> iolist()
 %% @doc Format Arg with Format.
+-spec format_field(Arg :: term(), Format :: string()) -> iolist().
 format_field(Arg, Format) ->
     format_field(Arg, Format, ?MODULE).
 
-%% @spec format_field(Arg, Format, _Module) -> iolist()
 %% @doc Format Arg with Format.
+-spec format_field(Arg :: term(), Format :: string(), Module :: term()) -> iolist().
 format_field(Arg, Format, _Module) ->
     F = default_ctype(Arg, parse_std_conversion(Format)),
     fix_padding(fix_sign(convert2(Arg, F), F), F).
 
-%% @spec f(Format::string(), Args) -> string()
 %% @doc Format Args with Format and return a string().
+-spec f(Format :: string(), Args :: term()) -> string().
 f(Format, Args) -> f(Format, Args, ?MODULE).
 
-%% @spec f(Format::string(), Args, Module) -> string()
 %% @doc Format Args with Format using Module and return a string().
+-spec f(Format :: string(), Args :: term(), Module :: term()) -> string().
 f(Format, Args, Module) ->
     case lists:member(${, Format) of
       true -> binary_to_list(bformat(Format, Args, Module));
       false -> Format
     end.
 
-%% @spec bformat(Format::string(), Args) -> binary()
 %% @doc Format Args with Format and return a binary().
+-spec bformat(Format :: string() | tokens(), Args :: term()) -> binary().
 bformat(Format, Args) ->
     iolist_to_binary(format(Format, Args)).
 
-%% @spec bformat(Format::string(), Args, Module) -> binary()
 %% @doc Format Args with Format using Module and return a binary().
+-spec bformat(Format :: string() | tokens(), Args :: term(), Module :: term()) -> binary().
 bformat(Format, Args, Module) ->
     iolist_to_binary(format(Format, Args, Module)).
 

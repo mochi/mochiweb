@@ -29,24 +29,24 @@
 -export([to_list/1, make/1]).
 -export([from_binary/1]).
 
-%% @type headers().
-%% @type key() = atom() | binary() | string().
-%% @type value() = atom() | binary() | string() | integer().
+-type headers() :: gb_trees:tree().
+-type key() :: atom() | binary() | string().
+-type value() :: atom() | binary() | string() | integer().
+-export_type([headers/0, key/0, value/0]).
 
-%% @spec empty() -> headers()
 %% @doc Create an empty headers structure.
+-spec empty() -> headers().
 empty() ->
     gb_trees:empty().
 
-%% @spec make(headers() | [{key(), value()}]) -> headers()
 %% @doc Construct a headers() from the given list.
+-spec make(headers() | [{key(), value()}]) -> headers().
 make(L) when is_list(L) ->
     from_list(L);
 %% assume a non-list is already mochiweb_headers.
 make(T) ->
     T.
 
-%% @spec from_binary(iolist()) -> headers()
 %% @doc Transforms a raw HTTP header into a mochiweb headers structure.
 %%
 %%      The given raw HTTP header can be one of the following:
@@ -66,6 +66,7 @@ make(T) ->
 %%         ["Content-Length: 47\r\n", "Content-Type: text/plain\r\n"]
 %%         ["Content-Length: 47\r\n", <<"Content-Type: text/plain\r\n">>]'''
 %%
+-spec from_binary(iolist() | binary() | [binary()]) -> headers().
 from_binary(RawHttpHeader) when is_binary(RawHttpHeader) ->
     from_binary(RawHttpHeader, []);
 from_binary(RawHttpHeaderList) ->
@@ -79,25 +80,25 @@ from_binary(RawHttpHeader, Acc) ->
             make(Acc)
     end.
 
-%% @spec from_list([{key(), value()}]) -> headers()
 %% @doc Construct a headers() from the given list.
+-spec from_list([{key(), value()}]) -> headers().
 from_list(List) ->
     lists:foldl(fun ({K, V}, T) -> insert(K, V, T) end, empty(), List).
 
-%% @spec enter_from_list([{key(), value()}], headers()) -> headers()
 %% @doc Insert pairs into the headers, replace any values for existing keys.
+-spec enter_from_list([{key(), value()}], headers()) -> headers().
 enter_from_list(List, T) ->
     lists:foldl(fun ({K, V}, T1) -> enter(K, V, T1) end, T, List).
 
-%% @spec default_from_list([{key(), value()}], headers()) -> headers()
 %% @doc Insert pairs into the headers for keys that do not already exist.
+-spec default_from_list([{key(), value()}], headers()) -> headers().
 default_from_list(List, T) ->
     lists:foldl(fun ({K, V}, T1) -> default(K, V, T1) end, T, List).
 
-%% @spec to_list(headers()) -> [{key(), string()}]
 %% @doc Return the contents of the headers. The keys will be the exact key
 %%      that was first inserted (e.g. may be an atom or binary, case is
 %%      preserved).
+-spec to_list(headers()) -> [{key(), string()}].
 to_list(T) ->
     F = fun ({K, {array, L}}, Acc) ->
                 L1 = lists:reverse(L),
@@ -107,9 +108,9 @@ to_list(T) ->
         end,
     lists:reverse(lists:foldl(F, [], gb_trees:values(T))).
 
-%% @spec get_value(key(), headers()) -> string() | undefined
 %% @doc Return the value of the given header using a case insensitive search.
 %%      undefined will be returned for keys that are not present.
+-spec get_value(key(), headers()) -> string() | undefined.
 get_value(K, T) ->
     case lookup(K, T) of
         {value, {_, V}} ->
@@ -118,10 +119,10 @@ get_value(K, T) ->
             undefined
     end.
 
-%% @spec get_primary_value(key(), headers()) -> string() | undefined
 %% @doc Return the value of the given header up to the first semicolon using
 %%      a case insensitive search. undefined will be returned for keys
 %%      that are not present.
+-spec get_primary_value(key(), headers()) -> string() | undefined.
 get_primary_value(K, T) ->
     case get_value(K, T) of
         undefined ->
@@ -130,7 +131,6 @@ get_primary_value(K, T) ->
             lists:takewhile(fun (C) -> C =/= $; end, V)
     end.
 
-%% @spec get_combined_value(key(), headers()) -> string() | undefined
 %% @doc Return the value from the given header using a case insensitive search.
 %%      If the value of the header is a comma-separated list where holds values
 %%      are all identical, the identical value will be returned.
@@ -145,12 +145,13 @@ get_primary_value(K, T) ->
 %%      fields with the same field-name may be present in a message if and only
 %%      if the entire field-value for that header field is defined as a
 %%      comma-separated list [i.e., #(values)].
+-spec get_combined_value(key(), headers()) -> string() | undefined.
 get_combined_value(K, T) ->
-    case get_value(K, T) of
+    case tokenize_header_value(get_value(K, T)) of
         undefined ->
             undefined;
-        V ->
-            case sets:to_list(sets:from_list(tokenize_header_value(V))) of
+        Vs ->
+            case sets:to_list(sets:from_list(Vs)) of
                 [Val] ->
                     Val;
                 _ ->
@@ -158,10 +159,10 @@ get_combined_value(K, T) ->
             end
     end.
 
-%% @spec lookup(key(), headers()) -> {value, {key(), string()}} | none
 %% @doc Return the case preserved key and value for the given header using
 %%      a case insensitive search. none will be returned for keys that are
 %%      not present.
+-spec lookup(key(), headers()) -> {value, {key(), string()}} | none.
 lookup(K, T) ->
     case gb_trees:lookup(normalize(K), T) of
         {value, {K0, V}} ->
@@ -170,8 +171,8 @@ lookup(K, T) ->
             none
     end.
 
-%% @spec default(key(), value(), headers()) -> headers()
 %% @doc Insert the pair into the headers if it does not already exist.
+-spec default(key(), value(), headers()) -> headers().
 default(K, V, T) ->
     K1 = normalize(K),
     V1 = trim_leading_and_trailing_ws(any_to_list(V)),
@@ -181,16 +182,16 @@ default(K, V, T) ->
             T
     end.
 
-%% @spec enter(key(), value(), headers()) -> headers()
 %% @doc Insert the pair into the headers, replacing any pre-existing key.
+-spec enter(key(), value(), headers()) -> headers().
 enter(K, V, T) ->
     K1 = normalize(K),
     V1 = trim_leading_and_trailing_ws(any_to_list(V)),
     gb_trees:enter(K1, {K, V1}, T).
 
-%% @spec insert(key(), value(), headers()) -> headers()
 %% @doc Insert the pair into the headers, merging with any pre-existing key.
 %%      A merge is done with Value = V0 ++ ", " ++ V1.
+-spec insert(key(), value(), headers()) -> headers().
 insert(K, V, T) ->
     K1 = normalize(K),
     V1 = trim_leading_and_trailing_ws(any_to_list(V)),
@@ -202,8 +203,8 @@ insert(K, V, T) ->
             gb_trees:update(K1, {K0, V2}, T)
     end.
 
-%% @spec delete_any(key(), headers()) -> headers()
 %% @doc Delete the header corresponding to key if it is present.
+-spec delete_any(key(), headers()) -> headers().
 delete_any(K, T) ->
     K1 = normalize(K),
     gb_trees:delete_any(K1, T).

@@ -61,29 +61,35 @@
 -define(PROBABLE_CLOSE(C),
         (C =:= $> orelse ?IS_WHITESPACE(C))).
 
+-export_type([html_node/0, html_attr/0, html_token/0]).
+
 -record(decoder, {line=1,
                   column=1,
                   offset=0}).
 
-%% @type html_node() = {string(), [html_attr()], [html_node() | string()]}
-%% @type html_attr() = {string(), string()}
-%% @type html_token() = html_data() | start_tag() | end_tag() | inline_html() | html_comment() | html_doctype()
-%% @type html_data() = {data, string(), Whitespace::boolean()}
-%% @type start_tag() = {start_tag, Name, [html_attr()], Singleton::boolean()}
-%% @type end_tag() = {end_tag, Name}
-%% @type html_comment() = {comment, Comment}
-%% @type html_doctype() = {doctype, [Doctype]}
-%% @type inline_html() = {'=', iolist()}
+-type html_text() :: binary() | string() | atom().
+-type html_node() :: {html_text(), [html_attr()], [html_node() | html_text()]}
+                   | {html_text(), [html_attr()]} | {html_text()}.
+-type html_attr() :: {html_text(), html_text() | number()} | html_text().
+-type html_token() :: html_data() | start_tag() | end_tag() | inline_html()
+                    | html_comment() | html_doctype() | {pi, term(), term()}
+                    | {pi, term()}.
+-type html_data() :: {data, html_text(), Whitespace :: boolean()}.
+-type start_tag() :: {start_tag, Name :: html_text(), [html_attr()], Singleton :: boolean()}.
+-type end_tag() :: {end_tag, Name :: html_text()}.
+-type html_comment() :: {comment, Comment :: html_text()}.
+-type html_doctype() :: {doctype, [Doctype :: html_text()]}.
+-type inline_html() :: {'=', iolist()}.
 
 %% External API.
 
-%% @spec parse(string() | binary()) -> html_node()
 %% @doc tokenize and then transform the token stream into a HTML tree.
+-spec parse(iodata()) -> html_node().
 parse(Input) ->
     parse_tokens(tokens(Input)).
 
-%% @spec parse_tokens([html_token()]) -> html_node()
 %% @doc Transform the output of tokens(Doc) into a HTML tree.
+-spec parse_tokens([html_token()]) -> html_node().
 parse_tokens(Tokens) when is_list(Tokens) ->
     %% Skip over doctype, processing instructions
     [{start_tag, Tag, Attrs, false} | Rest] = find_document(Tokens, normal),
@@ -105,13 +111,14 @@ maybe_add_html_tag(Tokens=[{start_tag, Tag, _Attrs, false} | _], html5)
 maybe_add_html_tag(Tokens, _Mode) ->
     Tokens.
 
-%% @spec tokens(StringOrBinary) -> [html_token()]
 %% @doc Transform the input UTF-8 HTML into a token stream.
+-spec tokens(iodata()) -> [html_token()].
 tokens(Input) ->
     tokens(iolist_to_binary(Input), #decoder{}, []).
 
-%% @spec to_tokens(html_node()) -> [html_token()]
 %% @doc Convert a html_node() tree to a list of tokens.
+-spec to_tokens(html_node() | inline_html() | html_doctype() | html_comment()) ->
+          [html_token()].
 to_tokens({Tag0}) ->
     to_tokens({Tag0, [], []});
 to_tokens(T={'=', _}) ->
@@ -132,15 +139,16 @@ to_tokens({Tag0, Attrs, Acc}) ->
             to_tokens([{Tag, Acc}], [{start_tag, Tag, Attrs, false}])
     end.
 
-%% @spec to_html([html_token()] | html_node()) -> iolist()
 %% @doc Convert a list of html_token() to a HTML document.
+-spec to_html([html_token()] | html_node() | inline_html() | html_doctype()
+              | html_comment()) -> iolist().
 to_html(Node) when is_tuple(Node) ->
     to_html(to_tokens(Node));
 to_html(Tokens) when is_list(Tokens) ->
     to_html(Tokens, []).
 
-%% @spec escape(string() | atom() | binary()) -> binary()
 %% @doc Escape a string such that it's safe for HTML (amp; lt; gt;).
+-spec escape(string() | atom() | binary()) -> binary().
 escape(B) when is_binary(B) ->
     escape(binary_to_list(B), []);
 escape(A) when is_atom(A) ->
@@ -148,9 +156,9 @@ escape(A) when is_atom(A) ->
 escape(S) when is_list(S) ->
     escape(S, []).
 
-%% @spec escape_attr(string() | binary() | atom() | integer() | float()) -> binary()
 %% @doc Escape a string such that it's safe for HTML attrs
 %%      (amp; lt; gt; quot;).
+-spec escape_attr(string() | binary() | atom() | integer() | float()) -> binary().
 escape_attr(B) when is_binary(B) ->
     escape_attr(binary_to_list(B), []);
 escape_attr(A) when is_atom(A) ->

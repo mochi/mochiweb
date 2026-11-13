@@ -59,6 +59,7 @@
 -author('bob@mochimedia.com').
 -export([encoder/1, encode/1]).
 -export([decoder/1, decode/1, decode/2]).
+-export_type([json_term/0]).
 
 %% This is a macro to placate syntax highlighters..
 -define(Q, $\").
@@ -83,14 +84,20 @@
         (C =:= $\s orelse C =:= $\t orelse C =:= $\r orelse C =:= $\n)).
 
 
-%% @type json_string() = atom | binary()
-%% @type json_number() = integer() | float()
-%% @type json_array() = [json_term()]
-%% @type json_object() = {struct, [{json_string(), json_term()}]}
-%% @type json_eep18_object() = {[{json_string(), json_term()}]}
-%% @type json_iolist() = {json, iolist()}
-%% @type json_term() = json_string() | json_number() | json_array() |
-%%                     json_object() | json_eep18_object() | json_iolist()
+-type json_string() :: atom() | binary().
+-type json_number() :: integer() | float().
+-type json_array() :: [json_term()].
+-type json_object() :: {struct, [{json_string(), json_term()}]}.
+-type json_eep18_object() :: {[{json_string(), json_term()}]}.
+-type json_iolist() :: {json, iolist()}.
+-type json_term() :: json_string() | json_number() | json_array() |
+                     json_object() | json_eep18_object() | json_iolist() |
+                     #{json_string() => json_term()}.
+-type encoder_option() :: handler_option() | utf8_option().
+-type handler_option() :: {handler, function()}.
+%% Emit unicode as utf8 (default - false)
+-type utf8_option() :: {utf8, boolean()}.
+-type decoder_option() :: {object_hook, function()} | {format, proplist | eep18 | struct | map}.
 
 -record(encoder, {handler=null,
                   utf8=false}).
@@ -101,36 +108,34 @@
                   column=1,
                   state=null}).
 
-%% @spec encoder([encoder_option()]) -> function()
 %% @doc Create an encoder/1 with the given options.
-%% @type encoder_option() = handler_option() | utf8_option()
-%% @type utf8_option() = boolean(). Emit unicode as utf8 (default - false)
+-spec encoder([encoder_option()]) -> function().
 encoder(Options) ->
     State = parse_encoder_options(Options, #encoder{}),
     fun (O) -> json_encode(O, State) end.
 
-%% @spec encode(json_term()) -> iolist()
 %% @doc Encode the given as JSON to an iolist.
+-spec encode(json_term()) -> iolist().
 encode(Any) ->
     json_encode(Any, #encoder{}).
 
-%% @spec decoder([decoder_option()]) -> function()
 %% @doc Create a decoder/1 with the given options.
+-spec decoder([decoder_option()]) -> function().
 decoder(Options) ->
     State = parse_decoder_options(Options, #decoder{}),
     fun (O) -> json_decode(O, State) end.
 
-%% @spec decode(iolist(), [{format, proplist | eep18 | struct | map}]) -> json_term()
 %% @doc Decode the given iolist to Erlang terms using the given object format
 %%      for decoding, where proplist returns JSON objects as [{binary(), json_term()}]
 %%      proplists, eep18 returns JSON objects as {[binary(), json_term()]},
 %%      map returns JSON objects as #{binary() => json_term()}, and struct
 %%      returns them as-is.
+-spec decode(iolist(), [decoder_option()]) -> json_term().
 decode(S, Options) ->
     json_decode(S, parse_decoder_options(Options, #decoder{})).
 
-%% @spec decode(iolist()) -> json_term()
 %% @doc Decode the given iolist to Erlang terms.
+-spec decode(iolist()) -> json_term().
 decode(S) ->
     json_decode(S, #decoder{}).
 

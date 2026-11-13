@@ -15,6 +15,7 @@
 -export([parse_qvalues/1, pick_accepted_encodings/3]).
 -export([make_io/1]).
 -export([normalize_path/1]).
+-export_type([qvalue/0, media_type/0, encoding/0]).
 -export([rand_uniform/2]).
 
 -define(PERCENT, 37).  % $\%
@@ -37,10 +38,11 @@ unhexdigit(C) when C >= $A, C =< $F -> C - $A + 10.
 unhexdigit(Hi, Lo) ->
     unhexdigit(Lo) bor (unhexdigit(Hi) bsl 4).
 
-%% @spec partition(String, Sep) -> {String, [], []} | {Prefix, Sep, Postfix}
 %% @doc Inspired by Python 2.5's str.partition:
 %%      partition("foo/bar", "/") = {"foo", "/", "bar"},
 %%      partition("foo", "/") = {"foo", "", ""}.
+-spec partition(String :: string(), Sep :: string()) ->
+          {string(), string(), string()}.
 partition(String, Sep) ->
     case partition(String, Sep, []) of
         undefined ->
@@ -69,11 +71,11 @@ partition2(_S, _Sep) ->
 
 
 
-%% @spec safe_relative_path(string()) -> string() | undefined
 %% @doc Return the reduced version of a relative path or undefined if it
 %%      is not safe. safe relative paths can be joined with an absolute path
 %%      and will result in a subdirectory of the absolute path. Safe paths
 %%      never contain a backslash character.
+-spec safe_relative_path(string()) -> string() | undefined.
 safe_relative_path("/" ++ _) ->
     undefined;
 safe_relative_path(P) ->
@@ -106,36 +108,36 @@ safe_relative_path(P, Acc) ->
             safe_relative_path(Rest, [Part | Acc])
     end.
 
-%% @spec shell_quote(string()) -> string()
 %% @doc Quote a string according to UNIX shell quoting rules, returns a string
 %%      surrounded by double quotes.
+-spec shell_quote(string()) -> string().
 shell_quote(L) ->
     shell_quote(L, [$\"]).
 
-%% @spec cmd_port([string()], Options) -> port()
 %% @doc open_port({spawn, mochiweb_util:cmd_string(Argv)}, Options).
+-spec cmd_port([string()], Options :: list()) -> port().
 cmd_port(Argv, Options) ->
     open_port({spawn, cmd_string(Argv)}, Options).
 
-%% @spec cmd([string()]) -> string()
 %% @doc os:cmd(cmd_string(Argv)).
+-spec cmd([string()]) -> string().
 cmd(Argv) ->
     os:cmd(cmd_string(Argv)).
 
-%% @spec cmd_string([string()]) -> string()
 %% @doc Create a shell quoted command string from a list of arguments.
+-spec cmd_string([string()]) -> string().
 cmd_string(Argv) ->
     string:join([shell_quote(X) || X <- Argv], " ").
 
-%% @spec cmd_status([string()]) -> {ExitStatus::integer(), Stdout::binary()}
 %% @doc Accumulate the output and exit status from the given application,
 %%      will be spawned with cmd_port/2.
+-spec cmd_status([string()]) -> {ExitStatus :: integer(), Stdout :: binary()}.
 cmd_status(Argv) ->
     cmd_status(Argv, []).
 
-%% @spec cmd_status([string()], [atom()]) -> {ExitStatus::integer(), Stdout::binary()}
 %% @doc Accumulate the output and exit status from the given application,
 %%      will be spawned with cmd_port/2.
+-spec cmd_status([string()], [atom()]) -> {ExitStatus :: integer(), Stdout :: binary()}.
 cmd_status(Argv, Options) ->
     Port = cmd_port(Argv, [exit_status, stderr_to_stdout,
                            use_stdio, binary | Options]),
@@ -144,8 +146,8 @@ cmd_status(Argv, Options) ->
         try port_close(Port) catch _:Error -> Error end
     end.
 
-%% @spec cmd_loop(port(), list()) -> {ExitStatus::integer(), Stdout::binary()}
 %% @doc Accumulate the output and exit status from a port.
+-spec cmd_loop(port(), list()) -> {ExitStatus :: integer(), Stdout :: binary()}.
 cmd_loop(Port, Acc) ->
     receive
         {Port, {exit_status, Status}} ->
@@ -154,10 +156,10 @@ cmd_loop(Port, Acc) ->
             cmd_loop(Port, [Data | Acc])
     end.
 
-%% @spec join([iolist()], iolist()) -> iolist()
 %% @doc Join a list of strings or binaries together with the given separator
 %%      string or char or binary. The output is flattened, but may be an
 %%      iolist() instead of a string() if any of the inputs are binary().
+-spec join([iolist()], iolist() | char()) -> list().
 join([], _Separator) ->
     [];
 join([S], _Separator) ->
@@ -172,8 +174,8 @@ revjoin([S | Rest], Separator, []) ->
 revjoin([S | Rest], Separator, Acc) ->
     revjoin(Rest, Separator, [S, Separator | Acc]).
 
-%% @spec quote_plus(atom() | integer() | float() | string() | binary()) -> string()
 %% @doc URL safe encoding of the given term.
+-spec quote_plus(atom() | integer() | float() | string() | binary()) -> string().
 quote_plus(Atom) when is_atom(Atom) ->
     quote_plus(atom_to_list(Atom));
 quote_plus(Int) when is_integer(Int) ->
@@ -195,8 +197,8 @@ quote_plus([C | Rest], Acc) ->
     <<Hi:4, Lo:4>> = <<C>>,
     quote_plus(Rest, [hexdigit(Lo), hexdigit(Hi), ?PERCENT | Acc]).
 
-%% @spec urlencode([{Key, Value}]) -> string()
 %% @doc URL encode the property list.
+-spec urlencode([{Key :: term(), Value :: term()}]) -> string().
 urlencode(Props) ->
     Pairs = lists:foldr(
               fun ({K, V}, Acc) ->
@@ -204,8 +206,8 @@ urlencode(Props) ->
               end, [], Props),
     string:join(Pairs, "&").
 
-%% @spec parse_qs(string() | binary()) -> [{Key, Value}]
 %% @doc Parse a query string or application/x-www-form-urlencoded.
+-spec parse_qs(string() | binary()) -> [{Key :: string(), Value :: string()}].
 parse_qs(Binary) when is_binary(Binary) ->
     parse_qs(binary_to_list(Binary));
 parse_qs(String) ->
@@ -244,8 +246,8 @@ parse_qs_value([$& | Rest], Acc) ->
 parse_qs_value([C | Rest], Acc) ->
     parse_qs_value(Rest, [C | Acc]).
 
-%% @spec unquote(string() | binary()) -> string()
 %% @doc Unquote a URL encoded string.
+-spec unquote(string() | binary()) -> string().
 unquote(Binary) when is_binary(Binary) ->
     unquote(binary_to_list(Binary));
 unquote(String) ->
@@ -263,8 +265,8 @@ qs_revdecode([Lo, Hi, ?PERCENT | Rest], Acc) when ?IS_HEX(Lo), ?IS_HEX(Hi) ->
 qs_revdecode([C | Rest], Acc) ->
     qs_revdecode(Rest, [C | Acc]).
 
-%% @spec unquote_path(string() | binary()) -> string()
 %% @doc Unquote a URL encoded string, does not encode + into space.
+-spec unquote_path(string() | binary()) -> string().
 unquote_path(Binary) when is_binary(Binary) ->
     unquote_path(binary_to_list(Binary));
 unquote_path(String) ->
@@ -280,9 +282,11 @@ qs_revdecode_path([Lo, Hi, ?PERCENT | Rest], Acc) when ?IS_HEX(Lo), ?IS_HEX(Hi) 
 qs_revdecode_path([C | Rest], Acc) ->
     qs_revdecode_path(Rest, [C | Acc]).
 
-%% @spec urlsplit(Url) -> {Scheme, Netloc, Path, Query, Fragment}
 %% @doc Return a 5-tuple, does not expand % escapes. Only supports HTTP style
 %%      URLs.
+-spec urlsplit(Url :: string()) ->
+          {Scheme :: string(), Netloc :: string(), Path :: string(),
+           Query :: string(), Fragment :: string()}.
 urlsplit(Url) ->
     {Scheme, Url1} = urlsplit_scheme(Url),
     {Netloc, Url2} = urlsplit_netloc(Url1),
@@ -321,10 +325,10 @@ urlsplit_netloc([C | Rest], Acc) ->
     urlsplit_netloc(Rest, [C | Acc]).
 
 
-%% @spec path_split(string()) -> {Part, Rest}
 %% @doc Split a path starting from the left, as in URL traversal.
 %%      path_split("foo/bar") = {"foo", "bar"},
 %%      path_split("/foo/bar") = {"", "foo/bar"}.
+-spec path_split(string()) -> {Part :: string(), Rest :: string()}.
 path_split(S) ->
     path_split(S, []).
 
@@ -336,23 +340,25 @@ path_split([C | Rest], Acc) ->
     path_split(Rest, [C | Acc]).
 
 
-%% @spec urlunsplit({Scheme, Netloc, Path, Query, Fragment}) -> string()
 %% @doc Assemble a URL from the 5-tuple. Path must be absolute.
+-spec urlunsplit({Scheme :: iodata(), Netloc :: iodata(), Path :: iodata(),
+                  Query :: iodata(), Fragment :: iodata()}) -> string().
 urlunsplit({Scheme, Netloc, Path, Query, Fragment}) ->
     lists:flatten([case Scheme of "" -> "";  _ -> [Scheme, "://"] end,
                    Netloc,
                    urlunsplit_path({Path, Query, Fragment})]).
 
-%% @spec urlunsplit_path({Path, Query, Fragment}) -> string()
 %% @doc Assemble a URL path from the 3-tuple.
+-spec urlunsplit_path({Path :: iodata(), Query :: iodata(), Fragment :: iodata()}) -> string().
 urlunsplit_path({Path, Query, Fragment}) ->
     lists:flatten([Path,
                    case Query of "" -> ""; _ -> [$? | Query] end,
                    case Fragment of "" -> ""; _ -> [$# | Fragment] end]).
 
-%% @spec urlsplit_path(Url) -> {Path, Query, Fragment}
 %% @doc Return a 3-tuple, does not expand % escapes. Only supports HTTP style
 %%      paths.
+-spec urlsplit_path(Url :: string()) ->
+          {Path :: string(), Query :: string(), Fragment :: string()}.
 urlsplit_path(Path) ->
     urlsplit_path(Path, []).
 
@@ -382,8 +388,8 @@ extension(Name) ->
         Ext -> Ext
     end.
 
-%% @spec guess_mime(string()) -> string()
 %% @doc  Guess the mime type of a file by the extension of its filename.
+-spec guess_mime(string()) -> string().
 guess_mime(File) ->
     case filename:basename(File) of
         "crossdomain.xml" ->
@@ -397,9 +403,9 @@ guess_mime(File) ->
             end
     end.
 
-%% @spec parse_header(string()) -> {Type, [{K, V}]}
 %% @doc  Parse a Content-Type like header, return the main Content-Type
 %%       and a property list of options.
+-spec parse_header(string()) -> {Type :: string(), [{K :: string(), V :: string()}]}.
 parse_header(String) ->
     %% TODO: This is exactly as broken as Python's cgi module.
     %%       Should parse properly like mochiweb_cookies.
@@ -434,17 +440,18 @@ unquote_header([$\\, C | Rest], Acc) ->
 unquote_header([C | Rest], Acc) ->
     unquote_header(Rest, [C | Acc]).
 
-%% @spec record_to_proplist(Record, Fields) -> proplist()
 %% @doc calls record_to_proplist/3 with a default TypeKey of '__record'
+-spec record_to_proplist(Record :: tuple(), Fields :: [atom()]) -> [{atom(), term()}].
 record_to_proplist(Record, Fields) ->
     record_to_proplist(Record, Fields, '__record').
 
-%% @spec record_to_proplist(Record, Fields, TypeKey) -> proplist()
 %% @doc Return a proplist of the given Record with each field in the
 %%      Fields list set as a key with the corresponding value in the Record.
 %%      TypeKey is the key that is used to store the record type
 %%      Fields should be obtained by calling record_info(fields, record_type)
 %%      where record_type is the record type of Record
+-spec record_to_proplist(Record :: tuple(), Fields :: [atom()], TypeKey :: term()) ->
+          [{term(), term()}].
 record_to_proplist(Record, Fields, TypeKey)
   when tuple_size(Record) - 1 =:= length(Fields) ->
     lists:zip([TypeKey | Fields], tuple_to_list(Record)).
@@ -458,10 +465,9 @@ shell_quote([C | Rest], Acc) when C =:= $\" orelse C =:= $\` orelse
 shell_quote([C | Rest], Acc) ->
     shell_quote(Rest, [C | Acc]).
 
-%% @spec parse_qvalues(string()) -> [qvalue()] | invalid_qvalue_string
-%% @type qvalue() = {media_type() | encoding() , float()}.
-%% @type media_type() = string().
-%% @type encoding() = string().
+-type qvalue() :: {media_type() | encoding(), float()}.
+-type media_type() :: string().
+-type encoding() :: string().
 %%
 %% @doc Parses a list (given as a string) of elements with Q values associated
 %%      to them. Elements are separated by commas and each element is separated
@@ -477,6 +483,7 @@ shell_quote([C | Rest], Acc) ->
 %%      parse_qvalues("gzip; q=0.5, deflate, identity;q=0.0") ->
 %%          [{"gzip", 0.5}, {"deflate", 1.0}, {"identity", 0.0}]
 %%
+-spec parse_qvalues(string()) -> [qvalue()] | invalid_qvalue_string.
 parse_qvalues(QValuesStr) ->
     try
         lists:map(
@@ -533,9 +540,6 @@ extract_q(KVRe, QRe, [Param | Rest], Acc) ->
             end
     end.
 
-%% @spec pick_accepted_encodings([qvalue()], [encoding()], encoding()) ->
-%%    [encoding()]
-%%
 %% @doc Determines which encodings specified in the given Q values list are
 %%      valid according to a list of supported encodings and a default encoding.
 %%
@@ -558,6 +562,8 @@ extract_q(KVRe, QRe, [Param | Rest], Acc) ->
 %%      ) ->
 %%          ["gzip", "identity"]
 %%
+-spec pick_accepted_encodings([qvalue()], [encoding()], encoding()) ->
+          [encoding()].
 pick_accepted_encodings(AcceptedEncs, SupportedEncs, DefaultEnc) ->
     SortedQList = lists:reverse(
         lists:sort(fun({_, Q1}, {_, Q2}) -> Q1 < Q2 end, AcceptedEncs)
@@ -614,10 +620,10 @@ make_io(Integer) when is_integer(Integer) ->
 make_io(Io) when is_list(Io); is_binary(Io) ->
     Io.
 
-%% @spec normalize_path(string()) -> string()
 %% @doc Remove duplicate slashes from an uri path ("//foo///bar////" becomes
 %%      "/foo/bar/").
 %%      Per RFC 3986, all but the last path segment must be non-empty.
+-spec normalize_path(string()) -> string().
 normalize_path(Path) ->
 	normalize_path(Path, []).
 

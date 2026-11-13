@@ -110,9 +110,9 @@ rngchar() ->
 rngchar(C) ->
     element(1 + C, ?SAFE_CHARS).
 
-%% @spec gettempdir() -> string()
 %% @doc Get a usable temporary directory using the first of these that is a directory:
 %%      $TMPDIR, $TMP, $TEMP, "/tmp", "/var/tmp", "/usr/tmp", ".".
+-spec gettempdir() -> string().
 gettempdir() ->
     gettempdir(gettempdir_checks(), fun normalize_dir/1).
 
