@@ -5,7 +5,7 @@ MochiWeb is an Erlang library for building lightweight HTTP servers.
 MochiWeb provides a lightweight and fast solution for building HTTP servers in Erlang. The library provides features for building robust and scalable HTTP servers.
 
 ## Getting Started
-Before you can use MochiWeb, you'll need to have [Erlang OTP](https://www.erlang.org/) installed. Once you have Erlang OTP installed, you can download the latest version of MochiWeb from the [GitHub repository](https://github.com/mochi/mochiweb).
+Before you can use MochiWeb, you'll need to have [Erlang OTP](https://www.erlang.org/) 25 or later installed. Once you have Erlang OTP installed, you can download the latest version of MochiWeb from the [GitHub repository](https://github.com/mochi/mochiweb).
 
 For a MochiWeb project, first obtain a copy of MochiWeb using Git by running the command.
 
@@ -44,13 +44,6 @@ For an example, view the `example_project` in the `examples/` folder.
 [Information about Rebar (Erlang build tool)](https://github.com/erlang/rebar3)
 
 [Mailing list](https://groups.google.com/group/mochiweb/)
-
-## OTP 21.2, 21.2.1, 21.2.2 warning
-
-OTP 21.2 (up to and including 21.2.2) introduced an SSL regression that
-makes these releases unsafe to use. See [ERL-830](https://bugs.erlang.org/browse/ERL-830).
-This issue was resolved in OTP 21.2.3.
-
 
 ## Contributing
 MochiWeb is an open-source project and welcomes contributions from the community.
