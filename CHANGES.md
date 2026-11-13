@@ -9,6 +9,7 @@ Version 3.6.0 released 2026-11-13
 * Don't compress empty response bodies
   https://github.com/mochi/mochiweb/pull/274
 * Update GitHub Actions checkout to v7
+  https://github.com/mochi/mochiweb/pull/275
 
 Version 3.5.0 released 2026-08-16
 
