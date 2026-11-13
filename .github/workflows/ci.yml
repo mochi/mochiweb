@@ -21,7 +21,7 @@ jobs:
           - "26"
           - "25"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - run: make test
       - run: make edoc
       - run: REBAR=rebar make test
