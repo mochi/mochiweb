@@ -3,9 +3,12 @@ Version 3.6.1 released 2026-11-13
 * Fix the Hex.pm release workflow, which failed to publish 3.6.0.
   It now pins rebar3 and rebar3_hex instead of using a prebuilt action,
   and CI runs a `rebar3 hex publish --dry-run` to catch this earlier.
+  https://github.com/mochi/mochiweb/pull/276
 * Publish edoc documentation to Hex.pm
+  https://github.com/mochi/mochiweb/pull/276
 * Replace deprecated edoc `@spec`/`@type` tags with `-spec`/`-type`
   attributes, and fail CI on edoc warnings
+  https://github.com/mochi/mochiweb/pull/276
 
 Version 3.6.0 released 2026-11-13
 
