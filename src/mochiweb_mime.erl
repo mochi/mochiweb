@@ -25,11 +25,11 @@
 -author('bob@mochimedia.com').
 -export([from_extension/1]).
 
-%% @spec from_extension(S::string()) -> string() | undefined
 %% @doc Given a filename extension (e.g. ".html") return a guess for the MIME
 %%      type such as "text/html". Will return the atom undefined if no good
 %%      guess is available.
 
+-spec from_extension(S :: string()) -> string() | undefined.
 from_extension(".stl") ->
     "application/SLA";
 from_extension(".stp") ->

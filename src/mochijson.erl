@@ -26,6 +26,7 @@
 -export([decoder/1, decode/1]).
 -export([binary_encoder/1, binary_encode/1]).
 -export([binary_decoder/1, binary_decode/1]).
+-export_type([json_term/0, bjson_term/0]).
 
 % This is a macro to placate syntax highlighters..
 -define(Q, $\").
@@ -33,25 +34,25 @@
 -define(INC_COL(S), S#decoder{column=1+S#decoder.column}).
 -define(INC_LINE(S), S#decoder{column=1, line=1+S#decoder.line}).
 
-%% @type json_string() = atom | string() | binary()
-%% @type json_number() = integer() | float()
-%% @type json_array() = {array, [json_term()]}
-%% @type json_object() = {struct, [{json_string(), json_term()}]}
-%% @type json_term() = json_string() | json_number() | json_array() |
-%%                     json_object()
-%% @type encoding() = utf8 | unicode
-%% @type encoder_option() = {input_encoding, encoding()} |
-%%                          {handler, function()}
-%% @type decoder_option() = {input_encoding, encoding()} |
-%%                          {object_hook, function()}
-%% @type bjson_string() = binary()
-%% @type bjson_number() = integer() | float()
-%% @type bjson_array() = [bjson_term()]
-%% @type bjson_object() = {struct, [{bjson_string(), bjson_term()}]}
-%% @type bjson_term() = bjson_string() | bjson_number() | bjson_array() |
-%%                      bjson_object()
-%% @type binary_encoder_option() = {handler, function()}
-%% @type binary_decoder_option() = {object_hook, function()}
+-type json_string() :: atom() | string() | binary().
+-type json_number() :: integer() | float().
+-type json_array() :: {array, [json_term()]}.
+-type json_object() :: {struct, [{json_string(), json_term()}]}.
+-type json_term() :: json_string() | json_number() | json_array() |
+                     json_object().
+-type encoding() :: utf8 | unicode.
+-type encoder_option() :: {input_encoding, encoding()} |
+                          {handler, function()}.
+-type decoder_option() :: {input_encoding, encoding()} |
+                          {object_hook, function()}.
+-type bjson_string() :: binary().
+-type bjson_number() :: integer() | float().
+-type bjson_array() :: [bjson_term()].
+-type bjson_object() :: {struct, [{bjson_string(), bjson_term()}]}.
+-type bjson_term() :: bjson_string() | bjson_number() | bjson_array() |
+                      bjson_object().
+-type binary_encoder_option() :: {handler, function()}.
+-type binary_decoder_option() :: {object_hook, function()}.
 
 -record(encoder, {input_encoding=unicode,
                   handler=null}).
@@ -62,47 +63,47 @@
                   column=1,
                   state=null}).
 
-%% @spec encoder([encoder_option()]) -> function()
 %% @doc Create an encoder/1 with the given options.
+-spec encoder([encoder_option()]) -> function().
 encoder(Options) ->
     State = parse_encoder_options(Options, #encoder{}),
     fun (O) -> json_encode(O, State) end.
 
-%% @spec encode(json_term()) -> iolist()
 %% @doc Encode the given as JSON to an iolist.
+-spec encode(json_term()) -> iolist().
 encode(Any) ->
     json_encode(Any, #encoder{}).
 
-%% @spec decoder([decoder_option()]) -> function()
 %% @doc Create a decoder/1 with the given options.
+-spec decoder([decoder_option()]) -> function().
 decoder(Options) ->
     State = parse_decoder_options(Options, #decoder{}),
     fun (O) -> json_decode(O, State) end.
 
-%% @spec decode(iolist()) -> json_term()
 %% @doc Decode the given iolist to Erlang terms.
+-spec decode(iolist()) -> json_term().
 decode(S) ->
     json_decode(S, #decoder{}).
 
-%% @spec binary_decoder([binary_decoder_option()]) -> function()
 %% @doc Create a binary_decoder/1 with the given options.
+-spec binary_decoder([binary_decoder_option()]) -> function().
 binary_decoder(Options) ->
     mochijson2:decoder(Options).
 
-%% @spec binary_encoder([binary_encoder_option()]) -> function()
 %% @doc Create a binary_encoder/1 with the given options.
+-spec binary_encoder([binary_encoder_option()]) -> function().
 binary_encoder(Options) ->
     mochijson2:encoder(Options).
 
-%% @spec binary_encode(bjson_term()) -> iolist()
 %% @doc Encode the given as JSON to an iolist, using lists for arrays and
 %%      binaries for strings.
+-spec binary_encode(bjson_term()) -> iolist().
 binary_encode(Any) ->
     mochijson2:encode(Any).
 
-%% @spec binary_decode(iolist()) -> bjson_term()
 %% @doc Decode the given iolist to Erlang terms, using lists for arrays and
 %%      binaries for strings.
+-spec binary_decode(iolist()) -> bjson_term().
 binary_decode(S) ->
     mochijson2:decode(S).
 

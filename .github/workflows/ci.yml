@@ -3,6 +3,7 @@ on:
     branches:
       - main
   pull_request:
+  merge_group:
 jobs:
   test:
     name: test ${{matrix.otp}} on ${{matrix.os}}
@@ -23,6 +24,30 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: make test
-      - run: make edoc
+      - name: make edoc (fail on warnings)
+        run: |
+          status=0
+          make edoc > edoc.log 2>&1 || status=$?
+          cat edoc.log
+          test "$status" -eq 0
+          if grep -i "warning" edoc.log; then
+            echo "edoc emitted warnings" >&2
+            exit 1
+          fi
       - run: REBAR=rebar make test
- 
+
+  hex-publish-dry-run:
+    name: hex publish dry run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Keep in sync with .github/workflows/release.yml
+      - uses: erlef/setup-beam@v1.24.1
+        with:
+          otp-version: "29"
+          rebar3-version: "3.28.0"
+      - name: Install rebar3_hex
+        run: |
+          mkdir -p ~/.config/rebar3
+          echo '{plugins, [{rebar3_hex, "7.5.0"}]}.' > ~/.config/rebar3/rebar.config
+      - run: rebar3 hex publish -r hexpm --dry-run --yes

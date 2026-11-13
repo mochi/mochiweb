@@ -32,44 +32,49 @@
 
 -export([send/2, write_chunk/2]).
 
-%% @type response(). A mochiweb_response parameterized module instance.
-%% @type encoding(). gzip | zstd
+-export_type([response/0, encoding/0]).
 
-%% @spec new(Request, Code, Headers) -> response()
+%% A mochiweb_response parameterized module instance.
+-type response() :: {?MODULE, list()}.
+-type encoding() :: gzip | zstd.
+
 %% @doc Create a new mochiweb_response instance.
+-spec new(Request :: {module(), list()}, Code :: integer(), Headers :: mochiweb_headers:headers()) ->
+          response().
 new(Request, Code, Headers) ->
     {?MODULE, [Request, Code, Headers]}.
 
-%% @spec new(Request, Code, Headers, {encoding(), Context}) -> response()
 %% @doc Create a new mochiweb_response where write_chunk/2 will use a given
 %%      encoder context
+-spec new(Request :: {module(), list()}, Code :: integer(), Headers :: mochiweb_headers:headers(),
+          {encoding(), Context :: term()}) -> response().
 new(Request, Code, Headers, {Codec, _} = Encoder)
     when Codec =:= gzip; Codec =:= zstd ->
     {?MODULE, [Request, Code, Headers, Encoder]}.
 
-%% @spec supported_encoders() -> [encoding()]
 %% @doc The codecs encoder/3 supports in this build. zstd requires the
 %%      zstd module with flush support and that's in OTP 29+ only.
+-spec supported_encoders() -> [encoding()].
 supported_encoders() ->
     [gzip] ++ zstd_supported().
 
-%% @spec encoder(encoding(), integer(), response()) -> response()
 %% @doc Return a response so that its write_chunk/2 compresses each chunk with
 %%      the given codec. Every chunk is flushed so bytes are written
 %%      out immediately. Empty chunk that finishes a chunked response will end the
 %%      compression stream. In mochiweb_request:respond/2 we set the matching
 %%      Content-Encoding header but callers using encoder/3 directly should
 %%      set it themselves.
+-spec encoder(encoding(), integer(), response()) -> response().
 encoder(gzip, Level, {?MODULE, [Request, Code, Headers]}) ->
     Z = zlib_gzip_init(Level),
     new(Request, Code, Headers, {gzip, Z});
 encoder(zstd, Level, {?MODULE, [Request, Code, Headers]}) ->
     new(Request, Code, Headers, {zstd, zstd_open(Level)}).
 
-%% @spec compress(encoding(), integer(), iodata()) -> iodata()
 %% @doc Compress a whole body in one pass with the given codec. Used by
 %%      mochiweb_request:respond/2 for {compressed, {Codec, Level}, Body}
 %%      bodies, which also sets the matching Content-Encoding header.
+-spec compress(encoding(), integer(), iodata()) -> iodata().
 compress(gzip, Level, Body) ->
     Z = zlib_gzip_init(Level),
     Compressed = zlib:deflate(Z, Body, finish),
@@ -79,15 +84,15 @@ compress(gzip, Level, Body) ->
 compress(zstd, Level, Body) ->
     zstd_oneshot(Level, Body).
 
-%% @spec get_header_value(string() | atom() | binary(), response()) ->
-%%           string() | undefined
 %% @doc Get the value of the given response header.
+-spec get_header_value(string() | atom() | binary(), response()) ->
+          string() | undefined.
 get_header_value(K,
 		 {?MODULE, [_Request, _Code, Headers | _]}) ->
     mochiweb_headers:get_value(K, Headers).
 
-%% @spec get(request | code | headers, response()) -> term()
 %% @doc Return the internal representation of the given field.
+-spec get(request | code | headers, response()) -> term().
 get(request, {?MODULE, [Request, _Code, _Headers | _]}) ->
     Request;
 get(code, {?MODULE, [_Request, Code, _Headers | _]}) ->
@@ -95,15 +100,15 @@ get(code, {?MODULE, [_Request, Code, _Headers | _]}) ->
 get(headers, {?MODULE, [_Request, _Code, Headers | _]}) ->
     Headers.
 
-%% @spec dump(response()) -> {mochiweb_request, [{atom(), term()}]}
 %% @doc Dump the internal representation to a "human readable" set of terms
 %%      for debugging/inspection purposes.
+-spec dump(response()) -> [{atom(), term()}].
 dump({?MODULE, [{ReqM, _} = Request, Code, Headers | _]}) ->
     [{request, ReqM:dump(Request)}, {code, Code},
      {headers, mochiweb_headers:to_list(Headers)}].
 
-%% @spec send(iodata(), response()) -> ok
 %% @doc Send data over the socket if the method is not HEAD.
+-spec send(iodata(), response()) -> ok.
 send(Data,
      {?MODULE, [{ReqM, _} = Request, _Code, _Headers | _]}) ->
     case ReqM:get(method, Request) of
@@ -111,10 +116,10 @@ send(Data,
       _ -> ReqM:send(Data, Request)
     end.
 
-%% @spec write_chunk(iodata(), response()) -> ok
 %% @doc Write a chunk of a HTTP chunked response. If Data is zero length,
 %%      then the chunked response will be finished. For a response with an
 %%      enoder that also finishes the compression stream.
+-spec write_chunk(iodata(), response()) -> ok.
 write_chunk(Data,
 	    {?MODULE, [_Request, _Code, _Headers, Encoder]} = THIS) ->
     case iolist_size(Data) of

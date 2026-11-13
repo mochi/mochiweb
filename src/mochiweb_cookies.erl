@@ -52,22 +52,22 @@
          orelse (C >= 16#5D andalso C =< 16#7E)
         )).
 
-%% @type proplist() = [{Key::string(), Value::string()}].
-%% @type header() = {Name::string(), Value::string()}.
-%% @type int_seconds() = integer().
+-type header() :: {Name :: string(), Value :: string()}.
+-type cookie_value() :: string() | binary() | atom() | integer().
+-type cookie_option() :: {max_age, integer()}
+                       | {local_time, calendar:datetime()}
+                       | {domain, string()} | {path, string()}
+                       | {secure, boolean()} | {http_only, boolean()}
+                       | {same_site, lax | strict | none}.
 
-%% @spec cookie(Key::string(), Value::string()) -> header()
 %% @doc Short-hand for <code>cookie(Key, Value, [])</code>.
+-spec cookie(Key :: cookie_value(), Value :: cookie_value()) -> header().
 cookie(Key, Value) ->
     cookie(Key, Value, []).
 
-%% @spec cookie(Key::string(), Value::string(), Options::[Option]) -> header()
-%% where Option = {max_age, int_seconds()} | {local_time, {date(), time()}}
-%%                | {domain, string()} | {path, string()}
-%%                | {secure, true | false} | {http_only, true | false}
-%%                | {same_site, lax | strict | none}
-%%
 %% @doc Generate a Set-Cookie header field tuple.
+-spec cookie(Key :: cookie_value(), Value :: cookie_value(),
+             Options :: [cookie_option()]) -> header().
 cookie(Key, Value, Options) ->
     Cookie = [any_to_list(Key), "=", quote(Value), "; Version=1"],
     %% Set-Cookie:
@@ -188,9 +188,9 @@ add_seconds(Secs, LocalTime) ->
 age_to_cookie_date(Age, LocalTime) ->
     rfc2109_cookie_expires_date(add_seconds(Age, LocalTime)).
 
-%% @spec parse_cookie(string()) -> [{K::string(), V::string()}]
 %% @doc Parse the contents of a Cookie header field, ignoring cookie
 %% attributes, and return a simple property list.
+-spec parse_cookie(string()) -> [{K :: string(), V :: string()}].
 parse_cookie("") ->
     [];
 parse_cookie(Cookie) ->

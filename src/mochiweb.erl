@@ -69,9 +69,12 @@ uri({scheme, Hostname, Port}) ->
 uri(HttpString) when is_list(HttpString) ->
     HttpString.
 
-%% @spec new_request( {Socket, Request, Headers}
-%%                  | {Socket, Opts, Request, Headers} ) -> MochiWebRequest
 %% @doc Return a mochiweb_request data structure.
+-spec new_request({Socket :: term(), {Method :: term(), HttpUri :: term(), Version :: term()},
+                   Headers :: term()}
+                  | {Socket :: term(), Opts :: list(),
+                     {Method :: term(), HttpUri :: term(), Version :: term()},
+                     Headers :: term()}) -> mochiweb_request:request().
 new_request({Socket, {Method, HttpUri, Version}, Headers}) ->
     new_request({Socket, [], {Method, HttpUri, Version}, Headers});
 
@@ -83,16 +86,18 @@ new_request({Socket, Opts, {Method, HttpUri, Version}, Headers}) ->
                          Version,
                          mochiweb_headers:make(Headers)).
 
-%% @spec new_response({Request, integer(), Headers}) -> MochiWebResponse
 %% @doc Return a mochiweb_response data structure.
+-spec new_response({Request :: mochiweb_request:request(), Code :: integer(),
+                    Headers :: mochiweb_headers:headers() | [{mochiweb_headers:key(), mochiweb_headers:value()}]}) ->
+                          mochiweb_response:response().
 new_response({Request, Code, Headers}) ->
     mochiweb_response:new(Request,
                           Code,
                           mochiweb_headers:make(Headers)).
 
-%% @spec ensure_started(App::atom()) -> ok
 %% @doc Start the given App and all it
 %% dependencies if it has not been started already.
+-spec ensure_started(App :: atom()) -> ok.
 ensure_started(App) ->
     case application:ensure_all_started(App) of
         {ok, _} ->

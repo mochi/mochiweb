@@ -26,29 +26,32 @@
 -author('bob@mochimedia.com').
 
 -export([open/1, write/2, close/1, name/1]).
+-export_type([handle/0]).
 
-%% @spec open(Name) -> Handle
+-type handle() :: {?MODULE, file:filename(), file:io_device()}.
+
 %% @doc Open the log file Name, creating or appending as necessary. All data
 %%      at the end of the file will be truncated until a newline is found, to
 %%      ensure that all records are complete.
+-spec open(Name :: file:filename()) -> handle().
 open(Name) ->
     {ok, FD} = file:open(Name, [raw, read, write, delayed_write, binary]),
     fix_log(FD),
     {?MODULE, Name, FD}.
 
-%% @spec name(Handle) -> string()
 %% @doc Return the path of the log file.
+-spec name(handle()) -> file:filename().
 name({?MODULE, Name, _FD}) ->
     Name.
 
-%% @spec write(Handle, IoData) -> ok
 %% @doc Write IoData to the log file referenced by Handle.
+-spec write(handle(), IoData :: iodata()) -> ok.
 write({?MODULE, _Name, FD}, IoData) ->
     ok = file:write(FD, [IoData, $\n]),
     ok.
 
-%% @spec close(Handle) -> ok
 %% @doc Close the log file referenced by Handle.
+-spec close(handle()) -> ok.
 close({?MODULE, _Name, FD}) ->
     ok = file:sync(FD),
     ok = file:close(FD),

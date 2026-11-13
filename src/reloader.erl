@@ -38,43 +38,44 @@
 
 %% External API
 
-%% @spec start() -> ServerRet
 %% @doc Start the reloader.
+-spec start() -> {ok, pid()} | ignore | {error, term()}.
 start() ->
     gen_server:start({local, ?MODULE}, ?MODULE, [], []).
 
-%% @spec start_link() -> ServerRet
 %% @doc Start the reloader.
+-spec start_link() -> {ok, pid()} | ignore | {error, term()}.
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-%% @spec stop() -> ok
 %% @doc Stop the reloader.
+-spec stop() -> stopped.
 stop() ->
     gen_server:call(?MODULE, stop).
 
 %% gen_server callbacks
 
-%% @spec init([]) -> {ok, State}
 %% @doc gen_server init, opens the server in an initial state.
+-spec init([]) -> {ok, #state{}}.
 init([]) ->
     {ok, TRef} = timer:send_interval(timer:seconds(1), doit),
     {ok, #state{last = stamp(), tref = TRef}}.
 
-%% @spec handle_call(Args, From, State) -> tuple()
 %% @doc gen_server callback.
+-spec handle_call(term(), {pid(), term()}, #state{}) ->
+          {stop, shutdown, stopped, #state{}} | {reply, {error, badrequest}, #state{}}.
 handle_call(stop, _From, State) ->
     {stop, shutdown, stopped, State};
 handle_call(_Req, _From, State) ->
     {reply, {error, badrequest}, State}.
 
-%% @spec handle_cast(Cast, State) -> tuple()
 %% @doc gen_server callback.
+-spec handle_cast(term(), #state{}) -> {noreply, #state{}}.
 handle_cast(_Req, State) ->
     {noreply, State}.
 
-%% @spec handle_info(Info, State) -> tuple()
 %% @doc gen_server callback.
+-spec handle_info(term(), #state{}) -> {noreply, #state{}}.
 handle_info(doit, State) ->
     Now = stamp(),
     _ = doit(State#state.last, Now),
@@ -82,32 +83,32 @@ handle_info(doit, State) ->
 handle_info(_Info, State) ->
     {noreply, State}.
 
-%% @spec terminate(Reason, State) -> ok
 %% @doc gen_server termination callback.
+-spec terminate(term(), #state{}) -> ok.
 terminate(_Reason, State) ->
     {ok, cancel} = timer:cancel(State#state.tref),
     ok.
 
 
-%% @spec code_change(_OldVsn, State, _Extra) -> State
 %% @doc gen_server code_change callback (trivial).
+-spec code_change(term(), #state{}, term()) -> {ok, #state{}}.
 code_change(_Vsn, State, _Extra) ->
     {ok, State}.
 
-%% @spec reload_modules([atom()]) -> [{module, atom()} | {error, term()}]
 %% @doc code:purge/1 and code:load_file/1 the given list of modules in order,
 %%      return the results of code:load_file/1.
+-spec reload_modules([atom()]) -> [{module, atom()} | {error, term()}].
 reload_modules(Modules) ->
     [begin code:purge(M), code:load_file(M) end || M <- Modules].
 
-%% @spec all_changed() -> [atom()]
 %% @doc Return a list of beam modules that have changed.
+-spec all_changed() -> [atom()].
 all_changed() ->
     [M || {M, Fn} <- code:all_loaded(), is_list(Fn), is_changed(M)].
 
-%% @spec is_changed(atom()) -> boolean()
 %% @doc true if the loaded module is a beam with a vsn attribute
 %%      and does not match the on-disk beam file, returns false otherwise.
+-spec is_changed(atom()) -> boolean().
 is_changed(M) ->
     try
         module_vsn(M:module_info()) =/= module_vsn(code:get_object_code(M))

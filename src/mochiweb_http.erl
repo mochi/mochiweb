@@ -33,6 +33,14 @@
 
 -export([parse_range_request/1, range_skip_length/2]).
 
+-export_type([option/0]).
+
+-type option() :: {name, atom()} | {ip, string() | tuple()} | {backlog, integer()}
+                | {nodelay, boolean()} | {acceptor_pool_size, integer()}
+                | {ssl, boolean()} | {profile_fun, undefined | fun((list()) -> ok)}
+                | {link, false} | {recbuf, undefined | non_neg_integer()}
+                | {atom(), term()}.
+
 -define(REQUEST_RECV_TIMEOUT,
 	300000).   %% timeout waiting for request line
 
@@ -54,17 +62,12 @@ stop() -> mochiweb_socket_server:stop(?MODULE).
 
 stop(Name) -> mochiweb_socket_server:stop(Name).
 
-%% @spec start(Options) -> ServerRet
-%%     Options = [option()]
-%%     Option = {name, atom()} | {ip, string() | tuple()} | {backlog, integer()}
-%%              | {nodelay, boolean()} | {acceptor_pool_size, integer()}
-%%              | {ssl, boolean()} | {profile_fun, undefined | (Props) -> ok}
-%%              | {link, false} | {recbuf, undefined | non_negative_integer()}
 %% @doc Start a mochiweb server.
 %%      profile_fun is used to profile accept timing.
 %%      After each accept, if defined, profile_fun is called with a proplist of a subset of the mochiweb_socket_server state and timing information.
 %%      The proplist is as follows: [{name, Name}, {port, Port}, {active_sockets, ActiveSockets}, {timing, Timing}].
 %% @end
+-spec start(Options :: [option()]) -> {ok, pid()} | ignore | {error, term()}.
 start(Options) ->
     ok = ensure_started(mochiweb_clock),
     mochiweb_socket_server:start(parse_options(Options)).

@@ -39,19 +39,19 @@
 	{state, boundary, length, buffer, callback, req}).
 
 %% TODO: DOCUMENT THIS MODULE.
-%% @type key() = atom() | string() | binary().
-%% @type value() = atom() | iolist() | integer().
-%% @type header() = {key(), value()}.
-%% @type bodypart() = {Start::integer(), End::integer(), Body::iolist()}.
-%% @type formfile() = {Name::string(), ContentType::string(), Content::binary()}.
-%% @type request().
-%% @type file_handler() = (Filename::string(), ContentType::string()) -> file_handler_callback().
-%% @type file_handler_callback() = (binary() | eof) -> file_handler_callback() | term().
+-type key() :: atom() | string() | binary().
+-type value() :: atom() | iolist() | integer().
+-type header() :: {key(), value()}.
+-type bodypart() :: {Start :: integer(), End :: integer(), Body :: iolist()}.
+-type formfile() :: {Name :: string(), ContentType :: string(), Content :: binary()}.
+-type request() :: mochiweb_request:request().
+-type file_handler() :: fun((Filename :: string(), ContentType :: string()) -> file_handler_callback()).
+-type file_handler_callback() :: fun((binary() | eof) -> file_handler_callback() | term()).
 
-%% @spec parts_to_body([bodypart()], ContentType::string(),
-%%                     Size::integer()) -> {[header()], iolist()}
 %% @doc Return {[header()], iolist()} representing the body for the given
 %%      parts, may be a single part or multipart.
+-spec parts_to_body([bodypart()], ContentType :: string(),
+                    Size :: integer()) -> {[header()], iolist()}.
 parts_to_body([{Start, End, Body}], ContentType,
 	      Size) ->
     HeaderList = [{"Content-Type", ContentType},
@@ -65,11 +65,11 @@ parts_to_body(BodyList, ContentType, Size)
     parts_to_multipart_body(BodyList, ContentType, Size,
 			    mochihex:to_hex(crypto:strong_rand_bytes(8))).
 
-%% @spec parts_to_multipart_body([bodypart()], ContentType::string(),
-%%                               Size::integer(), Boundary::string()) ->
-%%           {[header()], iolist()}
 %% @doc Return {[header()], iolist()} representing the body for the given
 %%      parts, always a multipart response.
+-spec parts_to_multipart_body([bodypart()], ContentType :: string(),
+                              Size :: integer(), Boundary :: string()) ->
+          {[header()], iolist()}.
 parts_to_multipart_body(BodyList, ContentType, Size,
 			Boundary) ->
     HeaderList = [{"Content-Type",
@@ -78,9 +78,9 @@ parts_to_multipart_body(BodyList, ContentType, Size,
 				   Boundary, Size),
     {HeaderList, MultiPartBody}.
 
-%% @spec multipart_body([bodypart()], ContentType::string(),
-%%                      Boundary::string(), Size::integer()) -> iolist()
 %% @doc Return the representation of a multipart body for the given [bodypart()].
+-spec multipart_body([bodypart()], ContentType :: string(),
+                     Boundary :: string(), Size :: integer()) -> iolist().
 multipart_body([], _ContentType, Boundary, _Size) ->
     ["--", Boundary, "--\r\n"];
 multipart_body([{Start, End, Body} | BodyList],
@@ -93,14 +93,14 @@ multipart_body([{Start, End, Body} | BodyList],
      | multipart_body(BodyList, ContentType, Boundary,
 		      Size)].
 
-%% @spec parse_form(request()) -> [{string(), string() | formfile()}]
 %% @doc Parse a multipart form from the given request using the in-memory
 %%      default_file_handler/2.
+-spec parse_form(request()) -> [{string(), string() | formfile()}].
 parse_form(Req) ->
     parse_form(Req, fun default_file_handler/2).
 
-%% @spec parse_form(request(), F::file_handler()) -> [{string(), string() | term()}]
 %% @doc Parse a multipart form from the given request using the given file_handler().
+-spec parse_form(request(), F :: file_handler()) -> [{string(), string() | term()}].
 parse_form(Req, FileHandler) ->
     Callback = fun (Next) ->
 		       parse_form_outer(Next, FileHandler, [])
@@ -294,9 +294,9 @@ get_boundary(ContentType) ->
       S when is_list(S) -> S
     end.
 
-%% @spec find_in_binary(Pattern::binary(), Data::binary()) ->
-%%            {exact, N} | {partial, N, K} | not_found
 %% @doc Searches for the given pattern in the given binary.
+-spec find_in_binary(Pattern :: binary(), Data :: binary()) ->
+          {exact, non_neg_integer()} | {partial, non_neg_integer(), non_neg_integer()} | not_found.
 find_in_binary(P, Data) when size(P) > 0 ->
     PS = size(P),
     DS = size(Data),

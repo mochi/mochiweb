@@ -61,6 +61,8 @@
 
 -export([is_closed/1]).
 
+-export_type([request/0]).
+
 -define(SAVE_QS, mochiweb_request_qs).
 
 -define(SAVE_PATH, mochiweb_request_path).
@@ -77,12 +79,17 @@
 
 -define(SAVE_FORCE_CLOSE, mochiweb_request_force_close).
 
-%% @type key() = atom() | string() | binary()
-%% @type value() = atom() | string() | binary() | integer()
-%% @type headers(). A mochiweb_headers structure.
-%% @type request(). A mochiweb_request parameterized module instance.
-%% @type response(). A mochiweb_response parameterized module instance.
-%% @type ioheaders() = headers() | [{key(), value()}].
+-type key() :: mochiweb_headers:key().
+-type value() :: mochiweb_headers:value().
+-type headers() :: mochiweb_headers:headers().
+%% A mochiweb_request parameterized module instance.
+-type request() :: {?MODULE, list()}.
+-type response() :: mochiweb_response:response().
+-type ioheaders() :: headers() | [{key(), value()}].
+-type response_body() :: iodata() | chunked
+                       | {chunked, {mochiweb_response:encoding(), integer()}}
+                       | {compressed, {mochiweb_response:encoding(), integer()}, iodata()}
+                       | {file, file:io_device()}.
 
 % 5 minute default idle timeout
 -define(IDLE_TIMEOUT, 300000).
@@ -90,19 +97,21 @@
 % Maximum recv_body() length of 1MB
 -define(MAX_RECV_BODY, 1024 * 1024).
 
-%% @spec new(Socket, Method, RawPath, Version, headers()) -> request()
 %% @doc Create a new request instance.
+-spec new(Socket :: term(), Method :: term(), RawPath :: string(), Version :: term(),
+          headers()) -> request().
 new(Socket, Method, RawPath, Version, Headers) ->
     new(Socket, [], Method, RawPath, Version, Headers).
 
-%% @spec new(Socket, Opts, Method, RawPath, Version, headers()) -> request()
 %% @doc Create a new request instance.
+-spec new(Socket :: term(), Opts :: list(), Method :: term(), RawPath :: string(),
+          Version :: term(), headers()) -> request().
 new(Socket, Opts, Method, RawPath, Version, Headers) ->
     {?MODULE,
      [Socket, Opts, Method, RawPath, Version, Headers]}.
 
-%% @spec get_header_value(K, request()) -> undefined | Value
 %% @doc Get the value of a given request header.
+-spec get_header_value(key(), request()) -> undefined | string().
 get_header_value(K,
 		 {?MODULE,
 		  [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -121,14 +130,15 @@ get_combined_header_value(K,
 			    Headers]}) ->
     mochiweb_headers:get_combined_value(K, Headers).
 
-%% @type field() = socket | scheme | method | raw_path | version | headers | peer | path | body_length | range
+-type field() :: socket | scheme | method | raw_path | version | headers | peer | path
+               | body_length | range | opts.
 
-%% @spec get(field(), request()) -> term()
 %% @doc Return the internal representation of the given field. If
 %%      <code>socket</code> is requested on a HTTPS connection, then
 %%      an ssl socket will be returned as <code>{ssl, SslSocket}</code>.
 %%      You can use <code>SslSocket</code> with the <code>ssl</code>
 %%      application, eg: <code>ssl:peercert(SslSocket)</code>.
+-spec get(field(), request()) -> term().
 get(socket,
     {?MODULE,
      [Socket, _Opts, _Method, _RawPath, _Version,
@@ -245,9 +255,9 @@ get(opts,
       _Headers]}) ->
     Opts.
 
-%% @spec dump(request()) -> {mochiweb_request, [{atom(), term()}]}
 %% @doc Dump the internal representation to a "human readable" set of terms
 %%      for debugging/inspection purposes.
+-spec dump(request()) -> {mochiweb_request, [{atom(), term()}]}.
 dump({?MODULE,
       [_Socket, Opts, Method, RawPath, Version, Headers]}) ->
     {?MODULE,
@@ -255,8 +265,8 @@ dump({?MODULE,
       {raw_path, RawPath}, {opts, Opts},
       {headers, mochiweb_headers:to_list(Headers)}]}.
 
-%% @spec send(iodata(), request()) -> ok
 %% @doc Send data over the socket.
+-spec send(iodata(), request()) -> ok.
 send(Data,
      {?MODULE,
       [Socket, _Opts, _Method, _RawPath, _Version,
@@ -266,9 +276,9 @@ send(Data,
       _ -> exit({shutdown, send_error})
     end.
 
-%% @spec recv(integer(), request()) -> binary()
 %% @doc Receive Length bytes from the client as a binary, with the default
 %%      idle timeout.
+-spec recv(integer(), request()) -> binary().
 recv(Length,
      {?MODULE,
       [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -276,9 +286,9 @@ recv(Length,
 	 THIS) ->
     recv(Length, ?IDLE_TIMEOUT, THIS).
 
-%% @spec recv(integer(), integer(), request()) -> binary()
 %% @doc Receive Length bytes from the client as a binary, with the given
 %%      Timeout in msec.
+-spec recv(integer(), timeout(), request()) -> binary().
 recv(Length, Timeout,
      {?MODULE,
       [Socket, _Opts, _Method, _RawPath, _Version,
@@ -288,8 +298,9 @@ recv(Length, Timeout,
       _ -> exit({shutdown, recv_error})
     end.
 
-%% @spec body_length(request()) -> undefined | chunked | unknown_transfer_encoding | integer()
 %% @doc  Infer body length from transfer-encoding and content-length headers.
+-spec body_length(request()) -> undefined | chunked | unknown_transfer_encoding | integer()
+                                  | {unknown_transfer_encoding, term()}.
 body_length({?MODULE,
 	     [_Socket, _Opts, _Method, _RawPath, _Version,
 	      _Headers]} =
@@ -305,18 +316,18 @@ body_length({?MODULE,
       Unknown -> {unknown_transfer_encoding, Unknown}
     end.
 
-%% @spec recv_body(request()) -> binary()
 %% @doc Receive the body of the HTTP request (defined by Content-Length).
 %%      Will only receive up to the default max-body length of 1MB.
+-spec recv_body(request()) -> binary() | undefined.
 recv_body({?MODULE,
 	   [_Socket, _Opts, _Method, _RawPath, _Version,
 	    _Headers]} =
 	      THIS) ->
     recv_body(?MAX_RECV_BODY, THIS).
 
-%% @spec recv_body(integer(), request()) -> binary()
 %% @doc Receive the body of the HTTP request (defined by Content-Length).
 %%      Will receive up to MaxBody bytes.
+-spec recv_body(integer(), request()) -> binary() | undefined.
 recv_body(MaxBody,
 	  {?MODULE,
 	   [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -388,10 +399,10 @@ stream_body(MaxChunkSize, ChunkFun, FunState,
 	  end
     end.
 
-%% @spec start_response({integer(), ioheaders()}, request()) -> response()
 %% @doc Start the HTTP response by sending the Code HTTP response and
 %%      ResponseHeaders. The server will set header defaults such as Server
 %%      and Date if not present in ResponseHeaders.
+-spec start_response({integer(), ioheaders()}, request()) -> response().
 start_response({Code, ResponseHeaders},
 	       {?MODULE,
 		[_Socket, _Opts, _Method, _RawPath, _Version,
@@ -399,9 +410,9 @@ start_response({Code, ResponseHeaders},
 		   THIS) ->
     start_raw_response({Code, ResponseHeaders}, THIS).
 
-%% @spec start_raw_response({integer(), headers()}, request()) -> response()
 %% @doc Start the HTTP response by sending the Code HTTP response and
 %%      ResponseHeaders.
+-spec start_raw_response({integer(), headers()}, request()) -> response().
 start_raw_response({Code, ResponseHeaders},
 		   {?MODULE,
 		    [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -413,11 +424,11 @@ start_raw_response({Code, ResponseHeaders},
     send(Header, THIS),
     Response.
 
-%% @spec start_response_length({integer(), ioheaders(), integer()}, request()) -> response()
 %% @doc Start the HTTP response by sending the Code HTTP response and
 %%      ResponseHeaders including a Content-Length of Length. The server
 %%      will set header defaults such as Server
 %%      and Date if not present in ResponseHeaders.
+-spec start_response_length({integer(), ioheaders(), integer()}, request()) -> response().
 start_response_length({Code, ResponseHeaders, Length},
 		      {?MODULE,
 		       [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -428,11 +439,12 @@ start_response_length({Code, ResponseHeaders, Length},
 					Length, HResponse),
     start_response({Code, HResponse1}, THIS).
 
-%% @spec format_response_header({integer(), ioheaders()} | {integer(), ioheaders(), integer()}, request()) -> iolist()
 %% @doc Format the HTTP response header, including the Code HTTP response and
 %%      ResponseHeaders including an optional Content-Length of Length. The server
 %%      will set header defaults such as Server
 %%      and Date if not present in ResponseHeaders.
+-spec format_response_header({integer(), ioheaders()} | {integer(), ioheaders(), integer()},
+                             request()) -> {iolist(), response()}.
 format_response_header({Code, ResponseHeaders},
 		       {?MODULE,
 			[_Socket, _Opts, _Method, _RawPath, Version,
@@ -466,7 +478,6 @@ format_response_header({Code, ResponseHeaders, Length},
 					Length, HResponse),
     format_response_header({Code, HResponse1}, THIS).
 
-%% @spec respond({integer(), ioheaders(), iodata() | chunked | {chunked, {Codec, integer()}} | {file, IoDevice}}, request()) -> response()
 %% @doc Start the HTTP response with start_response, and send Body to the
 %%      client (if the get(method) /= 'HEAD'). The Content-Length header
 %%      will be set by the Body length, and the server will insert header
@@ -476,6 +487,7 @@ format_response_header({Code, ResponseHeaders, Length},
 %%      one pass. Both set the matching Content-Encoding header
 %%      automatically. An empty Body is not compressed, is sent with
 %%      Content-Length: 0 and no Content-Encoding header.
+-spec respond({integer(), ioheaders(), response_body()}, request()) -> response().
 respond({Code, ResponseHeaders, {file, IoDevice}},
 	{?MODULE,
 	 [_Socket, _Opts, Method, _RawPath, _Version,
@@ -579,17 +591,17 @@ respond({Code, ResponseHeaders, Body},
     end,
     Response.
 
-%% @spec not_found(request()) -> response()
 %% @doc Alias for <code>not_found([])</code>.
+-spec not_found(request()) -> response().
 not_found({?MODULE,
 	   [_Socket, _Opts, _Method, _RawPath, _Version,
 	    _Headers]} =
 	      THIS) ->
     not_found([], THIS).
 
-%% @spec not_found(ExtraHeaders, request()) -> response()
 %% @doc Alias for <code>respond({404, [{"Content-Type", "text/plain"}
 %% | ExtraHeaders], &lt;&lt;"Not found."&gt;&gt;})</code>.
+-spec not_found(ExtraHeaders :: [{key(), value()}], request()) -> response().
 not_found(ExtraHeaders,
 	  {?MODULE,
 	   [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -600,9 +612,9 @@ not_found(ExtraHeaders,
 	     <<"Not found.">>},
 	    THIS).
 
-%% @spec ok({value(), iodata()} | {value(), ioheaders(), iodata() | {file, IoDevice}}, request()) ->
-%%           response()
 %% @doc respond({200, [{"Content-Type", ContentType} | Headers], Body}).
+-spec ok({value(), iodata()} | {value(), ioheaders(), response_body()}, request()) ->
+          response().
 ok({ContentType, Body},
    {?MODULE,
     [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -646,9 +658,9 @@ ok({ContentType, ResponseHeaders, Body},
 	  end
     end.
 
-%% @spec should_close(request()) -> bool()
 %% @doc Return true if the connection must be closed. If false, using
 %%      Keep-Alive should be safe.
+-spec should_close(request()) -> boolean().
 should_close({?MODULE,
 	      [_Socket, _Opts, _Method, _RawPath, Version,
 	       _Headers]} =
@@ -684,9 +696,9 @@ is_close(S = [_C, _L, _O, _S, _E]) ->
     string:to_lower(S) =:= "close";
 is_close(_) -> false.
 
-%% @spec cleanup(request()) -> ok
 %% @doc Clean up any junk in the process dictionary, required before continuing
 %%      a Keep-Alive request.
+-spec cleanup(request()) -> ok.
 cleanup({?MODULE,
 	 [_Socket, _Opts, _Method, _RawPath, _Version,
 	  _Headers]}) ->
@@ -696,8 +708,8 @@ cleanup({?MODULE,
     lists:foreach(fun (K) -> erase(K) end, L),
     ok.
 
-%% @spec parse_qs(request()) -> [{Key::string(), Value::string()}]
 %% @doc Parse the query string of the URL.
+-spec parse_qs(request()) -> [{Key :: string(), Value :: string()}].
 parse_qs({?MODULE,
 	  [_Socket, _Opts, _Method, RawPath, _Version,
 	   _Headers]}) ->
@@ -711,8 +723,8 @@ parse_qs({?MODULE,
       Cached -> Cached
     end.
 
-%% @spec get_cookie_value(Key::string, request()) -> string() | undefined
 %% @doc Get the value of the given cookie.
+-spec get_cookie_value(Key :: string(), request()) -> string() | undefined.
 get_cookie_value(Key,
 		 {?MODULE,
 		  [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -720,8 +732,8 @@ get_cookie_value(Key,
 		     THIS) ->
     proplists:get_value(Key, parse_cookie(THIS)).
 
-%% @spec parse_cookie(request()) -> [{Key::string(), Value::string()}]
 %% @doc Parse the cookie header.
+-spec parse_cookie(request()) -> [{Key :: string(), Value :: string()}].
 parse_cookie({?MODULE,
 	      [_Socket, _Opts, _Method, _RawPath, _Version,
 	       _Headers]} =
@@ -737,9 +749,9 @@ parse_cookie({?MODULE,
       Cached -> Cached
     end.
 
-%% @spec parse_post(request()) -> [{Key::string(), Value::string()}]
 %% @doc Parse an application/x-www-form-urlencoded form POST. This
 %%      has the side-effect of calling recv_body().
+-spec parse_post(request()) -> [{Key :: string(), Value :: string()}].
 parse_post({?MODULE,
 	    [_Socket, _Opts, _Method, _RawPath, _Version,
 	     _Headers]} =
@@ -760,9 +772,9 @@ parse_post({?MODULE,
       Cached -> Cached
     end.
 
-%% @spec stream_chunked_body(integer(), fun(), term(), request()) -> term()
 %% @doc The function is called for each chunk.
 %%      Used internally by stream_body.
+-spec stream_chunked_body(integer(), fun(), term(), request()) -> term().
 stream_chunked_body(MaxChunkSize, Fun, FunState,
 		    {?MODULE,
 		     [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -805,8 +817,8 @@ stream_unchunked_body(MaxChunkSize, Length, Fun,
     stream_unchunked_body(MaxChunkSize, Length - PktSize,
 			  Fun, NewState, THIS).
 
-%% @spec read_chunk_length(request()) -> integer()
 %% @doc Read the length of the next HTTP chunk.
+-spec read_chunk_length(request()) -> integer().
 read_chunk_length({?MODULE,
 		   [Socket, _Opts, _Method, _RawPath, _Version,
 		    _Headers]}) ->
@@ -829,9 +841,9 @@ read_chunk_length({?MODULE,
       _ -> exit({shutdown, read_chunk_length_recv_error})
     end.
 
-%% @spec read_chunk(integer(), request()) -> Chunk::binary() | [Footer::binary()]
 %% @doc Read in a HTTP chunk of the given length. If Length is 0, then read the
 %%      HTTP footers (as a list of binaries, since they're nominal).
+-spec read_chunk(integer(), request()) -> Chunk :: binary() | [Footer :: binary()].
 read_chunk(0,
 	   {?MODULE,
 	    [Socket, _Opts, _Method, _RawPath, _Version,
@@ -882,8 +894,8 @@ read_sub_chunks(Length, _MaxChunkSize, Fun, FunState,
 		    THIS) ->
     Fun({Length, read_chunk(Length, THIS)}, FunState).
 
-%% @spec serve_file(Path, DocRoot, request()) -> Response
 %% @doc Serve a file relative to DocRoot.
+-spec serve_file(Path :: string(), DocRoot :: string(), request()) -> response().
 serve_file(Path, DocRoot,
 	   {?MODULE,
 	    [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -891,8 +903,9 @@ serve_file(Path, DocRoot,
 	       THIS) ->
     serve_file(Path, DocRoot, [], THIS).
 
-%% @spec serve_file(Path, DocRoot, ExtraHeaders, request()) -> Response
 %% @doc Serve a file relative to DocRoot.
+-spec serve_file(Path :: string(), DocRoot :: string(), ExtraHeaders :: [{key(), value()}],
+                 request()) -> response().
 serve_file(Path, DocRoot, ExtraHeaders,
 	   {?MODULE,
 	    [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -1022,8 +1035,7 @@ range_parts(Body0, Ranges) ->
 	end,
     {lists:foldr(F, [], Ranges), Size}.
 
-%% @spec accepted_encodings([encoding()], request()) -> [encoding()] | bad_accept_encoding_value
-%% @type encoding() = string().
+-type encoding() :: string().
 %%
 %% @doc Returns a list of encodings accepted by a request. Encodings that are
 %%      not supported by the server will not be included in the return list.
@@ -1046,6 +1058,7 @@ range_parts(Body0, Ranges) ->
 %%         accepted_encodings(["gzip", "deflate", "identity"]) ->
 %%            ["deflate", "gzip", "identity"]
 %%
+-spec accepted_encodings([encoding()], request()) -> [encoding()] | bad_accept_encoding_value.
 accepted_encodings(SupportedEncodings,
 		   {?MODULE,
 		    [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -1065,8 +1078,6 @@ accepted_encodings(SupportedEncodings,
 						SupportedEncodings, "identity")
     end.
 
-%% @spec accepts_content_type(string() | binary(), request()) -> boolean() | bad_accept_header
-%%
 %% @doc Determines whether a request accepts a given media type by analyzing its
 %%      "Accept" header.
 %%
@@ -1087,6 +1098,7 @@ accepted_encodings(SupportedEncodings,
 %%      5) For an "Accept" header with value "text/*; q=0.0, */*":
 %%         accepts_content_type("text/plain") -> false
 %%
+-spec accepts_content_type(string() | binary(), request()) -> boolean() | bad_accept_header.
 accepts_content_type(ContentType1,
 		     {?MODULE,
 		      [_Socket, _Opts, _Method, _RawPath, _Version,
@@ -1111,8 +1123,6 @@ accepts_content_type(ContentType1,
 	      not lists:member({SuperType, 0.0}, QList)
     end.
 
-%% @spec accepted_content_types([string() | binary()], request()) -> [string()] | bad_accept_header
-%%
 %% @doc Filters which of the given media types this request accepts. This filtering
 %%      is performed by analyzing the "Accept" header. The returned list is sorted
 %%      according to the preferences specified in the "Accept" header (higher Q values
@@ -1137,6 +1147,7 @@ accepts_content_type(ContentType1,
 %%         accepts_content_types(["application/json", "text/html"]) ->
 %%             ["text/html", "application/json"]
 %%
+-spec accepted_content_types([string() | binary()], request()) -> [string()] | bad_accept_header.
 accepted_content_types(Types1,
 		       {?MODULE,
 			[_Socket, _Opts, _Method, _RawPath, _Version,
@@ -1193,12 +1204,12 @@ accept_header({?MODULE,
       Value -> Value
     end.
 
-%% @spec is_closed(request()) -> true | false | undefined
 %% @doc Check if a request connection is closing or already closed. This may be
 %% useful when processing long running request callbacks, when the client
 %% disconnects after a short timeout. This function works on Linux, NetBSD,
 %% OpenBSD, FreeBSD and MacOS. On other operating systems, like Windows for
 %% instance, it will return undefined.
+-spec is_closed(request()) -> boolean() | undefined.
 is_closed({?MODULE,
         [Socket, _Opts, _Method, _RawPath, _Version, _Headers]}) ->
     mochiweb_socket:is_closed(Socket).
