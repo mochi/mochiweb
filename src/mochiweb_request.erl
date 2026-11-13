@@ -474,7 +474,8 @@ format_response_header({Code, ResponseHeaders, Length},
 %%      response with chunks compressed by write_chunk/2. A
 %%      {compressed, {Codec, Level}, Body} body sends Body compressed in
 %%      one pass. Both set the matching Content-Encoding header
-%%      automatically.
+%%      automatically. An empty Body is not compressed, is sent with
+%%      Content-Length: 0 and no Content-Encoding header.
 respond({Code, ResponseHeaders, {file, IoDevice}},
 	{?MODULE,
 	 [_Socket, _Opts, Method, _RawPath, _Version,
@@ -551,13 +552,18 @@ respond({Code, ResponseHeaders,
       true -> ok;
       false -> erlang:error({unsupported_encoder, Codec})
     end,
-    %% Compress here and set the encoding header, then pass on to the next
-    %% clause to set the content-length properly based on the compressed body.
-    HResponse = mochiweb_headers:insert("Content-Encoding",
-					atom_to_list(Codec),
-					mochiweb_headers:make(ResponseHeaders)),
-    Compressed = mochiweb_response:compress(Codec, Level, Body),
-    respond({Code, HResponse, Compressed}, THIS);
+    case iolist_size(Body) of
+      0 ->
+	  %% Don't try to compress an empty body as framing will result in some non-0 size
+	  %% and responses like 204 or 304 would gain a body when we don't them to
+	  respond({Code, ResponseHeaders, Body}, THIS);
+      _ ->
+	  HResponse = mochiweb_headers:insert("Content-Encoding",
+					      atom_to_list(Codec),
+					      mochiweb_headers:make(ResponseHeaders)),
+	  Compressed = mochiweb_response:compress(Codec, Level, Body),
+	  respond({Code, HResponse, Compressed}, THIS)
+    end;
 respond({Code, ResponseHeaders, Body},
 	{?MODULE,
 	 [_Socket, _Opts, Method, _RawPath, _Version,
