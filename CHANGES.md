@@ -1,3 +1,15 @@
+Version 3.6.0 released 2026-11-13
+
+* Minimum supported version is now OTP 25 (OpenSSL 3 support).
+  OTP 23 and OTP 24 were removed from CI.
+  https://github.com/mochi/mochiweb/pull/273
+* mochiweb_html: ignore out-of-range and invalid surrogate numeric
+  character references instead of raising
+  https://github.com/mochi/mochiweb/pull/272
+* Don't compress empty response bodies
+  https://github.com/mochi/mochiweb/pull/274
+* Update GitHub Actions checkout to v7
+
 Version 3.5.0 released 2026-08-16
 
 * Add gzip and zstd chunked and one-shot response compression
